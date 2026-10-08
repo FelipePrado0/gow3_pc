@@ -221,7 +221,7 @@ private:
     // cost a protection fault in the writing thread plus an mprotect with TLB shootdowns on
     // every upload. After HotFaults faults a page stays writable and counts as always CPU
     // modified, so it is uploaded on every use instead. The set is rebuilt every HotPeriod.
-    // Opt-in (GOW3_HOT_PAGES=1): in Hunter's Nightmare the set grew to ~14k pages (56 MB), each
+    // Opt-in (GOW3_HOT_PAGES=1): in the test scene the set grew to ~14k pages (56 MB), each
     // re-uploaded on every binding, which cost far more than the faults (33 FPS) and preceded
     // a GPU ring timeout.
     static bool HotPagesEnabled() {

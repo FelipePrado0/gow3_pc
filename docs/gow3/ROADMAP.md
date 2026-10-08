@@ -9,7 +9,7 @@ Port nativo de **God of War III Remastered** (PS4) para Windows, construído a p
 | Jogo alvo | God of War III Remastered, **CUSA01623**, versão **01.02** |
 | Plataforma | Windows 10/11 64-bit, Vulkan 1.3 |
 | Máquina de teste | AMD Radeon RX 6700 XT, Ryzen 5 5600X, 32 GB |
-| Última atualização | 2026-10-08 (spec 6 em andamento) |
+| Última atualização | 2026-10-08 (spec 6 em andamento; código só do God of War III) |
 
 ---
 
@@ -45,7 +45,7 @@ O que o projeto faz é **imitar o sistema do PS4** em volta do jogo:
 | Erro 404 com nome da rota | Quando o jogo chama uma API que não existe, o programa para e imprime `STOP: first unsupported PS4 import: <nome>` | `src/probe.c` |
 
 O trabalho do port é, basicamente: **implementar cada API que o God of War III usa e o
-Bloodborne não usava, e corrigir os defeitos gráficos.**
+port base não implementava, e corrigir os defeitos gráficos.**
 
 ---
 
@@ -74,7 +74,6 @@ God of War III Remastered abre pelo loader nativo, roda a cutscene de abertura e
 - Launcher completo com todas as opções.
 - Outras regiões (CUSA01715 etc.) e outras versões do jogo.
 - Linux e Steam Deck.
-- Garantia de que o Bloodborne continue rodando (só os testes automáticos existentes).
 
 ---
 
@@ -97,7 +96,7 @@ God of War III Remastered abre pelo loader nativo, roda a cutscene de abertura e
 
 | # | Entregue | Commit |
 |---|---|---|
-| 0 | MSYS2 CLANG64 instalado; `bash build.sh` gera `out/bb-probe.exe` no Windows; branch `gow3` criada. Linha de base dos testes Python: 7 falhas que já existiam (testes só de Linux). | — |
+| 0 | MSYS2 CLANG64 instalado; `bash build.sh` gera `out/gow3-probe.exe` no Windows; branch `gow3` criada. Linha de base dos testes Python: 7 falhas que já existiam (testes só de Linux). | — |
 | 1 | Imports gravados como `NID#biblioteca` (iguais em qualquer jogo), com libScePosix tratada como libkernel. Nova opção `--check-imports` lista o que falta sem rodar o jogo. | `c4617d2` |
 | 2 | Perfil por jogo pelo `TITLE_ID`: GoW3 usa `patches/God_of_War_III_Remastered.xml` só na v01.02; DMEM e VBlank lidos das notas dos patches; patch de resolução substitui o Texture Fix; menu Insert com o nome do jogo. | `4589fb9` |
 | 3 | Dump CUSA01623 v01.02 conferido. `--check-imports`: 387 imports, 45 faltando (35 chamados pelo jogo, 10 só pela libc/Fios2). Lista na seção da etapa 3. | `ea89783` |
@@ -108,7 +107,8 @@ God of War III Remastered abre pelo loader nativo, roda a cutscene de abertura e
 | 7 (Spec 6a) | Lista de saves na tela (overlay): o jogo recebe a pasta escolhida ao salvar e carregar; "New save" e cancelar também funcionam. Teste no `services-test`. | `79d2f58` |
 | 7 (Patches) | Os patches do shadPS4 eram de outra compilação do eboot v01.02. Endereços recalculados e conferidos byte a byte no dump (resolução +0x10 e -0x120, dados no mesmo lugar). Patch só é aplicado se o sha256 do `eboot.bin` for o do dump. 1440p testado a 60 FPS. | `e749951` |
 | 7 (Patches) | 120 FPS portado: limite de FPS em `0x75dbe4` e leitura do FPS no cálculo de energia do golpe em `0x48ff1a` (constante 60,0). Acabou o jogo acelerado. | `d307830` |
-| 7 (Spec 6b) | Launcher do God of War III: página Patches do jogo (resolução única e patches do XML), nome, banner e ícone do jogo, páginas do Bloodborne escondidas, ícone na janela do jogo, atualização automática desligada, textos sem travessões. | `18a0d11`, `026147e` |
+| 7 (Spec 6b) | Launcher do God of War III: página Patches do jogo (resolução única e patches do XML), nome, banner e ícone do jogo, páginas do jogo original do port base escondidas, ícone na janela do jogo, atualização automática desligada, textos sem travessões. | `18a0d11`, `026147e` |
+| 7 (Limpeza) | Código só do God of War III: saíram os patches, o hack de som, o modo de FPS, os efeitos, os cheats e as páginas do launcher do jogo original, além do launcher GTK de Linux. Prefixo antigo virou `gow3` (arquivos, binários `gow3-*`, variáveis `GOW3_*`, `gow3.ini`, `God of War III.exe`); ícone novo. Upscalers mantidos no código, desligados, para calibrar depois. Mods mantidos com layout genérico (`dvdroot_ps4`). | — |
 
 `--check-imports` depois da spec 5: **0 faltando** (eram 45).
 
@@ -137,7 +137,8 @@ Primeira execução real (60 s, 2026-10-08): o jogo inicia sem `STOP:` nem `Faul
 - **Predicação da GPU** (`IT_SET_PREDICATION`) continua sem implementação, como no shadPS4.
 - **Linux:** o `build.sh` do Linux recebeu os testes novos e o FFmpeg no runtime, mas não foi compilado.
 - **Menu Insert:** textos ainda em russo e inglês.
-- **Demanda futura:** remover o Bloodborne por completo (patches, páginas escondidas do launcher, hack de som, textos) e deixar só o God of War III.
+- **Configurações antigas:** as do port base não são migradas; os nomes novos são `gow3.ini` e `%APPDATA%\gow3-launcher`.
+- **Upscalers temporais:** FSR 3/4, DLSS, TAA e vetores de movimento seguem no código, desligados; falta mapear o quadro do God of War III (cor da cena, profundidade, constantes da câmera).
 
 - Os testes em C (`test_runtime.c`, `test_content.c`, `test_sema.c`) não compilam no Windows pelo `build.sh`. As chaves foram convertidas, mas esses testes ainda não rodaram.
 - Zerar o `--check-imports` não garante que o jogo abre: travamentos de execução e defeitos gráficos entram na spec 6.
@@ -181,7 +182,7 @@ flowchart LR
 2. No shell **MSYS2 CLANG64**, instalar os pacotes listados em
    [packaging/windows/README.md](../../packaging/windows/README.md).
 3. `git submodule update --init --recursive` (já feito no clone).
-4. `bash build.sh` e confirmar que existem `out/bb-probe.exe` e `out/bb-gpu-capabilities.exe`.
+4. `bash build.sh` e confirmar que existem `out/gow3-probe.exe` e `out/gow3-gpu-capabilities.exe`.
 5. `python -m unittest discover -s tests` e anotar a linha de base (o que já passa ou falha).
 6. Criar a branch `gow3`.
 
@@ -192,7 +193,7 @@ flowchart LR
 ### Spec 1 — Reconhecer APIs pelo nome
 
 **Problema:** o runtime identifica cada API do PS4 por um nome que inclui códigos internos do
-dump do Bloodborne (ex.: `"bzQExy189ZI#q#q"`). No God of War III esses códigos são outros e
+dump do jogo original do port base (ex.: `"bzQExy189ZI#q#q"`). No God of War III esses códigos são outros e
 nenhuma API seria encontrada.
 
 **Solução:** trocar para uma chave canônica `NID#nomeDaBiblioteca` (ex.:
@@ -220,13 +221,13 @@ faltantes sem rodar o jogo.
 
 - [ ] Teste prova que a mesma API resolve igual com códigos locais diferentes.
 - [ ] Testes existentes continuam na mesma linha de base da etapa 0.
-- [ ] `bb-probe.exe out/boot-linked.bin --check-imports` imprime a lista e o código de saída.
+- [ ] `gow3-probe.exe out/boot-linked.bin --check-imports` imprime a lista e o código de saída.
 
 ---
 
 ### Spec 2 — Configuração por jogo + patches
 
-**Problema:** nome, ID, versão e patches do Bloodborne estão fixos no código.
+**Problema:** nome, ID, versão e patches do jogo original do port base estavam fixos no código.
 
 **Solução:** ler título e ID do `param.sfo` do jogo, aceitar `CUSA01623`, aplicar patches
 conforme o jogo e a versão.
@@ -235,7 +236,7 @@ conforme o jogo e a versão.
 
 - `run.py` — pasta padrão do jogo e mensagens.
 - `scripts/patches.py` — validação de patches por ID e versão do jogo.
-- `src/probe.c`, `gpu/shim/bbgpu.cpp`, `gpu/shim/bbport_overlay.cpp` — título da janela e do menu.
+- `src/probe.c`, `gpu/shim/gow3gpu.cpp`, `gpu/shim/gow3_overlay.cpp` — título da janela e do menu.
 - `patches/God_of_War_III_Remastered.xml` — novo, com os patches de resolução (720p, 1440p,
   4K) e 120 FPS da comunidade ([ps4_cheats#145](https://github.com/shadps4-emu/ps4_cheats/pull/145)).
 - `tests/test_patches.py` — novos casos.
@@ -244,9 +245,8 @@ conforme o jogo e a versão.
 
 - Quando o jogo não for CUSA01623 v01.02, o sistema deve recusar os patches do God of War III
   e registrar o motivo no log.
-- O sistema deve sempre aplicar o hack de som do Bloodborne só aos IDs do Bloodborne.
 - Quando um patch de resolução acima de 1080p estiver ativo, o sistema deve reservar a memória
-  extra necessária (`BB_DMEM_MB`).
+  extra necessária (`GOW3_DMEM_MB`).
 
 **Critérios de aceite**
 
@@ -284,7 +284,7 @@ conforme o jogo e a versão.
 | libSceAudioOut | 1 | Outputs | 5 |
 | libkernel | 16 | getargc/getargv, mmap/msync, Mlock, GetTscFrequency, GetModuleInfoFromAddr e 9 sem nome conhecido | 5 |
 
-Comando: `bb-probe.exe out/boot-linked.bin --app0 <jogo> --check-imports` (sai com 1 se faltar algo).
+Comando: `gow3-probe.exe out/boot-linked.bin --app0 <jogo> --check-imports` (sai com 1 se faltar algo).
 
 **APIs esperadas antes do inventário** (de um log do jogo no shadPS4):
 
@@ -327,7 +327,7 @@ FFmpeg ao runtime, e um novo teste com um MP3 pequeno gerado.
 
 ### Spec 4 — Vídeo das cutscenes
 
-**Problema:** o Bloodborne usa `sceAvPlayer`. O God of War III usa `sceVideodec`, um
+**Problema:** o port base só tinha `sceAvPlayer`. O God of War III usa `sceVideodec`, um
 decodificador mais baixo nível que não existe no runtime.
 
 **Solução:** adaptar a implementação do shadPS4 (baseada em FFmpeg H.264) para o runtime.
@@ -378,15 +378,15 @@ inventário.
 
 **Problema:** o tradutor de gráficos herda defeitos conhecidos do shadPS4 no God of War III:
 texturas corrompidas, iluminação queimada, tela branca e travadas ao entrar em áreas novas.
-As otimizações do bbport foram feitas para o Bloodborne e podem não servir.
+As otimizações herdadas do port base foram feitas para outro jogo e podem não servir.
 
 **Solução, em ordem**
 
-1. Rodar com o modo mais seguro: `BB_READBACK_LINEAR=1`, `BB_UPSCALER=none`,
-   `BB_DRAW_PIPE=0` e otimizações desligadas via `BB_TOGGLE_FILE`.
+1. Rodar com o modo mais seguro: `GOW3_READBACK_LINEAR=1`, `GOW3_UPSCALER=none`,
+   `GOW3_DRAW_PIPE=0` e otimizações desligadas via `GOW3_TOGGLE_FILE`.
 2. Portar as correções do fork [brunoShadPs4](https://github.com/serbru20066666/brunoShadPs4)
    (iluminação, MSAA, espera CPU/GPU no fim do quadro).
-3. Religar as otimizações do bbport uma a uma e medir FPS.
+3. Religar as otimizações do gow3 uma a uma e medir FPS.
 4. Gerar o pacote: zip com `run.py --play` e seleção da pasta do jogo.
 
 **Arquivos afetados:** `gpu/shadps4/video_core/...` (definidos durante a investigação),
@@ -394,14 +394,14 @@ As otimizações do bbport foram feitas para o Bloodborne e podem não servir.
 
 **Requisitos**
 
-- Enquanto uma otimização do bbport causar erro visual no God of War III, o sistema deve
+- Enquanto uma otimização do gow3 causar erro visual no God of War III, o sistema deve
   mantê-la desligada por padrão para este jogo.
 - O sistema deve sempre manter 60 FPS ou mais a 1080p na máquina de teste.
 
 **Critérios de aceite**
 
 - [ ] Percurso da alpha sem texturas corrompidas nem tela branca (comparado por capturas).
-- [ ] `BB_FRAME_STATS=1` mostra média de 60 FPS ou mais.
+- [ ] `GOW3_FRAME_STATS=1` mostra média de 60 FPS ou mais.
 - [ ] O zip roda numa pasta limpa, sem MSYS2 instalado.
 
 > Esta é a spec mais incerta. Pode ser dividida por tipo de defeito quando eles aparecerem.
@@ -415,7 +415,7 @@ As otimizações do bbport foram feitas para o Bloodborne e podem não servir.
 | Defeitos gráficos sem solução conhecida no shadPS4 | Alto | Portar correções do brunoShadPs4; acompanhar o upstream do shadPS4 |
 | Inventário revela APIs grandes não previstas | Médio | Dividir a spec 5; reaproveitar implementações do shadPS4 |
 | O upstream (bloodborne_pc) muda todo dia | Médio | Remote `upstream`, merge periódico da branch `windows` |
-| Código C de baixo nível difícil de depurar | Médio | Logs `STOP:`/`Fault:`, `BB_PAD_RECORD`/`BB_PAD_REPLAY` para repetir percursos |
+| Código C de baixo nível difícil de depurar | Médio | Logs `STOP:`/`Fault:`, `GOW3_PAD_RECORD`/`GOW3_PAD_REPLAY` para repetir percursos |
 | Licença | Baixo | Manter GPL-2.0 e os créditos; nunca distribuir arquivos do jogo |
 
 ---
@@ -436,7 +436,7 @@ As otimizações do bbport foram feitas para o Bloodborne e podem não servir.
 Ideias para versões seguintes, sem compromisso:
 
 - **Beta:** jogo completo do início ao fim; outras regiões (CUSA01715).
-- Launcher completo, com idiomas e opções, reaproveitando o do bbport.
+- Launcher completo, com idiomas e opções, reaproveitando o do gow3.
 - Upscaling temporal (FSR 3/4). O God of War III tem motion blur por objeto, então
   **provavelmente** já gera vetores de movimento, o que facilitaria. Precisa ser confirmado
   com captura de quadro.
@@ -476,5 +476,5 @@ Ideias para versões seguintes, sem compromisso:
   fork com correções específicas do God of War III.
 - [ps4_cheats#145](https://github.com/shadps4-emu/ps4_cheats/pull/145), patches de resolução e
   120 FPS.
-- Documentos internos do bbport: [upscaler](../upscaler.md), [parallel GPU](../parallel_gpu.md),
+- Documentos internos do gow3: [upscaler](../upscaler.md), [parallel GPU](../parallel_gpu.md),
   [motion vectors](../motion_vectors.md), [Windows](../../packaging/windows/README.md).

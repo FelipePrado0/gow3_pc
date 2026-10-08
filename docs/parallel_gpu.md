@@ -3,7 +3,7 @@
 Goal: remove the single-core bottleneck of the emulated GPU command processor
 (`shadPS4:GpuCommandProcessor`, ~100% of one core while the rest of the CPU idles).
 
-## Measurements (Bloodborne, Hunter's Nightmare, ~70 FPS, `BB_DCB_STATS=1`)
+## Measurements (the base port's original game, test scene, ~70 FPS, `GOW3_DCB_STATS=1`)
 
 | | |
 |---|---|
@@ -47,7 +47,7 @@ sharp fetches), buffer binding ~14%, render targets ~8%, PM4 decode ~3%.
 3. **Parallel Vulkan recording.** Each worker records its own command buffer; they are
    executed in submission order with barriers at the seams.
 
-Every step keeps a `BB_TOGGLE_FILE` bit so it can be switched off at run time and
+Every step keeps a `GOW3_TOGGLE_FILE` bit so it can be switched off at run time and
 compared by screenshot and frame rate.
 
 ## Portability
@@ -57,7 +57,7 @@ Must scale down to the Steam Deck (4 cores / 8 threads): worker count follows
 
 ## Results
 
-Step 1 (draw preparation, 4 workers, toggle 8192), Hunter's Nightmare, same view:
+Step 1 (draw preparation, 4 workers, toggle 8192), the test scene, same view:
 71.5 FPS with prepared draws vs 64.1 without (+11.5%), identical screenshots.
 97–98% of direct draws use the prepared pipeline; each `bb:DrawPrep` worker ~10% of a core.
 The GPU thread is still ~90% busy: texture/buffer binding is the next target (step 2).
@@ -70,29 +70,29 @@ The GPU command thread is back at ~100%: it is the limit again.
 
 Rejected: "hot pages" (never re-protect pages written repeatedly, upload them on every
 binding) — the set grew to ~14k pages, re-uploads dropped the frame rate to 33 FPS and a GPU
-ring timeout followed. Left opt-in behind BB_HOT_PAGES=1.
+ring timeout followed. Left opt-in behind GOW3_HOT_PAGES=1.
 
 Texture description cache 2-way/4096, same-target fast path, LRU touch skip, no per-texture
 meta lookup: other outdoor view, 93.9 FPS; with the texture memos off (mask 1056) 65.6 FPS.
 Close to the 100 Hz display cap (vblank-paced), so further gains need an uncapped test.
 
-## Streaming stutter (BB_FRAME_STATS "Stall:" lines)
+## Streaming stutter (GOW3_FRAME_STATS "Stall:" lines)
 
 Running through new areas gave 60–170 ms frames (also in shadPS4). The GPU thread was busy
 the whole frame, mostly in the kernel, uploading 50–400 MB of textures and buffers per frame.
 Findings, in the order they were fixed:
 
 1. Guest-to-staging copies ran on one thread (the recording thread, textures on the GPU
-   thread). They now start at once on copy threads (`BbCopy::Async`, `bbport_copy.cpp`);
+   thread). They now start at once on copy threads (`Gow3Copy::Async`, `gow3_copy.cpp`);
    small copies are batched per thread (one wakeup per ~512 KiB — one per copy cost 25% FPS).
    Guest-visible fences and queue submission wait for them (`Scheduler::WaitHostCopies`),
    which keeps the fix for UI flicker (the guest reused buffers before deferred copies ran).
 2. Copies then ran at 0.2–0.4 GB/s per thread, almost all in the kernel: the first CPU access
    to a new staging block makes the kernel allocate and clear it (~2 ms per 16 MiB), and the
    staging pool freed blocks after 3 s idle, between streaming bursts. It now keeps 512 MiB
-   (`BB_STAGING_KEEP_MB`), frees the rest after 30 s and populates 128 MiB at startup.
-3. Write faults: a 256 KiB unprotect window (`BB_FAULT_WINDOW`) halves them again.
-   `BB_UFFD=1` tracks writes with userfaultfd write-protection instead of mprotect (no
+   (`GOW3_STAGING_KEEP_MB`), frees the rest after 30 s and populates 128 MiB at startup.
+3. Write faults: a 256 KiB unprotect window (`GOW3_FAULT_WINDOW`) halves them again.
+   `GOW3_UFFD=1` tracks writes with userfaultfd write-protection instead of mprotect (no
    address-space write lock, no mapping splits); read protection for readbacks still uses
    mprotect. It removes the mprotect time but did not change the stalls measurably; opt-in.
 4. File reads into write-protected guest pages failed with EFAULT (kernel copies do not reach
@@ -110,7 +110,7 @@ uses them when `PipelineCache::UsedPrepared()` reports that the draw's pipeline 
 prepared draw — the flattened data was then compared word for word, and sharps depend on
 nothing else. Resource list sizes are checked per stage. Toggle 4096 switches it off.
 
-A/B in one run, standing still, `BB_FPS_LIMIT=0`, FSR 4, 20 s phases: 69–70 FPS with the
+A/B in one run, standing still, `GOW3_FPS_LIMIT=0`, FSR 4, 20 s phases: 69–70 FPS with the
 prepared sharps, 66.5–67 without (+3%), same image.
 
 Upscaler costs removed from the GPU thread before this (perf, DWARF call graphs): per-draw
@@ -136,12 +136,12 @@ off below 12 hardware threads (Steam Deck: no workers). Now:
   nearest scanned buffer ahead of the GPU thread, reach its starting state by applying the
   deltas since their last buffer (or from the queue's tail state), and prepare its draws.
   More workers now mean more buffers prepared in parallel, not more duplicated replay.
-- All helpers are SCHED_IDLE (`bbport_threads.h`): they only take idle cores. If the scanner
+- All helpers are SCHED_IDLE (`gow3_threads.h`): they only take idle cores. If the scanner
   starves (busy CPU), the GPU thread rebases it from its own register state once the lag
   passes 64 buffers instead of queueing without bound (`scanner rebases` in the stats).
 - Copy threads use the same affinity count (critical path, normal priority).
 
-A/B in one run (toggle 8192, standing still, `BB_FPS_LIMIT=0`, FSR 4), ~98% of direct draws
+A/B in one run (toggle 8192, standing still, `GOW3_FPS_LIMIT=0`, FSR 4), ~98% of direct draws
 prepared, no rebases:
 
 | CPU | with preparation | without |
@@ -161,7 +161,7 @@ thread only obtains the buffers of the merged ranges and records the bindings. U
 prepared draw's pipeline was taken, the attribute count matches the pipeline's fetch shader
 and no frame capture runs; toggle 4096 switches it off together with the sharps.
 
-A/B (standing still, `BB_FPS_LIMIT=0`, FSR 4, 16 threads): ~69.3 FPS on, ~65.7 off (+5.5%;
+A/B (standing still, `GOW3_FPS_LIMIT=0`, FSR 4, 16 threads): ~69.3 FPS on, ~65.7 off (+5.5%;
 the sharps alone gave +3%). Screenshots identical.
 
 Render targets were looked at and left on the GPU thread: their descriptions are already
@@ -171,10 +171,10 @@ reduced-resolution proxies — all on shared mutable state.
 
 ## Engine short paths: investigation (2026-09-30, in progress)
 
-- The eboot has no symbols but links Sony's Gnmx (`sdk\target\src\gnmx\gfxcontext.cpp`,
-  `lwgfxcontext.cpp`); FromSoftware's Dantelion2 CoreGraphics2 sits on top; YEBIS does the
+- The measured eboot has no symbols but links Sony's Gnmx (`sdk\target\src\gnmx\gfxcontext.cpp`,
+  `lwgfxcontext.cpp`); the game's own engine sits on top, with middleware for the
   post-processing.
-- `BB_BUFFER_STATS=1` (buffer_cache.cpp) prints buffer bindings per guest region every 5 s.
+- `GOW3_BUFFER_STATS=1` (buffer_cache.cpp) prints buffer bindings per guest region every 5 s.
   Almost all traffic comes from the engine's frame ring, ~0x1043400000–0x1049xxxxxx inside the
   2.4 GB direct allocation at 0x1042c00000: ~400k small constant copies/s (~190 MB/s) and
   ~850 MB/s of arena re-uploads after CPU writes (~13 MB per frame).
@@ -186,7 +186,7 @@ reduced-resolution proxies — all on shared mutable state.
   by the presenter's frame pool (`present_frames`, swapchain image count). Next: measure the
   ring's wrap period per frame and the real GPU lag, then prototype the import behind a toggle.
 
-### Measurements for the frame-data window (BB_BUFFER_STATS=1)
+### Measurements for the frame-data window (GOW3_BUFFER_STATS=1)
 
 - Reuse distance of 64 KiB blocks in 0x104xxxxxxx: overwhelmingly 1 frame (then 2). The engine
   rewrites the same memory every frame; there is no long ring.
@@ -210,15 +210,15 @@ changed at every task entry and resume, so a chunk only served data written befo
 A/B in one run, standing still: 32 KiB chunks 82/82/79 FPS vs 85/84/84 without (slower: the
 extra copied bytes cost more than the saved operations); 8 KiB chunks 85/85/85 vs 85/83/85
 (no difference). The per-binding constant copies are not what limits the frame; the change
-was removed. `BB_BUFFER_STATS=1` (bindings per region, reuse distance, GPU lag) stays.
+was removed. `GOW3_BUFFER_STATS=1` (bindings per region, reuse distance, GPU lag) stays.
 
-State after this work, standing still, `BB_FPS_LIMIT=0`, FSR 4: 82–85 FPS; GPU command thread
+State after this work, standing still, `GOW3_FPS_LIMIT=0`, FSR 4: 82–85 FPS; GPU command thread
 ~90% of a core, recording thread ~92% (mostly its spin), GPU ~70% busy.
 
 ### Texture binding: repeated sets and the UpdateImage fast path
 
 - Measured and dropped: only ~13% of draws bind exactly the textures and samplers of the
-  previous draw in every stage (running through Yharnam), so skipping whole texture sets
+  previous draw in every stage (running through the test level), so skipping whole texture sets
   would save at most ~3% of the GPU thread.
 - `TextureCache::UpdateImage` runs for every texture binding; for a clean, registered image
   already tracked and touched in this GC period it only took the texture-cache mutex (shared
@@ -230,15 +230,15 @@ State after this work, standing still, `BB_FPS_LIMIT=0`, FSR 4: 82–85 FPS; GPU
 
 ## LTO and PGO (2026-09-30)
 
-`build.sh` builds `libbbgpu` with LTO (`-flto=auto`, also for sirit and FSR-Vulkan linked
+`build.sh` builds `libgow3gpu` with LTO (`-flto=auto`, also for sirit and FSR-Vulkan linked
 into it) and, when `pgo/` holds a profile, with `-fprofile-use` (`-fprofile-partial-training
 -fprofile-correction`; functions changed since the profile compile without it). No `-march`:
 the same build runs on the Steam Deck.
 
-Collecting a profile: `BB_PGO=generate bash run.sh` builds an instrumented library
+Collecting a profile: `GOW3_PGO=generate bash run.sh` builds an instrumented library
 (`-fprofile-generate -fprofile-update=atomic`) that writes `pgo/` every 30 s (`bb:pgo` thread:
 `__gcov_dump` + `__gcov_reset`, since the game often ends through `_exit`); play a few minutes
-of ordinary gameplay. The next plain build uses it. `BB_PGO=off` / `BB_LTO=OFF` disable them.
+of ordinary gameplay. The next plain build uses it. `GOW3_PGO=off` / `GOW3_LTO=OFF` disable them.
 Regenerate the profile after larger code changes.
 
 Comparison, three runs in game (median of in-game 5 s windows, >800 draws/frame), with the new
@@ -253,7 +253,7 @@ tolerates small scene differences better than FPS):
 
 ## Second pass: where the GPU thread's time goes, and a texture helper (2026-09-30)
 
-Standing in Hunter's Nightmare, FSR 4, `BB_FPS_LIMIT=0`, ~85 FPS, ~1610 draws/frame.
+Standing in the test scene, FSR 4, `GOW3_FPS_LIMIT=0`, ~85 FPS, ~1610 draws/frame.
 
 **On-CPU profile** (perf, direct children): `Draw` 74% — `BindResources` 32% (textures 16%,
 buffers 13%), `BeginRendering` 8%, `GetGraphicsPipeline` 5%, `BindVertexBuffers` 4.5%,
@@ -265,10 +265,10 @@ barrier structures (`slot_images[id]`, image descriptions, backing state, set wr
 waits for guest submissions 0.5%. About 9% is blocked in `Scheduler::WaitHostCopies`: ~130
 times per frame (EOP/EOS events, `WriteData`, submissions) it waits for the small guest
 copies queued in the recording stream, i.e. until the recording thread has recorded every
-command before them, plus ~4% for the copy threads (`BbCopy::WaitAsync`). The recording thread
+command before them, plus ~4% for the copy threads (`Gow3Copy::WaitAsync`). The recording thread
 itself works ~40% (the rest is its spin); it is not the limit.
 
-### Texture binding on a helper thread (opt-in: `BB_TEXTURE_HELPER=1`, toggle 1 << 22)
+### Texture binding on a helper thread (opt-in: `GOW3_TEXTURE_HELPER=1`, toggle 1 << 22)
 
 `bb:TexBind` binds a draw's textures while the GPU thread binds its buffers and resolves its
 vertex/index buffers (split into Resolve/Emit, toggle 1 << 23); the GPU thread joins before
@@ -359,9 +359,9 @@ state.
   thread drains stage B before handling one inline. With userfaultfd, faults of the GPU thread
   take the locked path of guest threads.
 - `DmaData` to 0x3022C (skipped by the handler; ~70k/s) does not drain.
-- `BB_PIPE_VERIFY=N`: every Nth packet also carries the full register file and stage B reports
+- `GOW3_PIPE_VERIFY=N`: every Nth packet also carries the full register file and stage B reports
   words where its copy differs (none seen in game, menus included).
-- `BB_DRAW_PIPE=0/1` overrides the default (on with 8+ hardware threads). The toggle mask is 64
+- `GOW3_DRAW_PIPE=0/1` overrides the default (on with 8+ hardware threads). The toggle mask is 64
   bits now (bits 20-29 are raw debug toggles of the motion vectors and the upscaler, which the
   first measurements below also flipped): 1 << 37 whole pipeline, 1 << 38 fences on stage B,
   1 << 39 WaitRegMem on pending fences, 1 << 40 dispatches, 1 << 41 fences signalled by the
@@ -369,7 +369,7 @@ state.
   ring. `Frame stats` add a `Draw pipe` line: draws, drains that waited and why, stage A waiting,
   stage B busy.
 
-Results (Hunter's Nightmare, standing, FSR 4, `BB_FPS_LIMIT=0`, A/B in one run):
+Results (the test scene, standing, FSR 4, `GOW3_FPS_LIMIT=0`, A/B in one run):
 
 | | pipeline on | off |
 |---|---|---|
@@ -398,7 +398,7 @@ zero bytes to a frame buffer and a 4-byte label, whose readers are unknown), non
   draw in has completed (stage B stamps packets with the submission tick). Buffers overlapping
   guest memory that queued work will write (storage buffers, DMA, WriteData, fences:
   `NotePendingGpuWrite`) or GPU-modified memory stay with stage B.
-- `BB_PIPE_VERIFY` also re-walks each stage's resource tables on stage B and compares them with
+- `GOW3_PIPE_VERIFY` also re-walks each stage's resource tables on stage B and compares them with
   stage A's snapshot (guarded against faults: pointers may be stale by then). Pixel shaders whose
   `Info` the pipeline selection does not refresh (no user data) are skipped.
 
@@ -423,7 +423,7 @@ the preset (shadow maps, full-resolution post-processing and UI, FSR itself — 
 ~1.1-1.4 ms more than FSR 3 —, and emulation overhead: barriers, copies, resampling). FSR 4 at
 Native AA fails to start ("no free provider frame").
 
-### GPU profile (`BB_GPU_PROFILE=1`, `vk_gpu_profiler.h`)
+### GPU profile (`GOW3_GPU_PROFILE=1`, `vk_gpu_profiler.h`)
 
 Timestamps where each render pass, dispatch, upscaler run and submission end starts; the time to
 the next one is charged to it (barriers and copies in between included; "between submissions"
@@ -431,7 +431,7 @@ is mostly the GPU waiting for the CPU). Printed every 5 s, GPU ms per frame by l
 are written outside render passes (`radv_CmdWriteTimestamp2` crashed inside some) and only into
 the rasterizer's scheduler (the presenter has its own).
 
-Hunter's Nightmare, FSR 4 Ultra Performance, ~110 FPS (8.8 ms/frame):
+the test scene, FSR 4 Ultra Performance, ~110 FPS (8.8 ms/frame):
 
 | label | ms/frame |
 |---|---|
@@ -476,7 +476,7 @@ no render-target feedback and no upscaler redirect; it then only redoes the per-
 ### Copy shader merge distance
 
 The HLE merged copies whose ranges fit in 64 MiB, and each merged batch synchronizes its whole
-source and destination range. With 64 KiB (`BB_COPY_MERGE_KB`): the copy shader's GPU time
+source and destination range. With 64 KiB (`GOW3_COPY_MERGE_KB`): the copy shader's GPU time
 1.5 -> 0.6 ms/frame (profiler), GPU busy 85% -> ~77%, frame rate not lower (restarts vary
 125-142 FPS; 16 KiB and 256 KiB similar).
 
@@ -530,12 +530,12 @@ rendering without an upscaler. Found on the way:
   earlier passes' targets — in the lighting passes the G-buffer images they sample. The light
   accumulation passes stayed at 1920x1080 at every preset. Fixed (toggle 1 << 47 restores it).
 - Every pass that sampled a reduced target made the proxy be resampled to the native size first
-  (~25 resolves per frame, 0.4 ms; `BB_GPU_PROFILE` now labels resolves, fills, image uploads and
+  (~25 resolves per frame, 0.4 ms; `GOW3_GPU_PROFILE` now labels resolves, fills, image uploads and
   downloads). The recompiler marks images read by anything but normalized sampling without
   offsets (`ImageResource::needs_native`); other sampled bindings read the proxy directly
   (toggle 1 << 48): GPU busy 5.02 -> 4.86 ms, identical screenshots. Changes the `Info` layout:
   shader meta version 7, pipeline key version 5 (caches rebuilt once).
-- `BB_SCENE_DEBUG=<file>`: touching the file prints the next frame's scene passes with the reason
+- `GOW3_SCENE_DEBUG=<file>`: touching the file prints the next frame's scene passes with the reason
   each keeps the native size. What remains native before the upscaler: half-resolution
   (960x540) passes, which `SceneTargets::Eligible` does not handle.
 
@@ -553,7 +553,7 @@ decoded every submission, while end-of-pipe fences deferred to the Vulkan record
 (RecorderFences) were still pending; the guest freed the objects holding those labels while
 another of its threads still updated them. Stage A now drains the pipe and waits for the
 deferred signals before GPU idle (and before compute-queue WriteData/ReleaseMem). Found with
-`BB_WRITE_LOG=2` (fence targets logged at decode time, off the racing path). The notes below
+`GOW3_WRITE_LOG=2` (fence targets logged at decode time, off the racing path). The notes below
 are the investigation.
 
 #### Investigation notes
@@ -562,7 +562,7 @@ After ~2-15 min at the level (camera turning, nobody moving) the guest faults at
 `0x263b8e7`: a free-list pop in a guest allocator reads the next pointer `0x0000005300000000`
 from a freed block, so something wrote into memory the game had already freed. Soak runs of
 15-20 min: with the draw pipeline 3 of 4 crashed (at 863, 844 s and one earlier), with
-`BB_DRAW_PIPE=0` 0 of 2. With `BB_WRITE_LOG=1` (slower downloads) one run survived 20 min.
+`GOW3_DRAW_PIPE=0` 0 of 2. With `GOW3_WRITE_LOG=1` (slower downloads) one run survived 20 min.
 
 Ruled out / done so far:
 - guest-visible writes overtaking deferred fences (now ordered: `WaitDeferredSignals`, toggle
@@ -573,6 +573,6 @@ Candidates: late writes into guest memory that the pipeline delays further — a
 downloads (`TextureCache::DownloadImageMemory`, deferred until the GPU finishes, whole image),
 buffer downloads on page faults, and fault handling when the GPU command thread (stage A), which
 now reads guest memory for the constant ring, is not treated as a GPU-side thread
-(`IsGpuSideThreadId` accepts only stage B). Next: a run with `BB_WRITE_LOG=1` that crashes
+(`IsGpuSideThreadId` accepts only stage B). Next: a run with `GOW3_WRITE_LOG=1` that crashes
 prints which logged write landed near the corrupted block; bisect the pipeline toggles
 (38 tasks, 39 pending fence waits, 41 recorder fences, 42 memory writes, 36 constant ring).

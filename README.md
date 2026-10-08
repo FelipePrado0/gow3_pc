@@ -39,8 +39,8 @@ download yet: for now the project is built from source. Progress is tracked (in 
 - **Skip Intro** is not available: the community patch does not match this executable.
 - The first visit to each area can stutter while shaders compile. Starting the game can take
   more than a minute when the shader cache is large.
-- No temporal upscaling (FSR, DLSS or TAA) yet: these features came from the Bloodborne port
-  and have not been adapted to God of War III.
+- No temporal upscaling (FSR, DLSS or TAA) yet: the code is in the port but turned off until it
+  is calibrated for God of War III.
 - Tested only on Windows 11 with an AMD Radeon RX 6700 XT.
 
 ## Requirements
@@ -71,7 +71,7 @@ download yet: for now the project is built from source. Progress is tracked (in 
 3. Start the launcher (in PowerShell, in the project folder):
 
    ```powershell
-   python launcher/bbport_launcher_win.py
+   python launcher/gow3_launcher_win.py
    ```
 
 4. On **Game & effects**, choose the game folder. On **Game patches**, choose the resolution and
@@ -80,7 +80,7 @@ download yet: for now the project is built from source. Progress is tracked (in 
 You can also play without the launcher:
 
 ```powershell
-$env:BB_GAME_DIR = 'D:\path\CUSA01623'
+$env:GOW3_GAME_DIR = 'D:\path\CUSA01623'
 python run.py
 ```
 
@@ -119,7 +119,7 @@ out/gpu/services-test.exe
 To check that every system function the game uses is implemented, without starting the game:
 
 ```bash
-out/bb-probe.exe out/boot-linked.bin --app0 <game folder> --check-imports
+out/gow3-probe.exe out/boot-linked.bin --app0 <game folder> --check-imports
 ```
 
 ## How it works
@@ -131,18 +131,16 @@ out/bb-probe.exe out/boot-linked.bin --app0 <game folder> --check-imports
 | Runtime | `src/runtime_*.c` | Reimplements the PS4 system functions: memory, threads, files, audio, video, controller, saves and services |
 | GPU | `gpu/` | The shadPS4 video core, translating the PS4 GPU commands to Vulkan |
 | Patches | `patches/God_of_War_III_Remastered.xml`, `scripts/patches.py` | Applied in memory at start, without changing the game files |
-| Launcher | `launcher/bbport_launcher_win.py` | Settings, patches and the play button |
+| Launcher | `launcher/gow3_launcher_win.py` | Settings, patches and the play button |
 
-The project started as a fork of the Bloodborne port and still contains code from it (patches,
-hidden launcher pages, upscalers). That code is not used with God of War III and will be removed
-or adapted; the details are in the roadmap.
+The temporal upscalers (FSR 3/4, DLSS, TAA) and the motion vectors inherited from the base port
+stay in the code, turned off, until they are calibrated for God of War III (see the roadmap).
 
 ## Credits
 
 Built on [bbport](https://github.com/deadinside28/bloodborne_pc), the native Bloodborne port by
 deadinside28, on the [Windows port](https://github.com/Supermedo/bloodborne_pc) by Supermedo
 (Mohammed Albarghouthi), and on the [shadPS4](https://github.com/shadps4-emu/shadPS4) renderer.
-The original bbport README is in [docs/original-readme](docs/original-readme/README.md).
 
 God of War III Remastered patches by kvicken and cuesta4 (building on the PS3 patches by
 illusion0001), published for shadPS4 in

@@ -1,106 +1,70 @@
-# Файловые моды
+# Mods de arquivos
 
-В лаунчере появилась группа **Моды**: выбор папки, общий переключатель,
-включение каждого мода и стрелки порядка загрузки. Изменения применяются при
-следующем запуске. Нижний включённый мод имеет больший приоритет; при совпадении
-файлов в журнале выводится, какой мод заменил предыдущий.
+O launcher tem a página **Mods & patches**: escolha da pasta, chave geral, ativação de cada mod
+e setas de ordem de carga. As mudanças valem no próximo início. O mod mais abaixo na lista tem
+prioridade; quando dois mods trocam o mesmo arquivo, o log mostra qual venceu.
 
-По умолчанию используется `bbport/mods/`, а в AppImage —
-`~/.local/share/bbport/mods/`. Распакуйте скачанный мод так:
+A pasta padrão é `mods/` no diretório de dados. Cada mod fica na sua própria pasta:
 
 ```text
 mods/
-  Название мода/
-    dvdroot_ps4/
-      chr/...
-      param/...
-      menu/...
+  Nome do mod/
+    dvdroot_ps4/...
 ```
 
-Также принимаются:
+Também são aceitos:
 
-- `Название мода/app0/dvdroot_ps4/...` и `Название мода/CUSA03173/dvdroot_ps4/...`;
-- лишняя папка-обёртка, как после распаковки архива в папку с его именем:
-  `Название мода/Название мода v1.2/dvdroot_ps4/...` (рядом могут лежать readme/картинки);
-- мод без `dvdroot_ps4`, в котором сразу лежат папки игры: `Название мода/chr/...`,
-  `Название мода/parts/...` (`chr`, `parts`, `map`, `menu`, `msg`, `param`, `sfx`,
-  `sound`, `font` и другие папки `dvdroot_ps4`).
+- `Nome do mod/app0/dvdroot_ps4/...`;
+- uma pasta a mais por fora, como a de um arquivo extraído numa pasta com o nome dele:
+  `Nome do mod/Nome do mod v1.2/dvdroot_ps4/...` (readme e imagens ao lado são ignorados).
 
-Регистр имён в моде не важен: `DVDROOT_PS4/Chr/C0000.chrbnd.dcx` из мода, собранного
-под Windows, заменяет игровой `dvdroot_ps4/chr/c0000.chrbnd.dcx`. Раньше такой файл
-добавлялся рядом под своим именем, и игра его не видела. В журнале запуска видно, сколько
-файлов игры мод заменил и сколько добавил: `Mods: 12 game files replaced, 0 added`.
-Если мод должен заменять файлы, а пишет `0 game files replaced`, проверьте пути внутри мода.
-Архивы ZIP/7z нужно предварительно распаковать. Поддерживаются готовые замены
-файлов `dvdroot_ps4`: текстуры, модели, параметры, интерфейс, звук и шрифты.
-Менеджер не объединяет содержимое двух одинаковых `.dcx`/`.bnd` файлов: последняя
-замена выигрывает целиком.
+Maiúsculas e minúsculas nos nomes do mod não importam: um arquivo com outra caixa troca o
+arquivo do jogo de mesmo nome. O log mostra quantos arquivos o mod trocou e quantos acrescentou:
+`Mods: 12 game files replaced, 0 added`. Se o mod deveria trocar arquivos e aparece
+`0 game files replaced`, confira os caminhos dentro dele. Arquivos ZIP/7z precisam ser extraídos
+antes. Dois mods que trocam o mesmo arquivo não são mesclados: o último vence inteiro.
 
-Для уже подготовленной папки shadPS4 работает соседний каталог
-`CUSA03173-mods/dvdroot_ps4/...` рядом с `CUSA03173/`. Он подключается автоматически
-перед модами из списка. Общий переключатель выключает и его. Можно также выбрать
-папку, непосредственно содержащую `dvdroot_ps4`, как папку модов; такая папка
-подключается целиком, без списка отдельных модов.
-Соглашение `-mods` проверено по
-[исходникам shadPS4](https://github.com/shadps4-emu/shadPS4/blob/main/src/core/file_sys/fs.cpp).
+Uma pasta `<pasta do jogo>-mods/dvdroot_ps4/...` ao lado da pasta do jogo (convenção do shadPS4)
+entra antes dos mods da lista. A chave geral também a desliga.
 
-Оригиналы игры не перезаписываются. На время запуска создаётся отдельное
-объединённое дерево ссылок в каталоге данных `out/mod-game-*`; чтение, stat и
-перечисление каталогов видят выбранные замены и остальные оригинальные файлы.
-Игровые `/app0` и `/hostapp` доступны только для чтения. Сохранения остаются
-в прежней папке и доступны для записи. При обычном завершении или остановке
-лаунчером временное дерево удаляется. После SIGKILL/аварийного отключения оно
-может остаться; такие каталоги не используются в следующем запуске.
+Os arquivos do jogo nunca são alterados. A cada início é montada uma árvore de links em
+`out/mod-game-*` no diretório de dados, apagada quando o jogo termina. `/app0` fica só para
+leitura; os saves continuam na pasta de sempre.
 
-Моды с заменой `eboot.bin`, `sce_module` или `sce_sys`, инжекторы DLL и скриптовые
-плагины этим загрузчиком не поддерживаются. Патчи исполняемого кода остаются
-в существующей системе `patches/` / `BB_PATCHES`. Символьные ссылки внутри мода
-не принимаются. Совместимость конкретного мода с CUSA03173 1.09 определяется
-его автором.
+Mods que trocam `eboot.bin`, `sce_module` ou `sce_sys`, injetores de DLL e plugins de script não
+são suportados. Patches de código ficam em `patches/` / `GOW3_PATCHES`. Links simbólicos dentro
+do mod são recusados.
 
-Для запуска из терминала:
+Pelo terminal:
 
 ```sh
-BB_GAME_DIR=/path/to/CUSA03173 BB_MODS_DIR=/path/to/mods bash run.sh
-BB_GAME_DIR=/path/to/CUSA03173 BB_MODS_ENABLED=0 bash run.sh
+GOW3_GAME_DIR=/caminho/CUSA01623 GOW3_MODS_DIR=/caminho/mods python run.py
+GOW3_GAME_DIR=/caminho/CUSA01623 GOW3_MODS_ENABLED=0 python run.py
 ```
 
-Порядок и отключения сохраняются в каталоге данных `mods.json`:
+Ordem e desativações ficam em `mods.json` no diretório de dados:
 
 ```json
-{"order": ["Первый", "Второй"], "disabled": ["Первый"]}
+{"order": ["Primeiro", "Segundo"], "disabled": ["Primeiro"]}
 ```
 
-Новые папки включаются автоматически и добавляются в конец по алфавиту.
-`BB_MODS_CONFIG` меняет путь профиля. `BB_MOD_TRACE=1` с `BB_MODS_DIR` выводит
-первые чтения реально подключённых файлов для диагностики.
+Pastas novas entram ativadas, no fim da lista, em ordem alfabética. `GOW3_MODS_CONFIG` muda o
+caminho desse arquivo.
 
-# Сторонние патчи (XML shadPS4)
+# Patches de terceiros (XML do shadPS4)
 
-Папка `patches/` в каталоге данных (в AppImage — `~/.local/share/bbport/patches/`, в лаунчере
-группа **Сторонние патчи**, там же можно выбрать другую папку). Подходят XML-файлы патчей в
-формате shadPS4/GoldHEN: берутся `Metadata` для `AppVer="01.09"` и `eboot.bin`, файлы с
-`TitleID` других игр пропускаются. Включение по умолчанию — из `isEnabled` файла, выбор в
-лаунчере сохраняется в `patches.json` каталога данных:
+Pasta `patches/` no diretório de dados (no launcher, grupo **Third-party patches**, onde também
+dá para escolher outra pasta). Servem arquivos XML no formato shadPS4/GoldHEN: entram os
+`Metadata` da versão do jogo (01.02) para `eboot.bin`, e arquivos com `TitleID` de outros jogos
+são ignorados. A ativação padrão vem do `isEnabled` do arquivo; a escolha do launcher fica em
+`patches.json`:
 
 ```json
-{"enabled": ["файл.xml/Имя патча"], "disabled": ["файл.xml/Другой патч"]}
+{"enabled": ["arquivo.xml/Nome do patch"], "disabled": ["arquivo.xml/Outro patch"]}
 ```
 
-Поддерживаются строки `bytes`, `bytes16/32/64`, `float32/64`, `utf8`, `utf16`.
-Патч со строками `mask` (поиск по шаблону) или с адресом вне eboot пропускается целиком,
-с сообщением в журнале. Сторонние патчи применяются после встроенных
-(`patches/Bloodborne.xml`): при пересечении побеждает сторонний. Из терминала:
-`BB_PATCHES_DIR=/путь BB_PATCHES_CONFIG=/путь/patches.json bash run.sh`.
-
-Патчи, которые заменяют указатели в таблицах (как `60 FPS++` и `90 FPS++`), загрузчик
-переносит на реальный адрес образа. Раньше такие патчи останавливали запуск ошибкой
-`patch overlaps a relocation`.
-
-# Резкость TAA
-
-Настройки `sharpen` и `sharpness` теперь работают также для TAA, в лаунчере и
-меню игры. Диапазон — **0…1**; при 0 или выключенном переключателе дополнительного
-прохода нет. RCAS применяется к готовой сцене перед HUD. В историю TAA сохраняется
-цвет до повышения резкости, чтобы она не усиливалась при повторном накоплении.
-Ровные участки сохраняют исходный цвет, включая HDR; дополнительный буфер не нужен.
+Tipos de linha aceitos: `bytes`, `bytes16/32/64`, `float32/64`, `utf8`, `utf16`. Um patch com
+linhas `mask` (busca por padrão) ou com endereço fora do eboot é ignorado inteiro, com aviso no
+log. Os patches de terceiros são aplicados depois dos embutidos
+(`patches/God_of_War_III_Remastered.xml`): onde os dois escrevem, vence o de terceiros. Pelo
+terminal: `GOW3_PATCHES_DIR=/caminho GOW3_PATCHES_CONFIG=/caminho/patches.json python run.py`.

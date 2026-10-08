@@ -2,7 +2,7 @@
 
 ## Native TAA and missing FSR 4 assets (2026-10-01)
 
-`upscaler=taa` / `BB_UPSCALER=taa` is a separate native-resolution temporal AA
+`upscaler=taa` / `GOW3_UPSCALER=taa` is a separate native-resolution temporal AA
 mode, available live in the launcher and overlay. It uses the existing jitter and
 camera/object motion vectors, reprojection, depth rejection and 3×3 neighborhood
 clipping in one compute pass with two ping-pong RGBA16F histories. History stores
@@ -11,7 +11,7 @@ composed afterwards and never enters history. Output changes and AA/provider
 changes reset history. TAA uses Native AA dimensions while preserving the saved
 FSR preset, and does not allocate an FSR context or execute an FSR model/RCAS.
 It still adds GPU work compared with disabling temporal AA; native 4K raster cost
-also remains. The explicit `BB_RENDER_RES` compatibility path must be unset.
+also remains. The explicit `GOW3_RENDER_RES` compatibility path must be unset.
 
 FSR Native AA is not a fast pass-through: it renders at the output resolution and
 also executes the temporal reconstruction (including the model for FSR 4) and
@@ -21,7 +21,7 @@ FSR 4.1.1 assets have separate 1080p/2160p tiers and standard/Ultra models:
 `t1080_m0`, `t1080_m1`, `t2160_m0`, `t2160_m1`. Outputs above 1080p need the 2160
 tier, irrespective of the preset. A missing `t2160_m0/spd.spv` means missing
 assets, not a GPU feature failure. These assets are not bundled: build the full
-set with `tools/fsr4cap/build_assets.sh` and put it in `BB_FSR411_DIR` or the
+set with `tools/fsr4cap/build_assets.sh` and put it in `GOW3_FSR411_DIR` or the
 packaged data directory's `fsr4_411`. Fatal asset failures now select FSR 3.1 in
 the live settings, so the menu shows the active provider, retains the error, and
 allows retrying FSR 4 after changing the output/installing assets.
@@ -45,11 +45,11 @@ draws/frame, 185 vs 210 FPS), and on GPUs without shader stencil export every de
 copy took nine draws.
 
 - `run.sh` again patches the game's render size for outputs other than 1080p (as in 0.1) and
-  marks it with `BB_AUTO_RENDER_RES=1`, so an in-game restart recomputes it. Preset and output
-  changes then need a restart (the menu offers it). `BB_LIVE_RES=1` selects the live path.
+  marks it with `GOW3_AUTO_RENDER_RES=1`, so an in-game restart recomputes it. Preset and output
+  changes then need a restart (the menu offers it). `GOW3_LIVE_RES=1` selects the live path.
   1080p output and TAA keep the live path.
 - Depth/stencil scene proxies need `VK_EXT_shader_stencil_export` again; without it these
-  targets stay native (as in 0.1). `BB_SCENE_STENCIL_BITS=1` still forces the portable
+  targets stay native (as in 0.1). `GOW3_SCENE_STENCIL_BITS=1` still forces the portable
   resampler for tests.
 
 ## Live resolution changes (2026-10-01)
@@ -58,7 +58,7 @@ The in-game output selector now resizes 720p/1080p/1440p/2160p host targets at a
 display-pass boundary. Presets use `output / scale`, including raster sizes above
 1080p (4K Quality: 2560×1440; Native AA: 3840×2160). Guest allocations stay at
 1920×1080; `run.sh` no longer inserts a resolution patch for normal output choices.
-The explicit `BB_RENDER_RES` compatibility override is retained.
+The explicit `GOW3_RENDER_RES` compatibility override is retained.
 
 `SceneTargets` resolves and retires old proxies before changing size. FSR resources
 and history are rebuilt for the new input/output, with completion waits for both
@@ -73,17 +73,17 @@ back to 1080p. This change does not scale every post-processing pass; performanc
 and intermediate detail can differ from the old startup-patched render sizes.
 
 Verification: `out/dev/live-resolution-summary.log` switches output, preset and FSR
-off/on in one PID. `BB_PRESENT_DUMP_TRIGGER` captures the completed host display
-buffer (including HUD) into `BB_DUMP_DIR`. Captures confirm actual 720p/1440p/2160p
+off/on in one PID. `GOW3_PRESENT_DUMP_TRIGGER` captures the completed host display
+buffer (including HUD) into `GOW3_DUMP_DIR`. Captures confirm actual 720p/1440p/2160p
 buffers. `scene-resolution-test` covers color/depth/stencil round trips through
-proxies both smaller and larger than the guest allocation. `BB_PRESET_FILE` accepts
+proxies both smaller and larger than the guest allocation. `GOW3_PRESET_FILE` accepts
 `preset [output-index [upscaler-index]]` for scripted menu-equivalent changes.
 
-Frame analyzer: `BB_CAPTURE_TRIGGER=<file> BB_CAPTURE_DIR=<dir>`; creating the file records
+Frame analyzer: `GOW3_CAPTURE_TRIGGER=<file> GOW3_CAPTURE_DIR=<dir>`; creating the file records
 the next frame (boundary: the pass writing a display buffer) — passes, targets, shaders,
 sampled textures, and the first 1 KiB of bound constants for small passes and first draws.
 
-## Bloodborne's frame (1920x1080, Hunter's Dream / Nightmare)
+## The frame the upscaler was calibrated on (1920x1080; God of War III's is still to be mapped)
 
 | Passes | What |
 |---|---|
@@ -128,9 +128,9 @@ The previous frame's matrices are not there; the port keeps them itself.
 
 ## Status
 
-- Camera motion vectors: verified by reprojecting the previous frame (`BB_DEBUG_MOTION=1`,
+- Camera motion vectors: verified by reprojecting the previous frame (`GOW3_DEBUG_MOTION=1`,
   toggles 1<<22 reprojected frame, 1<<23 error map): static geometry matches.
-- FSR 3.1 (`BB_UPSCALER=fsr3`, FireBurn/FSR-Vulkan submodule): scene color before the
+- FSR 3.1 (`GOW3_UPSCALER=fsr3`, FireBurn/FSR-Vulkan submodule): scene color before the
   post-processing combine (compute shader 9a9cf8a9), 1:1, RGB written back (the game keeps data
   in the alpha). Toggle 1<<24 switches it off at run time.
 - Jitter: viewport offset of scene geometry (drawn with the scene depth, not full-screen
@@ -146,7 +146,7 @@ The previous frame's matrices are not there; the port keeps them itself.
 всех объектов. Причина — апскейлер в этом режиме вообще не выполнялся, а jitter оставался
 включённым: на экран шёл растянутый кадр сцены, каждый кадр сдвинутый на свою фазу Halton.
 
-1. Проход UI опознавался по точному размеру цели `BB_RENDER_RES` (1916x1078), а игра выделяет
+1. Проход UI опознавался по точному размеру цели `GOW3_RENDER_RES` (1916x1078), а игра выделяет
    цели с выровненной высотой (1916x1080; в константах сцены тоже 1916x1080). `RunScaled` не
    вызывался ни разу (в логе не было `UI: native composition`). Теперь допускается выравнивание
    до 8 пикселей (`RenderTarget`), а размер сцены для FSR берётся из констант сцены
@@ -155,7 +155,7 @@ The previous frame's matrices are not there; the port keeps them itself.
    создавал новые image view каждый кадр, а реестр FSR 4 вмещает восемь. Теперь те же
    `CachedView`, что и в пути Native AA.
 
-Проверка дампом (`BB_DUMP_TRIGGER=<файл> BB_DUMP_DIR=<каталог>`, `BB_DUMP_FRAMES`, по умолчанию 8:
+Проверка дампом (`GOW3_DUMP_TRIGGER=<файл> GOW3_DUMP_DIR=<каталог>`, `GOW3_DUMP_FRAMES`, по умолчанию 8:
 вход FSR, векторы движения и выход, raw): при неподвижной камере PSNR соседних кадров выхода
 ~45 дБ против ~28 дБ у входа с jitter; при повороте камеры и ходьбе шлейфов нет. FPS в этом
 режиме ~107 вместо ~220 — раньше FSR 4 просто не выполнялся.
@@ -165,7 +165,7 @@ The previous frame's matrices are not there; the port keeps them itself.
 
 ## 2026-10-01: FSR 4 быстрее — проход post (2.9 → 0.8 мс в 4K)
 
-Замеры: `BB_FSR4_PROFILE=1` (время каждого прохода FSR 4, патч провайдера в субмодуле,
+Замеры: `GOW3_FSR4_PROFILE=1` (время каждого прохода FSR 4, патч провайдера в субмодуле,
 см. `gpu/patches/fsr-vulkan`), бенчмарк вне игры `out/gpu/fsr4-bench` (`ninja -C out/gpu
 fsr4-bench`; `--stats` — регистры и инструкции от RADV). 4K Balanced (2260x1272 → 3840x2160),
 RX 7800 XT: весь FSR 4 — 5.8 мс, из них **post 2.5–2.9 мс** (не нейросеть: последние слои,
@@ -177,7 +177,7 @@ pixel shuffle 2x2 и смешивание с историей), 12 проход�
 
 Решение: `tools/fsr4_optimize.sh` декомпилирует post (spirv-cross), `tools/fsr4_post_lds.pl`
 собирает блок 16x16 рабочей группы в shared memory и пишет сплошными строками, glslang
-компилирует обратно в `fsr4_shaders/opt/`; `vk_fsr4.cpp` берёт его оттуда (`BB_FSR4_OPT=0` —
+компилирует обратно в `fsr4_shaders/opt/`; `vk_fsr4.cpp` берёт его оттуда (`GOW3_FSR4_OPT=0` —
 оригинал). Две тонкости, найденные сравнением выходов:
 - spirv-cross переводит знаковую распаковку int8 (`OpBitcast` в `i8vec4`) как `unpack8(uint)`
   (беззнаковую) — без исправления результат совсем другой (PSNR 17 дБ);
