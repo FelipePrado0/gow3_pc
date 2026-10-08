@@ -337,6 +337,16 @@ extern "C" int bbgpu_text_input_begin(const char* initial, const char* prompt) {
     return 1;
 }
 
+extern "C" int bbgpu_choice_begin(const char* title, const char* const* items, int count, int focus) {
+    if (!g_window || count <= 0) return 0;
+    BbOverlay::BeginChoice(title ? title : "", std::vector<std::string>(items, items + count), focus);
+    return 1;
+}
+
+extern "C" int bbgpu_choice_poll(void) {
+    return BbOverlay::PollChoice();
+}
+
 extern "C" int bbgpu_text_input_poll(char* out, uint64_t size) {
     if (!g_window) return 2;
     std::string text;

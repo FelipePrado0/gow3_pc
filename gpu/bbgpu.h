@@ -28,6 +28,10 @@ void bbgpu_dump_guest_writes(void *ucontext);
  * no window exists; poll returns 0 typing, 1 confirmed, 2 cancelled (UTF-8 text). */
 int bbgpu_text_input_begin(const char *initial_utf8, const char *prompt_utf8);
 int bbgpu_text_input_poll(char *out_utf8, uint64_t size);
+/* A list for the player to choose from, drawn over the game (save list). begin: 0 when no window
+ * exists. poll: -1 while open, -2 cancelled, else the chosen index. */
+int bbgpu_choice_begin(const char *title, const char *const *items, int count, int focus);
+int bbgpu_choice_poll(void);
 /* 1 while the in-game settings menu is open: the game's pad input is held neutral. */
 int bbgpu_overlay_captures_input(void);
 /* Number of symbols registered by the vendored libraries (diagnostics). */

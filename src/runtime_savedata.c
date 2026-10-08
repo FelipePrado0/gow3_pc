@@ -144,6 +144,14 @@ static int remove_entry(const char *path, const struct stat *st, int flag, struc
 static void remove_tree(const char *path) { nftw(path,remove_entry,16,FTW_DEPTH|FTW_PHYS); }
 #endif
 
+/* A save's param (title, subtitle, date) for the save dialog; 0 when it exists. */
+int runtime_savedata_param(int32_t user, const char *dir, void *param) {
+    if (!valid_name(dir,32)) return -1;
+    char base[600], meta[680];
+    root(user,NULL,base,sizeof(base));
+    snprintf(meta,sizeof(meta),"%s/%s.sce_sys",base,dir);
+    return read_param(meta,(Param *)param);
+}
 static ABI int32_t save_initialize(const void *param) { (void)param; initialized=1; return 0; }
 static ABI int32_t save_terminate(void) {
     if (!initialized) return ERR_NOT_INITIALIZED;

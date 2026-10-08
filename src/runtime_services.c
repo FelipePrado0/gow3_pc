@@ -252,13 +252,104 @@ static ABI int32_t msg_term(void) { return dialog_term(1); }
 static ABI int32_t msg_close(void) { return dialog_close(1); }
 static ABI int32_t msg_progress(uint32_t target, uint32_t value) { (void)value; return dialog_progress(1,target); }
 static ABI int32_t msg_result(unsigned char *out) { return dialog_result(1,out,0); }
+/* SaveDataDialog. OrbisSaveDataDialogParam: BaseParam (48), size, mode @52, dispType @56,
+ * animParam @64, items @72, ..., userData @112. SaveDialogItems: userId @0, titleId @8,
+ * dirName @16 (32-byte names), dirNameNum @24, newItem @32 (title @0), focusPos @40.
+ * A list (mode 1) is shown for the player to choose; every other mode answers for the
+ * first listed save. The result names the chosen save ("" = the new item). */
+#define SAVE_MODE_LIST 1
+#define SAVE_RESULT_CANCELED 1
+static struct {
+    uint32_t mode, result;
+    void *user_data;
+    char dirs[32][32];
+    int dir_count, has_new, choosing;
+} save_dialog;
+static char save_labels[33][200];
+static void save_label(char *out, size_t size, const char *dir) {
+    unsigned char param[RUNTIME_SAVE_PARAM_SIZE];
+    if (runtime_savedata_param(USER_ID,dir,param)) { snprintf(out,size,"%s",dir); return; }
+    int64_t mtime; memcpy(&mtime,param+1288,8);
+    time_t t=(time_t)mtime; struct tm tm;
+#ifdef _WIN32
+    localtime_s(&tm,&t);
+#else
+    localtime_r(&t,&tm);
+#endif
+    char when[32]; strftime(when,sizeof(when),"%Y-%m-%d %H:%M",&tm);
+    const char *title=(const char *)param, *subtitle=(const char *)param+128;
+    snprintf(out,size,"%.60s%s%.60s  (%s)",title[0] ? title : dir,subtitle[0] ? " - " : "",subtitle,when);
+}
 static ABI int32_t save_init(void) { return dialog_init(2); }
-static ABI int32_t save_open(const unsigned char *p) { return dialog_open_mode(2,p,52,5); }
-static ABI int32_t save_status(void) { return dialog_status(2); }
+static ABI int32_t save_open(const unsigned char *p) {
+    if (!p) return DIALOG_ARG_NULL;
+    if (!dialogs[2].initialized) return DIALOG_NOT_INITIALIZED;
+    memset(&save_dialog,0,sizeof(save_dialog));
+    memcpy(&save_dialog.mode,p+52,4);
+    memcpy(&save_dialog.user_data,p+112,8);
+    const unsigned char *items; memcpy(&items,p+72,8);
+    if (items) {
+        const char *dirs; uint32_t count; const void *new_item;
+        memcpy(&dirs,items+16,8); memcpy(&count,items+24,4); memcpy(&new_item,items+32,8);
+        for (uint32_t i=0;dirs && i<count && save_dialog.dir_count<32;++i)
+            if (dirs[i*32]) memcpy(save_dialog.dirs[save_dialog.dir_count++],dirs+i*32,31);
+        save_dialog.has_new=new_item!=NULL;
+    }
+    if (save_dialog.mode!=SAVE_MODE_LIST) return dialog_open_mode(2,p,52,5);
+    const char *labels[33]; int n=0;
+    if (save_dialog.has_new) { snprintf(save_labels[n],sizeof(save_labels[n]),"New save"); labels[n]=save_labels[n]; ++n; }
+    for (int i=0;i<save_dialog.dir_count;++i) { save_label(save_labels[n],sizeof(save_labels[n]),save_dialog.dirs[i]); labels[n]=save_labels[n]; ++n; }
+    uint32_t type; memcpy(&type,p+56,4);
+    const char *title=type==1 ? "Save game" : type==2 ? "Load game" : "Delete save";
+    if (!n || !bbgpu_choice_begin(title,labels,n,0)) {
+        printf("Runtime: SaveDataDialog list (%s): %s\n",title,n ? "no window, cancelled" : "no saves, cancelled");
+        save_dialog.result=SAVE_RESULT_CANCELED;
+        dialogs[2].status=DIALOG_FINISHED; dialogs[2].button=0;
+        return 0;
+    }
+    printf("Runtime: SaveDataDialog list (%s): %d entries shown\n",title,n);
+    save_dialog.choosing=1;
+    dialogs[2].status=DIALOG_RUNNING;
+    return 0;
+}
+static ABI int32_t save_status(void) {
+    if (save_dialog.choosing) {
+        int choice=bbgpu_choice_poll();
+        if (choice!=-1) {
+            save_dialog.choosing=0;
+            dialogs[2].status=DIALOG_FINISHED;
+            if (choice<0) { save_dialog.result=SAVE_RESULT_CANCELED; dialogs[2].button=0; }
+            else {
+                int dir=choice-save_dialog.has_new;
+                /* The chosen save goes first; the new item has no name. */
+                if (dir>=0) memcpy(save_dialog.dirs[0],save_dialog.dirs[dir],32);
+                else save_dialog.dirs[0][0]=0;
+                save_dialog.dir_count=dir>=0 || save_dialog.dir_count ? 1 : 0;
+                dialogs[2].button=1;
+            }
+            printf("Runtime: SaveDataDialog list: %s%s\n",choice<0 ? "cancelled" : "chose ",
+                   choice<0 ? "" : save_dialog.dirs[0][0] ? save_dialog.dirs[0] : "new save");
+        }
+    }
+    return dialog_status(2);
+}
 static ABI int32_t save_term(void) { return dialog_term(2); }
 static ABI int32_t save_close(void) { return dialog_close(2); }
 static ABI int32_t save_progress(uint32_t target, uint32_t rate) { (void)rate; return dialog_progress(2,target); }
-static ABI int32_t save_result(unsigned char *out) { return dialog_result(2,out,4); }
+/* OrbisSaveDataDialogResult: mode, result, buttonId, dirName* @16, param* @24, userData @32. */
+static ABI int32_t save_result(unsigned char *out) {
+    int32_t r=dialog_result(2,out,4);
+    if (r) return r;
+    memcpy(out,&save_dialog.mode,4);
+    memcpy(out+4,&save_dialog.result,4);
+    char *dir; unsigned char *param;
+    memcpy(&dir,out+16,8); memcpy(&param,out+24,8);
+    const char *name=save_dialog.dir_count && !save_dialog.result ? save_dialog.dirs[0] : "";
+    if (dir) { memset(dir,0,32); memcpy(dir,name,strnlen(name,31)); }
+    if (param && name[0]) runtime_savedata_param(USER_ID,name,param);
+    memcpy(out+32,&save_dialog.user_data,8);
+    return 0;
+}
 static ABI int32_t save_ready(void) { return 1; }
 static ABI int32_t profile_result(void *result) { if (result) memset(result,0,4); return 0; }
 /* ImeDialog: text typed on the keyboard into the game window (title bar shows it).

@@ -95,5 +95,8 @@ const char *runtime_file_user_dir(void);
 void runtime_savedata_configure(const char *title);
 uintptr_t runtime_savedata_resolve(const char *name);
 void runtime_savedata_report(void);
+/* OrbisSaveDataParam (1328 bytes) of a save directory of the current title. */
+#define RUNTIME_SAVE_PARAM_SIZE 1328
+int runtime_savedata_param(int32_t user, const char *dir, void *param);
 void runtime_thread_attach_host(const char *name);
 #endif

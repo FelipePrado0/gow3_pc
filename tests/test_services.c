@@ -9,9 +9,13 @@ int bbgpu_text_input_poll(char *text, uint64_t size) { (void)text; (void)size; r
 int64_t runtime_file_open(const char *path, int flags, int mode) { (void)path; (void)flags; (void)mode; return -1; }
 int64_t runtime_file_read(int fd, void *buffer, uint64_t size) { (void)fd; (void)buffer; (void)size; return -1; }
 int64_t runtime_file_close(int fd) { (void)fd; return 0; }
+static int choice_next=-1;
+int bbgpu_choice_begin(const char *title, const char *const *items, int count, int focus) { (void)title; (void)items; (void)focus; return count>0; }
+int bbgpu_choice_poll(void) { return choice_next; }
+int runtime_savedata_param(int32_t user, const char *dir, void *param) { (void)user; (void)dir; (void)param; return -1; }
 
 int main(void) {
-    unsigned char param[128]={0}, result[64];
+    unsigned char param[128]={0}, result[64]={0}; /* the game zeroes the pointers it does not want */
     uint32_t value;
 
     /* MsgDialog: a user message finishes with OK; a progress bar runs until closed. */
@@ -38,6 +42,28 @@ int main(void) {
     param[52]=2;
     assert(save_open(param)==0 && save_status()==DIALOG_FINISHED && save_result(result)==0);
     memcpy(&value,result+8,4); assert(value==1);
+    assert(save_term()==0);
+
+    /* Save list: the player's choice comes back as the save directory. */
+    char names[2][32]={"SAVE0001","SAVE0002"}, chosen[32];
+    unsigned char items[64]={0}, list[128]={0}, out[64]={0};
+    const char *names_ptr=names[0]; uint32_t name_count=2; const char *new_title="New";
+    memcpy(items+16,&names_ptr,8); memcpy(items+24,&name_count,4); memcpy(items+32,&new_title,8);
+    unsigned char *items_ptr=items; char *chosen_ptr=chosen;
+    list[52]=1; list[56]=2; memcpy(list+72,&items_ptr,8);
+    memcpy(out+16,&chosen_ptr,8);
+    assert(save_init()==0 && save_open(list)==0 && save_status()==DIALOG_RUNNING);
+    choice_next=2; /* entries: New save, SAVE0001, SAVE0002 */
+    assert(save_status()==DIALOG_FINISHED && save_result(out)==0 && !strcmp(chosen,"SAVE0002"));
+    memcpy(&value,out+4,4); assert(value==0);
+    memcpy(&value,out+8,4); assert(value==1);
+    assert(save_open(list)==0);
+    choice_next=0;
+    assert(save_status()==DIALOG_FINISHED && save_result(out)==0 && chosen[0]==0); /* new save */
+    assert(save_open(list)==0);
+    choice_next=-2;
+    assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
+    memcpy(&value,out+4,4); assert(value==SAVE_RESULT_CANCELED);
     assert(save_term()==0);
 
     /* PlayGo: installed, full speed, progress never divides by zero. */
