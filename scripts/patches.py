@@ -211,9 +211,12 @@ def compile_patches(xml, names, app_version, segments):
 # Third-party patch files (shadPS4/GoldHEN XML) in the data directory's patches/ folder.
 BLOODBORNE_IDS={'CUSA00207','CUSA00208','CUSA00900','CUSA01363','CUSA03173','CUSA03023'}
 PATCHES_DIR=Path(__file__).resolve().parent.parent/'patches'
-# Built-in patch file per game and the app version its addresses are for.
-GAMES=[(BLOODBORNE_IDS,PATCHES_DIR/'Bloodborne.xml','01.09'),
-       ({'CUSA01623'},PATCHES_DIR/'God_of_War_III_Remastered.xml','01.02')]
+# Built-in patch file per game, the app version its addresses are for and, when known, the
+# sha256 of the only eboot.bin they were checked against (another build of the same version has
+# its code elsewhere: byte writes there corrupt it).
+GAMES=[(BLOODBORNE_IDS,PATCHES_DIR/'Bloodborne.xml','01.09',None),
+       ({'CUSA01623'},PATCHES_DIR/'God_of_War_III_Remastered.xml','01.02',
+        'd85c8135d330c3b601bf5dc3f1dd86bd6119fb8a9fce372bed2c9785f9a79299')]
 DMEM_RETAIL_MB=5056  # runtime_memory.c POOL_SIZE default
 
 
@@ -226,8 +229,19 @@ def game_title_id(game):
 
 
 def game_profile(title_id):
-    """(title IDs, built-in XML, app version) for a known game, else None."""
+    """(title IDs, built-in XML, app version, eboot sha256 or None) for a known game, else None."""
     return next((g for g in GAMES if title_id in g[0]),None)
+
+
+def eboot_matches(game, profile):
+    """Whether the game's eboot.bin is the build the profile's patches were checked against."""
+    if not profile or not profile[3]:
+        return True
+    import hashlib
+    try:
+        return hashlib.sha256((Path(game)/'eboot.bin').read_bytes()).hexdigest()==profile[3]
+    except OSError:
+        return False
 
 
 # God of War III notes: the texture fix and the resolution patches both resize the video arena;
@@ -236,10 +250,11 @@ EXCLUSIVE_PREFIX='Resolution Patch'
 REPLACED_BY_EXCLUSIVE={'Bug Fix - Texture Corruption Fix'}
 
 
-def selected_patches(xml, app_version, extra):
-    """The file's isEnabled patches for this version, then the names in extra (";"-separated)."""
-    names=[m.get('Name') for m in ET.parse(xml).getroot().iter('Metadata')
-           if m.get('AppVer')==app_version and m.get('isEnabled','false').lower()=='true']
+def selected_patches(xml, app_version, extra, only=False):
+    """The file's isEnabled patches for this version, then the names in extra (";"-separated).
+    only: extra is the whole selection (the launcher's), without the file's defaults."""
+    names=[] if only else [m.get('Name') for m in ET.parse(xml).getroot().iter('Metadata')
+                           if m.get('AppVer')==app_version and m.get('isEnabled','false').lower()=='true']
     names+=[n for n in (n.strip() for n in extra.split(';')) if n and n not in names]
     exclusive=[n for n in names if n.startswith(EXCLUSIVE_PREFIX)]
     if len(exclusive)>1:
@@ -355,13 +370,17 @@ def main():
         print(f'Patches: no patch profile for {title}: none applied')
         return
     if profile and profile[0] is not BLOODBORNE_IDS:
-        ids,xml,needed=profile
+        ids,xml,needed,_sha=profile
         version=game_app_version(a.game_dir)
         if version!=needed and not os.environ.get('BB_FORCE_PATCHES'):
             write_patches(a.out,[])
             print(f'Patches: game version {version}, {xml.name} is for {needed}: none applied')
             return
-        names=selected_patches(xml,needed,a.extra)
+        if not eboot_matches(a.game_dir,profile) and not os.environ.get('BB_FORCE_PATCHES'):
+            write_patches(a.out,[])
+            print(f'Patches: eboot.bin is not the build {xml.name} was checked against: none applied')
+            return
+        names=selected_patches(xml,needed,a.extra,os.environ.get('BB_PATCHES_ONLY')=='1')
         segments=eboot_segments((a.out/'eboot.elf').read_bytes())
         writes=compile_patches(xml,names,needed,segments)
         if a.patches_dir:

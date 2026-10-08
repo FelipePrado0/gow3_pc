@@ -117,18 +117,32 @@ def main():
         # Patches exist for game version 01.09 only (patches.py applies none to others): other
         # versions keep the game's 30 FPS timing and change resolutions live.
         sys.path.insert(0, str(PORT / 'scripts'))
-        from patches import (BLOODBORNE_IDS, game_app_version, game_profile, game_title_id,
+        from patches import (BLOODBORNE_IDS, eboot_matches, game_app_version, game_profile, game_title_id,
                              patch_requirements, selected_patches)
         version = game_app_version(game)
         profile = game_profile(game_title_id(game))
         needed = profile[2] if profile else '01.09'
-        patched = version in (None, needed) or bool(env.get('BB_FORCE_PATCHES'))
+        patched = (version in (None, needed) and eboot_matches(game, profile)) or bool(env.get('BB_FORCE_PATCHES'))
         if not patched:
             print(f'Game version {version}: community patches need {needed}; 30 FPS, no effect patches')
         bloodborne = not profile or profile[0] is BLOODBORNE_IDS
+        if not bloodborne:
+            # The window shows the game's icon (BMP: the format SDL loads without extra libraries).
+            try:
+                from PIL import Image
+                with Image.open(game / 'sce_sys' / 'icon0.png') as icon:
+                    icon.convert('RGBA').resize((64, 64), Image.LANCZOS).save(out / 'window_icon.bmp')
+                env.setdefault('BB_WINDOW_ICON', str(out / 'window_icon.bmp'))
+            except (ImportError, OSError):
+                pass
+            # The temporal upscalers and motion vectors read Bloodborne's scene constants; linear
+            # image readbacks fix God of War III's corrupted textures.
+            env.setdefault('BB_UPSCALER', 'none')
+            env.setdefault('BB_READBACK_LINEAR', '1')
         if not bloodborne and patched:
             # Other games: the patch notes give the direct memory and VBlank rate they need.
-            dmem, vblank = patch_requirements(profile[1], selected_patches(profile[1], needed, env.get('BB_PATCHES', '')), needed)
+            names = selected_patches(profile[1], needed, env.get('BB_PATCHES', ''), env.get('BB_PATCHES_ONLY') == '1')
+            dmem, vblank = patch_requirements(profile[1], names, needed)
             if dmem:
                 env.setdefault('BB_DMEM_MB', str(dmem))
             if vblank:
@@ -140,7 +154,9 @@ def main():
         # BB_FPS presets are Bloodborne patches; other games keep their own timing (60 Hz VBlank).
         fps = env.get('BB_FPS', 'uncap') if patched and bloodborne else '30'
         scaled_render = scaled_output = None
-        if not env.get('BB_RENDER_RES'):
+        # Output sizes and live resolution changes scale Bloodborne's own targets; other games set
+        # their resolution with their patches.
+        if bloodborne and not env.get('BB_RENDER_RES'):
             printed = run_script('patches.py', '--print-scaled', '--settings', config, capture=True).split()
             if len(printed) == 2:
                 scaled_render, scaled_output = printed
