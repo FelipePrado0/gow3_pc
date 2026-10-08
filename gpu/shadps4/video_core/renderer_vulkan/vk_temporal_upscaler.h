@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: temporal upscaling of Bloodborne's HDR scene color (docs/upscaler.md). BB_UPSCALER=fsr3
+// bbport: temporal upscaling of the HDR scene color (docs/upscaler.md). Off for God of War III
+// until its scene color, depth and camera constants are found (run.py). BB_UPSCALER=fsr3
 // runs FSR 3.1 (FireBurn/FSR-Vulkan, native Vulkan) on the scene color right before the
 // post-processing combine pass, with the scene depth and camera motion vectors, and writes the
 // result back so the game's own post, tonemap and UI continue unchanged (Native AA preset).

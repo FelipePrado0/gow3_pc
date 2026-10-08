@@ -36,7 +36,8 @@ VertexRange IndexedRange(std::span<const Index, Extent> indices, int32_t base_ve
     return {uint32_t(int64_t(lo) + base_vertex), hi - lo + 1};
 }
 
-// Vertex shader constant buffers (stride 16) of Bloodborne's G-buffer shaders: the 864-byte
+// Vertex shader constant buffers (stride 16) of the G-buffer shaders the motion vectors were first
+// calibrated on (still to be recalibrated for God of War III): the 864-byte
 // scene constants (camera), 416-byte model constants and palettes of 3x4 bone matrices
 // (48 bytes per bone). Characters have 656+ bytes; weapons and props 2-8 bones (96-384).
 enum class BufferRole { Other, Skeleton, SmallSkeleton };
