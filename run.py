@@ -117,16 +117,28 @@ def main():
         # Patches exist for game version 01.09 only (patches.py applies none to others): other
         # versions keep the game's 30 FPS timing and change resolutions live.
         sys.path.insert(0, str(PORT / 'scripts'))
-        from patches import game_app_version
+        from patches import (BLOODBORNE_IDS, game_app_version, game_profile, game_title_id,
+                             patch_requirements, selected_patches)
         version = game_app_version(game)
-        patched = version in (None, '01.09') or bool(env.get('BB_FORCE_PATCHES'))
+        profile = game_profile(game_title_id(game))
+        needed = profile[2] if profile else '01.09'
+        patched = version in (None, needed) or bool(env.get('BB_FORCE_PATCHES'))
         if not patched:
-            print(f'Game version {version}: community patches need 01.09; 30 FPS, no effect patches')
+            print(f'Game version {version}: community patches need {needed}; 30 FPS, no effect patches')
+        bloodborne = not profile or profile[0] is BLOODBORNE_IDS
+        if not bloodborne and patched:
+            # Other games: the patch notes give the direct memory and VBlank rate they need.
+            dmem, vblank = patch_requirements(profile[1], selected_patches(profile[1], needed, env.get('BB_PATCHES', '')), needed)
+            if dmem:
+                env.setdefault('BB_DMEM_MB', str(dmem))
+            if vblank:
+                env.setdefault('BB_VBLANK_HZ', str(vblank))
         # Sizes chosen below for the previous launch are recomputed after an in-game restart.
         if env.get('BB_AUTO_RENDER_RES') == '1':
             for key in ('BB_RENDER_RES', 'BB_OUTPUT_RES', 'BB_AUTO_RENDER_RES'):
                 env.pop(key, None)
-        fps = env.get('BB_FPS', 'uncap') if patched else '30'
+        # BB_FPS presets are Bloodborne patches; other games keep their own timing (60 Hz VBlank).
+        fps = env.get('BB_FPS', 'uncap') if patched and bloodborne else '30'
         scaled_render = scaled_output = None
         if not env.get('BB_RENDER_RES'):
             printed = run_script('patches.py', '--print-scaled', '--settings', config, capture=True).split()

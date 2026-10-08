@@ -11,6 +11,7 @@
 
 #include <SDL3/SDL.h>
 #include "bbport_settings.h"
+#include "common/elf_info.h"
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
@@ -161,7 +162,12 @@ void Menu() {
                             ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(ImVec2(620.0f * base_scale, 0.0f), ImGuiCond_Appearing);
     bool keep_open = true;
-    if (!ImGui::Begin("Bloodborne — настройки  (Insert / L3+R3)", &keep_open,
+    // bbport: the game's own title (param.sfo), not a fixed one.
+    static const std::string heading = [] {
+        const std::string_view title = Common::ElfInfo::Instance().Title();
+        return std::string(title.empty() ? "Bloodborne" : title) + " — настройки  (Insert / L3+R3)";
+    }();
+    if (!ImGui::Begin(heading.c_str(), &keep_open,
                       ImGuiWindowFlags_NoCollapse)) {
         ImGui::End();
         return;

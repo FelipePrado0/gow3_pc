@@ -7,6 +7,7 @@ image places eboot vaddr 0 at image offset 0. Only literal writes are supported
 import argparse
 import json
 import os
+import re
 import struct
 import sys
 import xml.etree.ElementTree as ET
@@ -209,9 +210,56 @@ def compile_patches(xml, names, app_version, segments):
 
 # Third-party patch files (shadPS4/GoldHEN XML) in the data directory's patches/ folder.
 BLOODBORNE_IDS={'CUSA00207','CUSA00208','CUSA00900','CUSA01363','CUSA03173','CUSA03023'}
+PATCHES_DIR=Path(__file__).resolve().parent.parent/'patches'
+# Built-in patch file per game and the app version its addresses are for.
+GAMES=[(BLOODBORNE_IDS,PATCHES_DIR/'Bloodborne.xml','01.09'),
+       ({'CUSA01623'},PATCHES_DIR/'God_of_War_III_Remastered.xml','01.02')]
+DMEM_RETAIL_MB=5056  # runtime_memory.c POOL_SIZE default
 
 
-def external_patches(directory, app_version='01.09', exclude=Path(__file__).resolve().parent.parent/'patches/Bloodborne.xml'):
+def game_title_id(game):
+    try:
+        from prepare import sfo
+        return sfo((Path(game) / 'sce_sys/param.sfo').read_bytes()).get('TITLE_ID')
+    except (OSError, ValueError, ImportError):
+        return None
+
+
+def game_profile(title_id):
+    """(title IDs, built-in XML, app version) for a known game, else None."""
+    return next((g for g in GAMES if title_id in g[0]),None)
+
+
+# God of War III notes: the texture fix and the resolution patches both resize the video arena;
+# enable one, never both. A chosen resolution patch replaces the default texture fix.
+EXCLUSIVE_PREFIX='Resolution Patch'
+REPLACED_BY_EXCLUSIVE={'Bug Fix - Texture Corruption Fix'}
+
+
+def selected_patches(xml, app_version, extra):
+    """The file's isEnabled patches for this version, then the names in extra (";"-separated)."""
+    names=[m.get('Name') for m in ET.parse(xml).getroot().iter('Metadata')
+           if m.get('AppVer')==app_version and m.get('isEnabled','false').lower()=='true']
+    names+=[n for n in (n.strip() for n in extra.split(';')) if n and n not in names]
+    exclusive=[n for n in names if n.startswith(EXCLUSIVE_PREFIX)]
+    if len(exclusive)>1:
+        raise ValueError(f'choose one resolution patch, not {exclusive}')
+    return [n for n in names if not (exclusive and n in REPLACED_BY_EXCLUSIVE)]
+
+
+def patch_requirements(xml, names, app_version):
+    """(direct memory MiB, VBlank Hz) the selected patches' notes ask for, None when not needed.
+    shadPS4 notes say "Requires setting DMEM to N MB": N is on top of the retail pool."""
+    dmem=vblank=None
+    for meta in ET.parse(xml).getroot().iter('Metadata'):
+        if meta.get('Name') not in names or meta.get('AppVer')!=app_version: continue
+        note=meta.get('Note','')
+        if m:=re.search(r'DMEM to (\d+) MB',note): dmem=max(dmem or 0,DMEM_RETAIL_MB+int(m.group(1)))
+        if m:=re.search(r'VBlank to (\d+) FPS',note): vblank=max(vblank or 0,int(m.group(1)))
+    return dmem,vblank
+
+
+def external_patches(directory, app_version='01.09', exclude=PATCHES_DIR/'Bloodborne.xml', ids=BLOODBORNE_IDS):
     """[(key, file, metadata)] of eboot patches for this version in directory/*.xml.
     key is "<file name>/<patch name>" (the launcher's selection, patches.json)."""
     found=[]
@@ -223,8 +271,8 @@ def external_patches(directory, app_version='01.09', exclude=Path(__file__).reso
         except ET.ParseError as error:
             print(f'Patches: {path.name}: {error}',file=sys.stderr)
             continue
-        ids={e.text.strip() for e in root.iter('ID') if e.text}
-        if ids and not ids&BLOODBORNE_IDS: continue
+        file_ids={e.text.strip() for e in root.iter('ID') if e.text}
+        if file_ids and not file_ids&ids: continue
         for meta in root.iter('Metadata'):
             if meta.get('AppVer')==app_version and meta.get('AppElf','eboot.bin')=='eboot.bin':
                 found.append((f'{path.name}/{meta.get("Name")}',path,meta))
@@ -262,6 +310,14 @@ def compile_external(selected, segments):
     return writes
 
 
+def write_patches(out, writes):
+    # BBPATCH2: the patch base, so the loader can rebase pointers the patches write into
+    # relocated slots (60/90 FPS++ replace function pointers).
+    blob=struct.pack('<8sQQ',b'BBPATCH2',EBOOT_BASE,len(writes))
+    for offset,data in writes: blob+=struct.pack('<QQ',offset,len(data))+data
+    (out/'patches.bin').write_bytes(blob)
+
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--patches-dir',type=Path,help='third-party patch XML files (shadPS4 format)')
@@ -292,12 +348,33 @@ def main():
         size=render_size(settings)
         if size: print(f'{size[0]}x{size[1]}')
         return
+    title=game_title_id(a.game_dir)
+    profile=game_profile(title)
+    if title and not profile:
+        write_patches(a.out,[])
+        print(f'Patches: no patch profile for {title}: none applied')
+        return
+    if profile and profile[0] is not BLOODBORNE_IDS:
+        ids,xml,needed=profile
+        version=game_app_version(a.game_dir)
+        if version!=needed and not os.environ.get('BB_FORCE_PATCHES'):
+            write_patches(a.out,[])
+            print(f'Patches: game version {version}, {xml.name} is for {needed}: none applied')
+            return
+        names=selected_patches(xml,needed,a.extra)
+        segments=eboot_segments((a.out/'eboot.elf').read_bytes())
+        writes=compile_patches(xml,names,needed,segments)
+        if a.patches_dir:
+            writes+=compile_external(external_selection(external_patches(a.patches_dir,needed,xml,ids),
+                                                        a.patches_config),segments)
+        write_patches(a.out,writes)
+        print(f'Patches: {title}; {len(writes)} writes from {names or "none"}')
+        return
     # The patches are byte writes at the addresses of one game version: on another version they
     # would corrupt code. Such a game runs unpatched (run.sh/run.py then choose 30 FPS).
     version=game_app_version(a.game_dir)
     if version and version!=a.app_version and not os.environ.get('BB_FORCE_PATCHES'):
-        blob=struct.pack('<8sQQ',b'BBPATCH2',EBOOT_BASE,0)
-        (a.out/'patches.bin').write_bytes(blob)
+        write_patches(a.out,[])
         print(f'Patches: game version {version}, patches are for {a.app_version}: none applied '
               '(30 FPS, no effect or resolution patches)')
         return
@@ -322,11 +399,7 @@ def main():
         # After the built-in ones: an external patch of the same bytes wins.
         writes+=compile_external(external_selection(external_patches(a.patches_dir,a.app_version,a.xml),
                                                     a.patches_config),segments)
-    # BBPATCH2: the patch base, so the loader can rebase pointers the patches write into
-    # relocated slots (60/90 FPS++ replace function pointers).
-    blob=struct.pack('<8sQQ',b'BBPATCH2',EBOOT_BASE,len(writes))
-    for offset,data in writes: blob+=struct.pack('<QQ',offset,len(data))+data
-    (a.out/'patches.bin').write_bytes(blob)
+    write_patches(a.out,writes)
     print(f'Patches: FPS preset {a.fps}; {len(writes)} writes from {names or "none"}')
 
 

@@ -9,7 +9,7 @@ from patches import (EBOOT_BASE, OUTPUT_SIZE, RESOLUTION_TEMPLATE, SCENE_HEIGHT,
                      SCENE_WIDTH, UI_HEIGHT, UI_WIDTH, compile_patches,
                      render_size, resolution_writes, scaled_sizes, effect_patches,
                      validate_patch_requirements, external_patches, external_selection,
-                     compile_external)
+                     compile_external, game_profile, selected_patches, patch_requirements)
 
 XML = ROOT / 'patches/Bloodborne.xml'
 SEGMENTS = [(0, 0x6000000)]
@@ -160,6 +160,42 @@ class ExternalPatchTests(unittest.TestCase):
 
     def test_built_in_file_is_not_external(self):
         self.assertEqual(external_patches(XML.parent), [])
+
+
+GOW3 = ROOT / 'patches/God_of_War_III_Remastered.xml'
+
+
+class GameProfileTests(unittest.TestCase):
+    def test_profiles_by_title_id(self):
+        self.assertEqual(game_profile('CUSA03173')[1:], (XML, '01.09'))
+        self.assertEqual(game_profile('CUSA01623')[1:], (GOW3, '01.02'))
+        self.assertIsNone(game_profile('CUSA99999'))
+        self.assertIsNone(game_profile(None))
+
+    def test_gow3_defaults_and_extras(self):
+        self.assertEqual(selected_patches(GOW3, '01.02', ''),
+                         ['Bug Fix - Texture Corruption Fix', 'Skip Any Video With X Button'])
+        self.assertEqual(selected_patches(GOW3, '01.02', 'Frame Rate Patch - 120 FPS; Skip Any Video With X Button'),
+                         ['Bug Fix - Texture Corruption Fix', 'Skip Any Video With X Button',
+                          'Frame Rate Patch - 120 FPS'])
+        self.assertEqual(selected_patches(GOW3, '01.00', ''), [])
+
+    def test_gow3_resolution_patch_replaces_texture_fix(self):
+        self.assertEqual(selected_patches(GOW3, '01.02', 'Resolution Patch - 4K'),
+                         ['Skip Any Video With X Button', 'Resolution Patch - 4K'])
+        with self.assertRaises(ValueError):
+            selected_patches(GOW3, '01.02', 'Resolution Patch - 4K;Resolution Patch - 720p')
+
+    def test_gow3_patches_compile(self):
+        names = [m.get('Name') for m in ET.parse(GOW3).getroot().iter('Metadata')]
+        self.assertTrue(compile_patches(GOW3, names, '01.02', SEGMENTS))
+
+    def test_requirements_from_patch_notes(self):
+        # Notes ask for extra direct memory (shadPS4 "DMEM") and a VBlank rate.
+        self.assertEqual(patch_requirements(GOW3, ['Resolution Patch - 4K', 'Skip Intro'], '01.02'),
+                         (5056 + 6144, None))
+        self.assertEqual(patch_requirements(GOW3, ['Frame Rate Patch - 120 FPS'], '01.02'), (None, 120))
+        self.assertEqual(patch_requirements(GOW3, [], '01.02'), (None, None))
 
 
 if __name__ == '__main__':
