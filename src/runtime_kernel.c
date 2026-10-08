@@ -167,6 +167,33 @@ static ABI __attribute__((noreturn)) void raise_exception(uint32_t code,uint64_t
     runtime_report();
     exit(23);
 }
+/* The process was started without arguments other than its own name. */
+static const char *guest_argv[]={"eboot.bin",NULL};
+static ABI int32_t get_argc(void) { return 1; }
+static ABI const char **get_argv(void) { return guest_argv; }
+/* Only the game and its bundled modules exist; nothing was loaded at run time. */
+static ABI int32_t stop_unload_module(int32_t handle,uint64_t args,const void *argp,uint32_t flags,const void *opt,int32_t *result) {
+    (void)args; (void)argp; (void)flags; (void)opt; (void)result;
+    printf("Runtime: sceKernelStopUnloadModule(%d): no such module\n",handle);
+    return ERR(3); /* ESRCH */
+}
+static ABI int32_t module_info_from_addr(uint64_t address,int32_t flags,void *info) {
+    (void)address;
+    if (flags>=3) return ERR(22);
+    if (!info) return ERR(14);
+    return ERR(3); /* ESRCH: the runtime keeps no module records */
+}
+static ABI int32_t kernel_mlock(const void *address,uint64_t size) { (void)address; (void)size; return 0; }
+/* libc's C++ exception unwinder. The game does not throw (no __cxa_throw import): unwinding
+ * finds no frame data, and resuming a context is a stop, never a silent success. */
+static ABI int32_t elf_phdr_match_addr(void *info,uint64_t address) { (void)info; (void)address; return 0; }
+static ABI int32_t is_signal_return(uint64_t pc) { (void)pc; return 0; }
+static ABI void pthread_cxa_finalize(void *dso) { (void)dso; }
+static ABI __attribute__((noreturn)) void unwind_resume(void) {
+    fputs("STOP: guest C++ exception unwinding (sigreturn/__Ux86_64_setcontext) is not supported\n",stderr);
+    runtime_report();
+    exit(23);
+}
 static ABI int32_t print_backtrace(void) {
     fputs("Runtime: guest requested a backtrace (not available)\n",stderr);
     return 0;
@@ -310,6 +337,11 @@ static const RuntimeExport exports[]={
     {"sceKernelDebugRaiseException",raise_exception},
     {"sceKernelDebugRaiseExceptionOnReleaseMode",raise_exception},
     {"sceKernelPrintBacktraceWithModuleInfo",print_backtrace},
+    {"getargc",get_argc}, {"getargv",get_argv}, {"sceKernelStopUnloadModule",stop_unload_module},
+    {"sceKernelGetModuleInfoFromAddr",module_info_from_addr}, {"sceKernelMlock",kernel_mlock},
+    {"__elf_phdr_match_addr",elf_phdr_match_addr}, {"_is_signal_return",is_signal_return},
+    {"__pthread_cxa_finalize",pthread_cxa_finalize}, {"sigreturn",unwind_resume},
+    {"__Ux86_64_setcontext",unwind_resume},
     {"signal",guest_signal}, {"sigprocmask",guest_sigprocmask}, {"_sigprocmask",guest_sigprocmask},
     {"sigfillset",guest_sigfillset}, {"sigemptyset",guest_sigemptyset},
     {"getrusage",guest_getrusage}, {"sysctl",guest_sysctl},

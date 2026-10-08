@@ -207,7 +207,18 @@ static ABI int32_t posix_cond_wait(GuestCond **c, GuestMutex **m) { return posix
 static ABI int32_t posix_cond_timedwait(GuestCond **c, GuestMutex **m, const GuestTimespec *t) { return posix_result(cond_abs_timedwait(c, m, t)); }
 static ABI int32_t posix_cond_signal(GuestCond **c) { return posix_result(cond_signal(c)); }
 static ABI int32_t posix_cond_broadcast(GuestCond **c) { return posix_result(cond_broadcast(c)); }
+static ABI int32_t condattr_init(void **attr) {
+    if (!attr) return (int32_t)0x80020016; /* EINVAL */
+    *attr=calloc(1,16);
+    return *attr ? 0 : (int32_t)0x8002000C; /* ENOMEM */
+}
+static ABI int32_t condattr_destroy(void **attr) {
+    if (!attr || !*attr) return (int32_t)0x80020016;
+    free(*attr); *attr=NULL; return 0;
+}
 uintptr_t runtime_mutex_resolve(const char *name) {
+    if (!strcmp(name,"m5-2bsNfv7s#libkernel")) return (uintptr_t)condattr_init;
+    if (!strcmp(name,"waPcxYiR3WA#libkernel")) return (uintptr_t)condattr_destroy;
     if (!strcmp(name,"0TyVk4MSLt0#libkernel")) return (uintptr_t)posix_cond_init;
     if (!strcmp(name,"RXXqi4CtF8w#libkernel")) return (uintptr_t)posix_cond_destroy;
     if (!strcmp(name,"Op8TBGY5KHg#libkernel")) return (uintptr_t)posix_cond_wait;

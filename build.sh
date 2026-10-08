@@ -106,4 +106,6 @@ if [[ ${1:-} == --test ]]; then
     out/mp3-test tests/data/sine.mp3
     "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread "${includes[@]}" -I. -Isrc tests/test_videodec.c "${libraries[@]}" -o out/videodec-test
     out/videodec-test tests/data/tiny.h264
+    "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc tests/test_services.c -o out/services-test
+    out/services-test
 fi

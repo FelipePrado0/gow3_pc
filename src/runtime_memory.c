@@ -534,6 +534,16 @@ static ABI int32_t map_flexible_named(void **inout, uint64_t size, int prot, int
     (void)name; return map_flexible(inout,size,prot,flags);
 }
 static ABI int32_t release_flexible(void *address, uint64_t size) { return direct_unmap(address,size); }
+/* POSIX mmap as libc uses it: anonymous memory from the flexible pool. File mappings fail with
+ * ENODEV (no guest file descriptor can be mapped). */
+static ABI void *posix_mmap(void *address, uint64_t size, int prot, int flags, int fd, int64_t offset) {
+    if (!(flags & 0x1000) || fd!=-1 || offset) { *runtime_errno()=19; return (void *)-1; }
+    void *out=address;
+    int32_t r=map_flexible(&out,(size+PAGE-1)&~(PAGE-1),prot,flags & 0x10);
+    if (r) { *runtime_errno()=12; return (void *)-1; }
+    return out;
+}
+static ABI int32_t posix_msync(void *address, uint64_t size, int flags) { (void)address; (void)size; (void)flags; return 0; }
 static ABI int32_t reserve_range(void **inout, uint64_t size, int flags, uint64_t alignment) {
     if (!alignment) alignment=PAGE;
     if (!inout || !size || size%PAGE || !valid_alignment(alignment)) return INVALID;
@@ -634,6 +644,7 @@ static ABI int32_t batch_map(BatchEntry *entries, int count, int *processed) {
     return batch_map2(entries,count,processed,MAP_FIXED_FLAG);
 }
 static const RuntimeExport exports[]={
+    {"mmap",posix_mmap}, {"msync",posix_msync},
     {"sceKernelGetDirectMemorySize",direct_size}, {"sceKernelAllocateDirectMemory",direct_allocate},
     {"sceKernelMapDirectMemory",direct_map}, {"sceKernelMapNamedDirectMemory",direct_map_named},
     {"sceKernelReleaseDirectMemory",direct_release}, {"sceKernelMunmap",direct_unmap}, {"munmap",direct_unmap},

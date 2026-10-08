@@ -97,6 +97,8 @@ static ABI int32_t system_status(unsigned char *status) {
 }
 static ABI int32_t system_event(void *event) { (void)event; return SYSTEM_NO_EVENT; }
 static ABI int32_t hide_splash(void) { note("SystemService: splash screen hidden"); return 0; }
+static ABI int32_t safe_area(float *info) { if (!info) return SYSTEM_PARAMETER; *info=1.0f; return 0; } /* full screen */
+static ABI int32_t disable_music_player(void) { return 0; }
 static ABI int32_t launch_browser(void) { note("SystemService: web browser request ignored (offline)"); return 0; }
 
 /* ---- NetCtl / Net / Http / Ssl: no network ---- */
@@ -182,9 +184,16 @@ static ABI int32_t voice_info(uint32_t port,uint32_t *info) {
 }
 
 /* ---- Common dialogs: nothing is displayed; an opened dialog finishes. ---- */
-typedef struct { const char *name; int initialized, status; } Dialog;
-static Dialog dialogs[]={{"CommonDialog",0,0},{"MsgDialog",0,0},{"SaveDataDialog",0,0},
-                         {"NpProfileDialog",0,0},{"NpCommerceDialog",0,0},{"ImeDialog",0,0}};
+typedef struct { const char *name; int initialized, status; uint32_t button; } Dialog;
+static Dialog dialogs[]={{"CommonDialog",0,0,0},{"MsgDialog",0,0,0},{"SaveDataDialog",0,0,0},
+                         {"NpProfileDialog",0,0,0},{"NpCommerceDialog",0,0,0},{"ImeDialog",0,0,0}};
+#define DIALOG_RUNNING 2
+#define DIALOG_FINISHED 3
+#define DIALOG_NOT_FINISHED ((int32_t)0x80B80005)
+#define DIALOG_PARAM_INVALID ((int32_t)0x80B8000A)
+#define DIALOG_NOT_RUNNING ((int32_t)0x80B8000B)
+#define DIALOG_ARG_NULL ((int32_t)0x80B8000D)
+#define DIALOG_NOT_SUPPORTED ((int32_t)0x80B8000F)
 static int common_initialized;
 static ABI int32_t common_init(void) { common_initialized=1; return 0; }
 static int32_t dialog_init(int i) {
@@ -194,7 +203,29 @@ static int32_t dialog_init(int i) {
 static int32_t dialog_open(int i) {
     if (!dialogs[i].initialized) return DIALOG_NOT_INITIALIZED;
     printf("Runtime: %s opened; completed immediately (no dialog UI yet)\n",dialogs[i].name);
-    dialogs[i].status=3; return 0;
+    dialogs[i].status=DIALOG_FINISHED; dialogs[i].button=1; return 0; /* OK / YES */
+}
+/* A progress bar shows the game's own work: it runs until the game closes it. */
+static int32_t dialog_open_progress(int i) {
+    if (!dialogs[i].initialized) return DIALOG_NOT_INITIALIZED;
+    printf("Runtime: %s progress bar opened (runs until closed)\n",dialogs[i].name);
+    dialogs[i].status=DIALOG_RUNNING; dialogs[i].button=0; return 0;
+}
+static int32_t dialog_close(int i) {
+    if (dialogs[i].status!=DIALOG_RUNNING) return DIALOG_NOT_RUNNING;
+    dialogs[i].status=DIALOG_FINISHED; return 0;
+}
+static int32_t dialog_progress(int i, uint32_t target) {
+    if (dialogs[i].status!=DIALOG_RUNNING) return DIALOG_NOT_RUNNING;
+    return target ? DIALOG_PARAM_INVALID : 0;
+}
+/* Result: result (OK), button, reserved; SaveDataDialog's begins with the mode. */
+static int32_t dialog_result(int i, unsigned char *out, size_t offset) {
+    if (dialogs[i].status!=DIALOG_FINISHED) return DIALOG_NOT_FINISHED;
+    if (!out) return DIALOG_ARG_NULL;
+    uint32_t values[2]={0,dialogs[i].button};
+    memcpy(out+offset,values,8);
+    return 0;
 }
 static int32_t dialog_status(int i) { return dialogs[i].status; }
 static int32_t dialog_term(int i) {
@@ -206,7 +237,29 @@ static int32_t dialog_term(int i) {
     static ABI int32_t tag##_open(const void *p) { (void)p; return dialog_open(i); } \
     static ABI int32_t tag##_status(void) { return dialog_status(i); } \
     static ABI int32_t tag##_term(void) { return dialog_term(i); }
-DIALOG(msg,1) DIALOG(save,2) DIALOG(profile,3) DIALOG(commerce,4)
+DIALOG(profile,3) DIALOG(commerce,4)
+/* OrbisMsgDialogParam: BaseParam (48 bytes), size, mode (2 = progress bar).
+ * OrbisSaveDataDialogParam: BaseParam, int32 size, mode (5 = progress bar). */
+static int32_t dialog_open_mode(int i, const unsigned char *param, size_t mode_offset, uint32_t progress_mode) {
+    if (!param) return DIALOG_ARG_NULL;
+    uint32_t mode; memcpy(&mode,param+mode_offset,4);
+    return mode==progress_mode ? dialog_open_progress(i) : dialog_open(i);
+}
+static ABI int32_t msg_init(void) { return dialog_init(1); }
+static ABI int32_t msg_open(const unsigned char *p) { return dialog_open_mode(1,p,56,2); }
+static ABI int32_t msg_status(void) { return dialog_status(1); }
+static ABI int32_t msg_term(void) { return dialog_term(1); }
+static ABI int32_t msg_close(void) { return dialog_close(1); }
+static ABI int32_t msg_progress(uint32_t target, uint32_t value) { (void)value; return dialog_progress(1,target); }
+static ABI int32_t msg_result(unsigned char *out) { return dialog_result(1,out,0); }
+static ABI int32_t save_init(void) { return dialog_init(2); }
+static ABI int32_t save_open(const unsigned char *p) { return dialog_open_mode(2,p,52,5); }
+static ABI int32_t save_status(void) { return dialog_status(2); }
+static ABI int32_t save_term(void) { return dialog_term(2); }
+static ABI int32_t save_close(void) { return dialog_close(2); }
+static ABI int32_t save_progress(uint32_t target, uint32_t rate) { (void)rate; return dialog_progress(2,target); }
+static ABI int32_t save_result(unsigned char *out) { return dialog_result(2,out,4); }
+static ABI int32_t save_ready(void) { return 1; }
 static ABI int32_t profile_result(void *result) { if (result) memset(result,0,4); return 0; }
 /* ImeDialog: text typed on the keyboard into the game window (title bar shows it).
  * OrbisImeDialogParam: user, type, languages(8), enter label, method, filter,
@@ -304,6 +357,14 @@ static ABI int32_t trophy_game_info(int32_t ctx,int32_t handle,void *details,voi
 static ABI int32_t trophy_info(int32_t ctx,int32_t handle,int32_t id,void *details,void *data) {
     (void)id; return trophy_game_info(ctx,handle,details,data);
 }
+/* Nothing is unlocked on this console: an empty 128-trophy flag set. */
+static ABI int32_t trophy_unlock_state(int32_t ctx,int32_t handle,uint32_t *flags,uint32_t *count) {
+    if (!flags || !count) return TROPHY_INVALID;
+    if (ctx<=0 || handle<=0) return TROPHY_INVALID;
+    memset(flags,0,16); *count=0;
+    return 0;
+}
+static ABI int32_t trophy_release(int32_t id) { return id>0 ? 0 : TROPHY_INVALID; }
 
 /* ---- PlayGo: fully installed package ---- */
 static int playgo_handle, playgo_chunks=-1;
@@ -344,6 +405,29 @@ static ABI int32_t playgo_locus(int32_t handle,const uint16_t *ids,uint32_t coun
     return 0;
 }
 static ABI int32_t playgo_speed(int32_t handle,int32_t speed) { (void)speed; return handle==playgo_handle && handle ? 0 : PLAYGO_BAD_HANDLE; }
+static ABI int32_t playgo_get_speed(int32_t handle,int32_t *speed) {
+    if (handle!=playgo_handle || !handle) return PLAYGO_BAD_HANDLE;
+    if (!speed) return PLAYGO_BAD_POINTER;
+    *speed=2; return 0; /* Full: nothing left to install */
+}
+/* Progress of installed chunks: done (1 of 1, never a zero total to divide by). */
+static ABI int32_t playgo_progress(int32_t handle,const uint16_t *ids,uint32_t count,uint64_t *out) {
+    if (handle!=playgo_handle || !handle) return PLAYGO_BAD_HANDLE;
+    if (!ids || !out) return PLAYGO_BAD_POINTER;
+    if (!count) return PLAYGO_BAD_SIZE;
+    for (uint32_t i=0;i<count;++i) if (ids[i]>=playgo_chunks) return PLAYGO_BAD_CHUNK;
+    out[0]=out[1]=1; return 0;
+}
+static ABI int32_t playgo_todo(int32_t handle,const void *list,uint32_t count) {
+    if (handle!=playgo_handle || !handle) return PLAYGO_BAD_HANDLE;
+    if (!list) return PLAYGO_BAD_POINTER;
+    return count ? 0 : PLAYGO_BAD_SIZE; /* everything is installed: nothing to schedule */
+}
+static ABI int32_t playgo_close(int32_t handle) {
+    if (handle!=playgo_handle || !handle) return PLAYGO_BAD_HANDLE;
+    playgo_handle=0; return 0;
+}
+static ABI int32_t playgo_terminate(void) { playgo_handle=0; return 0; }
 
 /* ---- DiscMap: the game is fully installed, no disc bitmap exists ---- */
 #define DISC_MAP_NO_BITMAP ((int32_t)0x81100004)
@@ -373,6 +457,7 @@ static const RuntimeExport exports[]={
     {"sceSystemServiceParamGetInt",system_param}, {"sceSystemServiceGetStatus",system_status},
     {"sceSystemServiceReceiveEvent",system_event}, {"sceSystemServiceHideSplashScreen",hide_splash},
     {"sceSystemServiceLaunchWebBrowser",launch_browser},
+    {"sceSystemServiceGetDisplaySafeAreaInfo",safe_area}, {"sceSystemServiceDisableMusicPlayer",disable_music_player},
     {"sceNetInit",net_init}, {"sceNetTerm",net_term}, {"sceNetErrnoLoc",net_errno_loc},
     {"sceNetPoolCreate",net_pool_create}, {"sceNetPoolDestroy",net_pool_destroy},
     {"sceNetEpollCreate",net_epoll_create}, {"sceNetEpollDestroy",net_epoll_destroy},
@@ -462,8 +547,13 @@ static const RuntimeExport exports[]={
     {"sceCommonDialogInitialize",common_init},
     {"sceMsgDialogInitialize",msg_init}, {"sceMsgDialogOpen",msg_open},
     {"sceMsgDialogUpdateStatus",msg_status}, {"sceMsgDialogTerminate",msg_term},
+    {"sceMsgDialogClose",msg_close}, {"sceMsgDialogProgressBarSetValue",msg_progress},
+    {"sceMsgDialogGetResult",msg_result}, {"sceMsgDialogGetStatus",msg_status},
     {"sceSaveDataDialogInitialize",save_init}, {"sceSaveDataDialogOpen",save_open},
     {"sceSaveDataDialogUpdateStatus",save_status}, {"sceSaveDataDialogTerminate",save_term},
+    {"sceSaveDataDialogGetStatus",save_status}, {"sceSaveDataDialogClose",save_close},
+    {"sceSaveDataDialogProgressBarSetValue",save_progress}, {"sceSaveDataDialogGetResult",save_result},
+    {"sceSaveDataDialogIsReadyToDisplay",save_ready},
     {"sceNpProfileDialogInitialize",profile_init}, {"sceNpProfileDialogOpen",profile_open},
     {"sceNpProfileDialogUpdateStatus",profile_status}, {"sceNpProfileDialogTerminate",profile_term},
     {"sceNpProfileDialogGetResult",profile_result},
@@ -474,8 +564,12 @@ static const RuntimeExport exports[]={
     {"sceNpTrophyCreateContext",trophy_context}, {"sceNpTrophyCreateHandle",trophy_handle},
     {"sceNpTrophyRegisterContext",trophy_register}, {"sceNpTrophyUnlockTrophy",trophy_unlock},
     {"sceNpTrophyGetGameInfo",trophy_game_info}, {"sceNpTrophyGetTrophyInfo",trophy_info},
+    {"sceNpTrophyGetTrophyUnlockState",trophy_unlock_state}, {"sceNpTrophyAbortHandle",trophy_release},
+    {"sceNpTrophyDestroyHandle",trophy_release}, {"sceNpTrophyDestroyContext",trophy_release},
     {"scePlayGoInitialize",playgo_init}, {"scePlayGoOpen",playgo_open}, {"scePlayGoGetChunkId",playgo_chunk_ids},
     {"scePlayGoGetLocus",playgo_locus}, {"scePlayGoSetInstallSpeed",playgo_speed},
+    {"scePlayGoGetInstallSpeed",playgo_get_speed}, {"scePlayGoGetProgress",playgo_progress},
+    {"scePlayGoSetToDoList",playgo_todo}, {"scePlayGoClose",playgo_close}, {"scePlayGoTerminate",playgo_terminate},
     {"sceMouseInit",ok_void}, {"sceMouseOpen",mouse_open}, {"sceMouseRead",mouse_read}, {"sceMouseClose",mouse_close},
     {"sceAudioInOpen",audio_in_open},
     {"sceDiscMapIsRequestOnHDD",discmap_on_hdd}, {"sceDiscMap_8A828CAEE7EDD5E9",discmap_8a82},
