@@ -203,6 +203,7 @@ class GameProfileTests(unittest.TestCase):
         # Notes ask for extra direct memory (shadPS4 "DMEM") and a VBlank rate.
         self.assertEqual(patch_requirements(GOW3, ['Resolution Patch - 4K', 'Skip Any Video With X Button'], '01.02'),
                          (5056 + 6144, None))
+        self.assertEqual(patch_requirements(GOW3, ['Frame Rate Patch - 120 FPS'], '01.02'), (None, 120))
         self.assertEqual(patch_requirements(GOW3, [], '01.02'), (None, None))
 
 

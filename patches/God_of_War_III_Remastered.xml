@@ -4,7 +4,9 @@
      The shadPS4 file targets another build of 01.02: its code addresses in 0x564000-0x56bfff are
      0x10 higher and in 0x5f0000-0x609fff 0x120 lower here; data addresses match. Every ported
      address holds the expected original value (1920, 1080, 960x540, video arena 0x50000000).
-     "Frame Rate Patch - 120 FPS" and "Skip Intro" do not match this build and are left out. -->
+     "Frame Rate Patch - 120 FPS" is ported by hand: the frame rate constant (59.94) is at 0x75dbe4
+     and the swing energy multiplier reads the frame rate at 0x48ff1a; its replacement LEA points at
+     the 60.0 constant at 0x6fc0d8. "Skip Intro" does not match this build and is left out. -->
 <Patch>
     <TitleID>
         <ID>CUSA01623</ID>
@@ -96,6 +98,12 @@
             <Line Type="bytes" Address="0x007f2a3c" Value="80070000"/>
             <Line Type="bytes" Address="0x007f2a40" Value="38040000"/>
             <Line Type="bytes" Address="0x007cd918" Value="000000f0"/>
+        </PatchList>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Frame Rate Patch - 120 FPS" Note="Raises the engine maximum framerate from 59.94 to 120 FPS so the frametime clamp produces a 1/120 second gameplay delta. Corrects swing energy calculations to match the original 60 Hz simulation. Requires setting VBlank to 120 FPS." Author="kvicken" PatchVer="1.1" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x0048ff1a" Value="488d05b7c12600"/>
+            <Line Type="bytes" Address="0x0075dbe4" Value="0000f042"/>
         </PatchList>
     </Metadata>
     <Metadata Title="God of War III Remastered" Name="Skip Any Video With X Button" Note="Allows manual skipping of cinematics any cinematic with the X button. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy." Author="cuesta4" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="true">
