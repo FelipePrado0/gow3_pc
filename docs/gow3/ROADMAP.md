@@ -9,7 +9,7 @@ Port nativo de **God of War III Remastered** (PS4) para Windows, construído a p
 | Jogo alvo | God of War III Remastered, **CUSA01623**, versão **01.02** |
 | Plataforma | Windows 10/11 64-bit, Vulkan 1.3 |
 | Máquina de teste | AMD Radeon RX 6700 XT, Ryzen 5 5600X, 32 GB |
-| Última atualização | 2026-10-08 |
+| Última atualização | 2026-10-08 (spec 6 em andamento) |
 
 ---
 
@@ -89,7 +89,7 @@ God of War III Remastered abre pelo loader nativo, roda a cutscene de abertura e
 | 4 | Áudio MP3 | **Spec 3** | Sim | 3 | ✅ Concluída |
 | 5 | Vídeo das cutscenes | **Spec 4** | Sim | 3 | ✅ Concluída |
 | 6 | Serviços do sistema que faltam | **Spec 5** | Sim | 3 | ✅ Concluída |
-| 7 | Gráficos corretos + pacote | **Spec 6** | Sim | 4, 5, 6 | ⬜ Pendente |
+| 7 | Gráficos corretos + pacote | **Spec 6** | Sim | 4, 5, 6 | 🟨 Em andamento |
 
 **Total: 6 specs** (podem virar 7–8 dependendo do inventário da etapa 3).
 
@@ -103,13 +103,41 @@ God of War III Remastered abre pelo loader nativo, roda a cutscene de abertura e
 | 3 | Dump CUSA01623 v01.02 conferido. `--check-imports`: 387 imports, 45 faltando (35 chamados pelo jogo, 10 só pela libc/Fios2). Lista na seção da etapa 3. | `ea89783` |
 | 4 (Spec 3) | MP3 no libSceAjm via FFmpeg (`src/runtime_mp3.c`): leitura do cabeçalho e dos metadados gapless (LAME/Xing, VBRI, FGH), `sceAjmDecMp3ParseFrame`, saída S16/S32/float. Teste `mp3-test`: a saída bate amostra por amostra com a decodificação do próprio FFmpeg. | `6f0a7a6` |
 | 5 (Spec 4) | `sceVideodec` (H.264 para NV12) via FFmpeg (`src/runtime_videodec.c`): QueryResourceInfo, CreateDecoder, Decode, Flush, Reset, DeleteDecoder. Imagem maior que o buffer do jogo devolve erro em vez de estourar memória. Teste `videodec-test` com 6 quadros, incluindo B-frames. | `4a96c28` |
-| 6 (Spec 5) | As 37 APIs restantes: diálogos de mensagem e save (barra de progresso fica aberta até o jogo fechar), PlayGo (tudo instalado), troféus (nada desbloqueado), barra de luz do controle, área segura da tela, argumentos do processo, `mmap`/`msync` anônimos, atributos de condição. A API desconhecida era `sceKernelStopUnloadModule` (confirmado pelo hash do nome); responde "módulo inexistente". Teste `services-test`. | — |
+| 6 (Spec 5) | As 37 APIs restantes: diálogos de mensagem e save (barra de progresso fica aberta até o jogo fechar), PlayGo (tudo instalado), troféus (nada desbloqueado), barra de luz do controle, área segura da tela, argumentos do processo, `mmap`/`msync` anônimos, atributos de condição. A API desconhecida era `sceKernelStopUnloadModule` (confirmado pelo hash do nome); responde "módulo inexistente". Teste `services-test`. | `68409d4` |
+| 7 (Spec 6) | GPU: as imagens copiadas de volta da GPU passam a esperar a GPU uma vez por envio, não uma vez por imagem (gameplay subiu de 2 para 52 a 60 FPS). Aviso `IT_SET_PREDICATION` registrado uma vez. Teclado funciona junto com o controle. | `08eadbc` |
+| 7 (Spec 6a) | Lista de saves na tela (overlay): o jogo recebe a pasta escolhida ao salvar e carregar; "New save" e cancelar também funcionam. Teste no `services-test`. | `79d2f58` |
+| 7 (Patches) | Os patches do shadPS4 eram de outra compilação do eboot v01.02. Endereços recalculados e conferidos byte a byte no dump (resolução +0x10 e -0x120, dados no mesmo lugar). Patch só é aplicado se o sha256 do `eboot.bin` for o do dump. 1440p testado a 60 FPS. | `e749951` |
+| 7 (Patches) | 120 FPS portado: limite de FPS em `0x75dbe4` e leitura do FPS no cálculo de energia do golpe em `0x48ff1a` (constante 60,0). Acabou o jogo acelerado. | `d307830` |
+| 7 (Spec 6b) | Launcher do God of War III: página Patches do jogo (resolução única e patches do XML), nome, banner e ícone do jogo, páginas do Bloodborne escondidas, ícone na janela do jogo, atualização automática desligada, textos sem travessões. | `18a0d11`, `026147e` |
 
 `--check-imports` depois da spec 5: **0 faltando** (eram 45).
 
 Primeira execução real (60 s, 2026-10-08): o jogo inicia sem `STOP:` nem `Fault:`; abre as portas de áudio, inicia o Ajm, cria o save, carrega os WADs das fases e envia comandos de GPU. O que aparece na tela ainda não foi verificado (início da spec 6).
 
+**Critérios da alpha (situação em 2026-10-08)**
+
+| Critério | Situação |
+|---|---|
+| Menu e New Game | ✅ |
+| Cutscene de abertura com vídeo e som | ✅ |
+| Música, efeitos e vozes | ✅ |
+| Controle e teclado | ✅ |
+| Save grava e carrega após reiniciar | 🟨 lista de saves pronta, falta o teste do usuário |
+| 60 FPS a 1080p na RX 6700 XT | ✅ (52 a 60; quedas só na primeira compilação de shaders) |
+| Sem texturas corrompidas nem tela branca | 🟨 Texture Fix e leitura linear ligados; falta percorrer o prólogo inteiro |
+| Log sem `STOP:` nem `Fault:` no percurso | ✅ nos testes feitos |
+| Pacote zip que roda sem MSYS2 | ⬜ pendente |
+
 **Pendências conhecidas**
+
+- **Skip Intro** não foi portado: o código dele não bate com este eboot e ficou fora do XML.
+- **120 FPS:** o jogo limita o tempo de cada quadro a 1/FPS alvo. Abaixo de 120 FPS ele roda em câmera lenta (no PS4 acontece o mesmo abaixo de 60). Nas cenas pesadas a RX 6700 XT fica entre 52 e 65 FPS, então o patch só vale onde 120 se sustenta.
+- **Inicialização:** o jogo pode levar mais de um minuto para abrir a janela porque pré-compila o cache de shaders.
+- **Saves de teste:** existem 10 saves `SD-2610080631xx` criados antes da lista de saves; podem ser apagados.
+- **Predicação da GPU** (`IT_SET_PREDICATION`) continua sem implementação, como no shadPS4.
+- **Linux:** o `build.sh` do Linux recebeu os testes novos e o FFmpeg no runtime, mas não foi compilado.
+- **Menu Insert:** textos ainda em russo e inglês.
+- **Demanda futura:** remover o Bloodborne por completo (patches, páginas escondidas do launcher, hack de som, textos) e deixar só o God of War III.
 
 - Os testes em C (`test_runtime.c`, `test_content.c`, `test_sema.c`) não compilam no Windows pelo `build.sh`. As chaves foram convertidas, mas esses testes ainda não rodaram.
 - Zerar o `--check-imports` não garante que o jogo abre: travamentos de execução e defeitos gráficos entram na spec 6.
