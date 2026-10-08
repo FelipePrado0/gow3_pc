@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Bloodborne launcher for Windows (Tkinter; launcher/bbport_launcher.py is the Linux one).
+"""God of War III (bbport) launcher for Windows (Tkinter; launcher/bbport_launcher.py is the Linux one).
 
 Every setting of the port in one window: the game folder and saves, bbport.ini (upscaler,
 preset, output, effects), start-up options passed to run.py as environment variables
@@ -35,12 +35,13 @@ DATA_DIR = Path(os.environ.get('BB_DATA_DIR', PORT_DIR))
 CONFIG_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'bbport-launcher'
 CONFIG_FILE = CONFIG_DIR / 'settings.json'
 PATCH_VERSION = '01.09'
+APP_NAME = 'God of War III'
 MAX_LOG_LINES = 6000
 NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 # This build; GitHub release tags are windows-v<VERSION>.
 VERSION = '1.5'
-RELEASES_API = 'https://api.github.com/repos/Supermedo/bloodborne_pc/releases/latest'
-RELEASES_PAGE = 'https://github.com/Supermedo/bloodborne_pc/releases/latest'
+RELEASES_API = 'https://api.github.com/repos/FelipePrado0/gow3_pc/releases/latest'
+RELEASES_PAGE = 'https://github.com/FelipePrado0/gow3_pc/releases/latest'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'bbport-update'
 # Never copied over an installation by an update (the package does not hold them either).
 USER_FILES = ('user', 'out', 'mods', 'bbport.ini', 'mods.json', 'patches.json', 'last_run.log')
@@ -161,13 +162,13 @@ INI_DEFAULTS = {'upscaler': 'fsr4', 'preset': '1', 'sharpen': '1', 'sharpness': 
                 'object_motion': '1', 'show_fps': '1', 'output_res': '1920x1080', 'model_lod': '0',
                 'live_resolution': 'auto',
                 **{key: '1' if on else '0' for key, _t, on in EFFECTS + EXTRAS + CHEATS + TWEAKS}}
-APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'), 'user_dir': '',
+APP_DEFAULTS = {'ui_language': '', 'game_dir': os.environ.get('BB_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623')), 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
                 'player_name': '', 'fullscreen': False, 'hdr': False, 'present_mode': 'Mailbox',
                 'fps_mode': 'uncap', 'frame_cap': '', 'draw_pipe': '', 'readbacks': '',
                 'frames_ahead': '', 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'extra_env': '', 'close_on_play': False,
-                'check_updates': True}
+                'check_updates': False, 'game_patches': {}}
 
 UPSCALERS = [('dlss', ('DLSS (NVIDIA GeForce RTX)',)),
              ('fsr4', ('FSR 4 (best quality)', 'FSR 4 (лучшее качество)')),
@@ -273,14 +274,33 @@ def game_info(folder):
     try:
         from prepare import sfo
         values = sfo((folder / 'sce_sys/param.sfo').read_bytes())
-        return values.get('TITLE', 'Bloodborne').replace('™', '').strip(), values.get('APP_VER', '?')
+        return values.get('TITLE', APP_NAME).replace('™', '').replace('®', '').strip(), values.get('APP_VER', '?')
     except (OSError, ValueError, ImportError):
-        return 'Bloodborne', '?'
+        return APP_NAME, '?'
+
+
+def game_profile_of(folder):
+    """(title id, (ids, built-in XML, app version)) of a game with a patch profile, else (id, None)."""
+    from patches import game_profile, game_title_id
+    title_id = game_title_id(folder) if folder else None
+    return title_id, game_profile(title_id)
+
+
+def is_bloodborne(folder):
+    from patches import BLOODBORNE_IDS
+    title_id, profile = game_profile_of(folder)
+    return profile is None or profile[0] is BLOODBORNE_IDS
 
 
 def game_environment(s):
     env = dict(os.environ)
     env['BB_GAME_DIR'] = s['game_dir']
+    # Other games: the launcher's patch selection is the whole list (run.py, patches.py).
+    title_id, profile = game_profile_of(s['game_dir'])
+    chosen = s.get('game_patches', {}).get(title_id) if title_id else None
+    if profile and not is_bloodborne(s['game_dir']) and chosen is not None:
+        env['BB_PATCHES'] = ';'.join(chosen)
+        env['BB_PATCHES_ONLY'] = '1'
     if s['user_dir']:
         env['BB_USER_DIR'] = s['user_dir']
     env['BB_MODS_DIR'] = s['mods_dir'] or str(DATA_DIR / 'mods')
@@ -335,7 +355,13 @@ class Launcher:
         self.banner_source = self.banner_image = None
         self.ui_calls = queue.Queue()  # work for the Tk thread from helper threads
         self.mod_order, self.mod_vars, self.patch_vars = [], {}, {}
-        root.title('Bloodborne — bbport')
+        root.title(f'{APP_NAME} (PC)')
+        if sys.platform == 'win32':
+            try:  # the taskbar shows this window's icon, not Python's
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('gow3pc.launcher')
+            except (AttributeError, OSError):
+                pass
         root.configure(bg=BG)
         self.dpi = root.winfo_fpixels('1i') / 96.0
         root.geometry(f'{self.px(1120)}x{self.px(740)}')
@@ -354,12 +380,18 @@ class Launcher:
         return int(size * self.dpi)
 
     def set_icon(self):
+        game_icon = Path(self.var('game_dir', 'app').get() or '.') / 'sce_sys' / 'icon0.png'
         try:
-            self.root.iconbitmap(default=str(PORT_DIR / 'launcher' / 'bloodborne.ico'))
+            from PIL import Image
+            ico = CONFIG_DIR / 'game_icon.ico'
+            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+            with Image.open(game_icon) as image:
+                image.convert('RGBA').save(ico, sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (256, 256)])
+            self.root.iconbitmap(default=str(ico))
             return
-        except self.tk.TclError:
+        except (ImportError, OSError, self.tk.TclError):
             pass
-        for icon in (PORT_DIR / 'launcher' / 'bloodborne.png', Path(self.app['game_dir']) / 'sce_sys' / 'icon0.png'):
+        for icon in (game_icon, PORT_DIR / 'launcher' / 'bloodborne.png'):
             try:
                 self.icon = self.tk.PhotoImage(file=str(icon))
                 if self.icon.width() > 128:
@@ -484,10 +516,10 @@ class Launcher:
                 row=r + 1, column=1, sticky='w', pady=(2, 2))
         return widget
 
-    def check(self, parent, key, store, title, hint=None):
+    def check(self, parent, key, store, title, hint=None, var=None):
         ttk = self.ttk
         r = self.next_row(parent)
-        ttk.Checkbutton(parent, text=title, variable=self.var(key, store)).grid(
+        ttk.Checkbutton(parent, text=title, variable=var if var is not None else self.var(key, store)).grid(
             row=r, column=0, columnspan=2, sticky='w', pady=(4, 0))
         if hint:
             ttk.Label(parent, text=hint, style='Muted.TLabel', wraplength=self.px(640), justify='left').grid(
@@ -546,13 +578,16 @@ class Launcher:
         side = tk.Frame(self.root, bg=BG, width=self.px(220))
         side.pack(side='left', fill='y')
         side.pack_propagate(False)
-        tk.Label(side, text='BLOODBORNE', bg=BG, fg=GOLD, font=('Georgia', 16)).pack(anchor='w', padx=22, pady=(24, 0))
+        self.side_title = tk.Label(side, text=APP_NAME.upper(), bg=BG, fg=GOLD, font=('Georgia', 15),
+                                   wraplength=self.px(190), justify='left')
+        self.side_title.pack(anchor='w', padx=22, pady=(24, 0))
         self.side = side
         tk.Label(side, text=_('native port · Windows', 'нативный порт · Windows') + f'  ·  v{VERSION}', bg=BG, fg=MUTED,
                  font=('Segoe UI', 9)).pack(anchor='w', padx=22, pady=(0, 20))
         self.nav, self.current_page = {}, None
         for name, title in (('play', _('Play', 'Играть')), ('graphics', _('Graphics', 'Графика')),
                             ('display', _('Display & FPS', 'Экран и FPS')), ('game', _('Game & effects', 'Игра и эффекты')),
+                            ('gamepatches', _('Game patches', 'Патчи игры')),
                             ('cheats', _('Cheats', 'Читы')), ('mods', _('Mods & patches', 'Моды и патчи')),
                             ('advanced', _('Advanced', 'Дополнительно')),
                             ('log', _('Log', 'Журнал'))):
@@ -590,11 +625,12 @@ class Launcher:
         self.build_display()
         self.build_game()
         self.build_cheats()
+        self.build_game_patches()
         self.build_mods()
         self.build_advanced()
         self.build_log()
         self.root.bind_all('<MouseWheel>', self.wheel)
-        self.refresh_status()
+        self.game_changed()
 
     def wheel(self, event):
         page = self.pages.get(self.current_page)
@@ -611,6 +647,8 @@ class Launcher:
             item.configure(bg=PANEL if n == name else BG, fg=GOLD if n == name else TEXT)
         if name == 'mods':
             self.refresh_lists()
+        elif name == 'gamepatches':
+            self.refresh_game_patches()
         elif name == 'graphics':
             self.refresh_fsr4()
         elif name == 'play':
@@ -672,9 +710,11 @@ class Launcher:
                                                        'Выберите папку игры («Игра и эффекты»)'),
                           fill=MUTED, font=('Segoe UI', 11))
         if not self.banner_image:
-            c.create_text(30, h - 70, text='Bloodborne', anchor='w', fill='#f2ead9', font=('Georgia', 36))
-        info = game_info(self.var('game_dir', 'app').get())
-        sub = (_('CUSA03173 · game version {}', 'CUSA03173 · версия игры {}').format(info[1]) if info
+            c.create_text(30, h - 70, text=APP_NAME, anchor='w', fill='#f2ead9', font=('Georgia', 36))
+        folder = self.var('game_dir', 'app').get()
+        info = game_info(folder)
+        title_id = game_profile_of(folder)[0] if info else None
+        sub = (_('{} · game version {}', '{} · версия игры {}').format(title_id or '?', info[1]) if info
                else _('Game folder not set', 'Папка игры не выбрана'))
         c.create_text(33, h - 30, text=sub, anchor='w', fill=GOLD, font=('Segoe UI', 11))
 
@@ -775,9 +815,10 @@ class Launcher:
         self.section(f, _('Game', 'Игра'), top=4)
         self.folder(f, 'game_dir', _('Game folder', 'Папка игры'),
                     _('Choose the folder with eboot.bin', 'Выберите папку с eboot.bin'),
-                    _('Your own dump of CUSA03173 (eboot.bin, sce_module, sce_sys, dvdroot_ps4); version 1.09 '
-                      'for the community patches.', 'Ваш дамп CUSA03173 (eboot.bin, sce_module, sce_sys, '
-                      'dvdroot_ps4); версия 1.09 для патчей сообщества.'), on_change=self.game_changed)
+                    _('Your own dump of the game (eboot.bin, sce_module, sce_sys); God of War III Remastered: '
+                      'CUSA01623, version 01.02 for the community patches.',
+                      'Ваш дамп игры (eboot.bin, sce_module, sce_sys); God of War III Remastered: CUSA01623, '
+                      'версия 01.02 для патчей сообщества.'), on_change=self.game_changed)
         self.folder(f, 'user_dir', _('Saves folder', 'Папка сохранений'),
                     _('Choose the saves folder', 'Выберите папку сохранений'),
                     _('Empty: {} (shader caches are kept there too).',
@@ -785,15 +826,18 @@ class Launcher:
         self.row(f, _('Game language', 'Язык игры'), self.choice(f, 'language', 'app', LANGUAGES))
         self.row(f, _('Player name', 'Имя игрока'), self.ttk.Entry(f, textvariable=self.var('player_name', 'app'), width=30),
                  _('Where the game shows the PSN name; empty: the default.', 'Где игра показывает имя PSN; пусто — по умолчанию.'))
-        self.section(f, _('Effects', 'Эффекты'))
-        self.version_warning(f)
+        fx = self.bloodborne_effects = self.ttk.Frame(f)
+        fx.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we')
+        fx.columnconfigure(1, weight=1)
+        self.section(fx, _('Effects', 'Эффекты'))
+        self.version_warning(fx)
         for key, title, _on in EFFECTS:
-            self.check(f, key, 'ini', _(*title))
-        self.section(f, _('Extras', 'Дополнительно'))
+            self.check(fx, key, 'ini', _(*title))
+        self.section(fx, _('Extras', 'Дополнительно'))
         for key, title, _on in EXTRAS:
-            self.check(f, key, 'ini', _(*title))
-        self.note(f, _('Effects and extras are game patches for version 1.09, applied at start.',
-                       'Эффекты и дополнения — патчи игры для версии 1.09, применяются при запуске.'))
+            self.check(fx, key, 'ini', _(*title))
+        self.note(fx, _('Effects and extras are game patches for version 1.09, applied at start.',
+                        'Эффекты и дополнения — патчи игры для версии 1.09, применяются при запуске.'))
 
     def build_cheats(self):
         f = self.scrolled_page('cheats', _('Cheats', 'Читы'),
@@ -811,6 +855,71 @@ class Launcher:
         control, camera = self.var('cheat_enemy_control', 'ini'), self.var('debug_camera', 'ini')
         control.trace_add('write', lambda *_a: control.get() and camera.set(False))
         camera.trace_add('write', lambda *_a: camera.get() and control.set(False))
+
+    def build_game_patches(self):
+        """Patches of the selected game's built-in XML (God of War III): one resolution, the rest
+        switched one by one; the notes come from the patch file."""
+        f = self.scrolled_page('gamepatches', _('Game patches', 'Патчи игры'),
+                               _('Community patches of the selected game, applied at start.',
+                                 'Патчи сообщества для выбранной игры, применяются при запуске.'))
+        self.game_patch_frame = self.ttk.Frame(f)
+        self.game_patch_frame.grid(row=0, column=0, columnspan=2, sticky='we')
+        self.game_patch_title, self.game_patch_res, self.game_patch_vars = None, None, {}
+
+    def refresh_game_patches(self):
+        import xml.etree.ElementTree as ET
+        from patches import EXCLUSIVE_PREFIX
+        tk, ttk, f = self.tk, self.ttk, self.game_patch_frame
+        self.store_game_patches()
+        for widget in f.winfo_children():
+            widget.destroy()
+        f.columnconfigure(1, weight=1)
+        folder = self.var('game_dir', 'app').get()
+        title_id, profile = game_profile_of(folder)
+        self.game_patch_title, self.game_patch_res, self.game_patch_vars = None, None, {}
+        if is_bloodborne(folder):
+            self.note(f, _("This game's patches are on Game & effects, Display & FPS and Cheats.",
+                           'Патчи этой игры — на страницах «Игра и эффекты», «Экран и FPS» и «Читы».'), top=0)
+            return
+        _ids, xml, version = profile
+        metas = [m for m in ET.parse(xml).getroot().iter('Metadata') if m.get('AppVer') == version]
+        chosen = self.app.get('game_patches', {}).get(title_id)
+        on = set(chosen) if chosen is not None else {m.get('Name') for m in metas
+                                                         if m.get('isEnabled', 'false').lower() == 'true'}
+        self.note(f, _('{} · version {} · {}', '{} · версия {} · {}').format(title_id, version, xml.name), top=0)
+        resolutions = [m for m in metas if m.get('Name', '').startswith(EXCLUSIVE_PREFIX)]
+        if resolutions:
+            names = [''] + [m.get('Name') for m in resolutions]
+            labels = [_('Native (1920 × 1080)', 'Нативное (1920 × 1080)')] + [n[len(EXCLUSIVE_PREFIX):].strip(' -') for n in names[1:]]
+            current = next((n for n in names[1:] if n in on), '')
+            self.game_patch_res = tk.StringVar(value=current)
+            box = ttk.Combobox(f, values=labels, state='readonly', width=32)
+            box.current(names.index(current))
+            box.bind('<<ComboboxSelected>>', lambda _e: self.game_patch_res.set(names[box.current()]))
+            note = next((m.get('Note') for m in resolutions if m.get('Name') == current), None)
+            self.row(f, _('Resolution', 'Разрешение'), box,
+                     _('The game renders at this size; a resolution patch replaces the texture fix and '
+                       'reserves the memory it needs.',
+                       'Игра рисует в этом размере; патч разрешения заменяет исправление текстур и '
+                       'резервирует нужную память.') if not note else note)
+        self.section(f, _('Patches', 'Патчи'))
+        for meta in metas:
+            name = meta.get('Name')
+            if name.startswith(EXCLUSIVE_PREFIX):
+                continue
+            var = tk.BooleanVar(value=name in on)
+            self.game_patch_vars[name] = var
+            author = meta.get('Author')
+            self.check(f, None, None, name + (f'  ({author})' if author else ''), meta.get('Note'), var=var)
+        self.game_patch_title = title_id
+
+    def store_game_patches(self):
+        """The page's selection into settings (the whole list for this game)."""
+        if not self.game_patch_title:
+            return
+        names = [self.game_patch_res.get()] if self.game_patch_res and self.game_patch_res.get() else []
+        names += [n for n, v in self.game_patch_vars.items() if v.get()]
+        self.app.setdefault('game_patches', {})[self.game_patch_title] = names
 
     def build_mods(self):
         f = self.scrolled_page('mods', _('Mods & patches', 'Моды и патчи'),
@@ -905,22 +1014,47 @@ class Launcher:
 
     # ---- state -------------------------------------------------------------------------------
     def game_changed(self):
+        folder = self.var('game_dir', 'app').get()
+        info = game_info(folder)
+        title = info[0] if info else APP_NAME
+        self.root.title(f'{title} (PC)')
+        self.side_title.configure(text=title.upper())
+        # Graphics (temporal upscalers), Display & FPS, Cheats and the effects hold Bloodborne only.
+        bloodborne = is_bloodborne(folder)
+        for name, before in (('graphics', 'display'), ('display', 'game'), ('cheats', 'mods')):
+            if bloodborne and not self.nav[name].winfo_ismapped():
+                self.nav[name].pack(fill='x', before=self.nav[before])
+            elif not bloodborne:
+                self.nav[name].pack_forget()
+        if bloodborne:
+            self.bloodborne_effects.grid()
+        else:
+            self.bloodborne_effects.grid_remove()
+        if self.current_page == 'gamepatches':
+            self.refresh_game_patches()
         self.banner_source = None
         self.draw_banner()
         self.set_icon()
         self.refresh_status()
 
     def refresh_status(self):
-        info = game_info(self.var('game_dir', 'app').get())
+        folder = self.var('game_dir', 'app').get()
+        info = game_info(folder)
+        _title_id, profile = game_profile_of(folder) if info else (None, None)
         if not info:
             game = _('✗ No eboot.bin in the game folder (Game & effects)', '✗ В папке игры нет eboot.bin («Игра и эффекты»)')
+        elif profile and not is_bloodborne(folder):
+            game = (_('✓ Game version {}: the game patches apply', '✓ Версия игры {}: патчи игры применяются').format(info[1])
+                    if info[1] == profile[2] else
+                    _('⚠ Game version {}: the game patches need {}; none applied',
+                      '⚠ Версия игры {}: патчам нужна {}; не применяются').format(info[1], profile[2]))
         elif info[1] == PATCH_VERSION:
             game = _('✓ Game version {}: every patch available', '✓ Версия игры {}: доступны все патчи').format(info[1])
         else:
             game = _('⚠ Game version {}: runs at 30 FPS without the community patches (they are for 1.09)',
                      '⚠ Версия игры {}: 30 FPS без патчей сообщества (они для 1.09)').format(info[1])
         user = Path(self.var('user_dir', 'app').get() or DATA_DIR / 'user')
-        saves = list((user / 'savedata').glob('*/*/SPRJ*')) if (user / 'savedata').is_dir() else []
+        saves = list((user / 'savedata').glob('*/*/*')) if (user / 'savedata').is_dir() else []
         save = (_('✓ Saves found in {}', '✓ Найдены сохранения в {}').format(user) if saves
                 else _('• No saves yet: the game creates them in {}', '• Сохранений пока нет: игра создаст их в {}').format(user))
         missing = fsr4_missing()
@@ -931,7 +1065,7 @@ class Launcher:
             self.checks[key].configure(text=text, foreground=MUTED if text.startswith('•') else
                                        '#d9a441' if text.startswith('⚠') else '#d36b5c' if text.startswith('✗') else TEXT)
         for label in getattr(self, 'warnings', []):
-            if info and info[1] != PATCH_VERSION:
+            if info and info[1] != PATCH_VERSION and is_bloodborne(folder):
                 label.configure(text=label.template.format(info[1]))
                 label.grid()
             else:
@@ -942,6 +1076,15 @@ class Launcher:
                                                                      'Сначала выберите папку игры.'), fg=MUTED)
 
     def summary(self):
+        folder = self.var('game_dir', 'app').get()
+        if not is_bloodborne(folder):
+            self.store_game_patches()
+            title_id, _profile = game_profile_of(folder)
+            names = self.app.get('game_patches', {}).get(title_id) or []
+            resolution = next((n.split(' - ', 1)[-1] for n in names if n.startswith('Resolution Patch')),
+                              _('Native (1920 × 1080)', 'Нативное (1920 × 1080)'))
+            others = len([n for n in names if not n.startswith('Resolution Patch')])
+            return _('{} · {} more patches', '{} · ещё патчей: {}').format(resolution, others)
         fps = dict(FPS_MODES).get(self.var('fps_mode', 'app').get(), ('?',))
         info = game_info(self.var('game_dir', 'app').get())
         if info and info[1] != PATCH_VERSION:
@@ -1064,6 +1207,7 @@ class Launcher:
 
     def collect(self):
         """Writes settings.json, bbport.ini, mods.json and patches.json."""
+        self.store_game_patches()
         for key, var in self.vars.items():
             try:
                 value = var.get()
@@ -1096,8 +1240,8 @@ class Launcher:
             return
         self.collect()
         if not game_info(self.app['game_dir']):
-            self.messagebox.showerror('Bloodborne', _('Choose the game folder with eboot.bin (CUSA03173).',
-                                                      'Выберите папку игры с eboot.bin (CUSA03173).'))
+            self.messagebox.showerror(APP_NAME, _('Choose the game folder with eboot.bin (CUSA01623).',
+                                                  'Выберите папку игры с eboot.bin (CUSA01623).'))
             self.show('game')
             return
         self.set_log('')
@@ -1130,7 +1274,7 @@ class Launcher:
             for _i in range(500):
                 item = self.output.get_nowait()
                 if isinstance(item, tuple):
-                    self.append(_('\n— the game exited (code {}) —\n', '\n— игра завершилась (код {}) —\n').format(item[0]))
+                    self.append(_('\nThe game exited (code {}).\n', '\nИгра завершилась (код {}).\n').format(item[0]))
                     self.process = None
                     if self.job:
                         self.job.close()
@@ -1191,14 +1335,14 @@ class Launcher:
         except (OSError, ValueError, KeyError) as failure:
             if manual:
                 self.ui_calls.put(lambda error=failure: self.messagebox.showerror(
-                    'Bloodborne', _('Could not check for updates: {}', 'Не удалось проверить обновления: {}').format(error)))
+                    APP_NAME, _('Could not check for updates: {}', 'Не удалось проверить обновления: {}').format(error)))
             return
 
         def show():
             if version_tuple(version) > version_tuple(VERSION):
                 self.offer_update(version, url, page)
             elif manual:
-                self.messagebox.showinfo('Bloodborne', _('You have the latest version ({}).',
+                self.messagebox.showinfo(APP_NAME, _('You have the latest version ({}).',
                                                          'У вас последняя версия ({}).').format(VERSION))
         self.ui_calls.put(show)
 
@@ -1225,12 +1369,12 @@ class Launcher:
 
     def install_update(self, version, url, page):
         if self.process:
-            self.messagebox.showinfo('Bloodborne', _('Close the game before updating.', 'Закройте игру перед обновлением.'))
+            self.messagebox.showinfo(APP_NAME, _('Close the game before updating.', 'Закройте игру перед обновлением.'))
             return
         if not FROZEN or not url:  # a source tree updates with git
             webbrowser.open(page)
             return
-        if not self.messagebox.askyesno('Bloodborne', _(
+        if not self.messagebox.askyesno(APP_NAME, _(
                 'Install version {} now? The launcher closes, installs it and opens again. Saves and settings are kept.',
                 'Установить версию {} сейчас? Лаунчер закроется, установит её и откроется снова. Сохранения и '
                 'настройки останутся.').format(version)):
@@ -1270,7 +1414,7 @@ class Launcher:
                 def failed(error=failure):
                     self.update_button.configure(state='normal')
                     self.update_label.configure(text=_('Version {} is available.', 'Доступна версия {}.').format(version))
-                    self.messagebox.showerror('Bloodborne', _('Update failed: {}', 'Не удалось обновить: {}').format(error))
+                    self.messagebox.showerror(APP_NAME, _('Update failed: {}', 'Не удалось обновить: {}').format(error))
                 self.ui_calls.put(failed)
         threading.Thread(target=work, daemon=True).start()
 
@@ -1281,7 +1425,7 @@ class Launcher:
         import shutil
         cache = Path(self.app['user_dir'] or DATA_DIR / 'user') / 'cache'
         shutil.rmtree(cache, ignore_errors=True)
-        self.messagebox.showinfo('Bloodborne', _('Shader cache cleared. The next start stutters for a few minutes while '
+        self.messagebox.showinfo(APP_NAME, _('Shader cache cleared. The next start stutters for a few minutes while '
                                                  'it is rebuilt.', 'Кэш шейдеров очищен. Следующий запуск несколько '
                                                  'минут будет подтормаживать, пока кэш собирается заново.'))
 
@@ -1300,9 +1444,9 @@ class Launcher:
         result = subprocess.run(['powershell', '-NoProfile', '-Command', script], capture_output=True,
                                 creationflags=NO_WINDOW)
         if result.returncode == 0:
-            self.messagebox.showinfo('Bloodborne', _('Shortcut created on the desktop.', 'Ярлык создан на рабочем столе.'))
+            self.messagebox.showinfo(APP_NAME, _('Shortcut created on the desktop.', 'Ярлык создан на рабочем столе.'))
         else:
-            self.messagebox.showerror('Bloodborne', result.stderr.decode(errors='replace')[:400])
+            self.messagebox.showerror(APP_NAME, result.stderr.decode(errors='replace')[:400])
 
     def close(self):
         try:
