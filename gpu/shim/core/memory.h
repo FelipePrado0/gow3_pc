@@ -1,4 +1,4 @@
-// bbport: the MemoryManager surface used by the video core and GnmDriver.
+// gow3: the MemoryManager surface used by the video core and GnmDriver.
 // Guest memory lives at identical host addresses; the C runtime owns the VMAs.
 #pragma once
 #include "common/types.h"

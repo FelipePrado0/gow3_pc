@@ -151,7 +151,7 @@ bool WriteVector(const BlobType type, std::filesystem::path&& path_, std::vector
                     LOG_ERROR(Render, "Failed to add {} to the archive", path.string().c_str());
                 }
             } else {
-                // bbport: write beside and rename into place, so a game that ends during the
+                // gow3: write beside and rename into place, so a game that ends during the
                 // write (the queue is not drained at exit) never leaves a truncated blob that
                 // the next start would load.
                 using namespace Common::FS;

@@ -13,7 +13,7 @@ layout(binding = 6, rgba16f) uniform writeonly image2D diagnostic_img;
 layout(push_constant) uniform Params {
     vec2 jitter;
     uint reset_history;
-    uint pad; // bits 0-7: diagnostic output (BB_TAA_DIAGNOSTICS); 8-12: A/B switches
+    uint pad; // bits 0-7: diagnostic output (GOW3_TAA_DIAGNOSTICS); 8-12: A/B switches
     vec4 proj;
     vec4 prev_proj;
     vec4 previous_z;

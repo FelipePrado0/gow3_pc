@@ -1,4 +1,4 @@
-/* bbport: Wine side of the memory bridge test (tools/bridge_helper). Built with MinGW, run under
+/* gow3: Wine side of the memory bridge test (tools/bridge_helper). Built with MinGW, run under
  * Proton's Wine. Imports a Vulkan buffer the native process exported as an opaque fd (inherited
  * fd number on the command line) through VK_KHR_external_memory_win32, checks the native
  * pattern and writes its own.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# bbport: compares fsr4cap captures (capture_<render>_<output> dirs): weights, scratch size and the
+# gow3: compares fsr4cap captures (capture_<render>_<output> dirs): weights, scratch size and the
 # shader/groups of each dispatch of frame 1.
 import glob, os, re, sys
 root = sys.argv[1]

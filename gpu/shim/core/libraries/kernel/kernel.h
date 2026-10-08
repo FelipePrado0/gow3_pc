@@ -1,4 +1,4 @@
-// bbport: the parts of shadPS4's kernel.h used by vendored libraries.
+// gow3: the parts of shadPS4's kernel.h used by vendored libraries.
 #pragma once
 #include "common/types.h"
 #include "core/libraries/kernel/orbis_error.h"

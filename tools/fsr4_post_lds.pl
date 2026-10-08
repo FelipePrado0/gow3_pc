@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 # fsr4_post_lds.pl < post.comp > post_lds.comp
-# bbport: rewrites a decompiled FSR 4 v07 post pass (spirv-cross GLSL) for RDNA3.
+# gow3: rewrites a decompiled FSR 4 v07 post pass (spirv-cross GLSL) for RDNA3.
 #
 # Each invocation computes a 2x2 block of output pixels and stores them into three images
 # (recurrent state, history, output). Stores of every other pixel from three images cost ~4x
@@ -23,19 +23,19 @@ use lib $FindBin::Bin;
 use Fsr4SpirvCrossFixes;
 $src = Fsr4SpirvCrossFixes::signed_unpack($src);
 
-my %slot = (rw_recurrent_0 => ['bb_rec', 'vec4'], rw_history_color => ['bb_hist', 'vec4'],
-            rw_mlsr_output_color => ['bb_out', 'vec4']);
+my %slot = (rw_recurrent_0 => ['gow3_rec', 'vec4'], rw_history_color => ['gow3_hist', 'vec4'],
+            rw_mlsr_output_color => ['gow3_out', 'vec4']);
 for my $image (sort keys %slot) {
     my ($array, $type) = @{$slot{$image}};
-    my $n = ($src =~ s/imageStore\($image, ivec2\((_\d+)\), /$array\[bbLocal($1)\] = $type(/g);
+    my $n = ($src =~ s/imageStore\($image, ivec2\((_\d+)\), /$array\[gow3Local($1)\] = $type(/g);
     die "expected one store to $image, found $n\n" unless $n == 1;
 }
 my $decl = <<'GLSL';
-// bbport: the workgroup's 16x16 output block, stored in contiguous rows after the loop.
-shared vec4 bb_rec[256];
-shared vec4 bb_hist[256];
-shared vec4 bb_out[256];
-uint bbLocal(uvec2 p)
+// gow3: the workgroup's 16x16 output block, stored in contiguous rows after the loop.
+shared vec4 gow3_rec[256];
+shared vec4 gow3_hist[256];
+shared vec4 gow3_out[256];
+uint gow3Local(uvec2 p)
 {
     uvec2 l = p - gl_WorkGroupID.xy * 16u;
     return l.y * 16u + l.x;
@@ -46,14 +46,14 @@ GLSL
 $src =~ s/^void main\(\)\n/$decl/m or die "no main\n";
 my $flush = <<'GLSL';
     barrier();
-    uvec2 bbBase = gl_WorkGroupID.xy * 16u;
-    for (uint bbK = 0u; bbK < 4u; bbK++)
+    uvec2 gow3Base = gl_WorkGroupID.xy * 16u;
+    for (uint gow3K = 0u; gow3K < 4u; gow3K++)
     {
-        uint bbI = gl_LocalInvocationIndex + 64u * bbK;
-        ivec2 bbP = ivec2(bbBase + uvec2(bbI % 16u, bbI / 16u));
-        imageStore(rw_recurrent_0, bbP, bb_rec[bbI]);
-        imageStore(rw_history_color, bbP, bb_hist[bbI]);
-        imageStore(rw_mlsr_output_color, bbP, bb_out[bbI]);
+        uint gow3I = gl_LocalInvocationIndex + 64u * gow3K;
+        ivec2 gow3P = ivec2(gow3Base + uvec2(gow3I % 16u, gow3I / 16u));
+        imageStore(rw_recurrent_0, gow3P, gow3_rec[gow3I]);
+        imageStore(rw_history_color, gow3P, gow3_hist[gow3I]);
+        imageStore(rw_mlsr_output_color, gow3P, gow3_out[gow3I]);
     }
 }
 GLSL

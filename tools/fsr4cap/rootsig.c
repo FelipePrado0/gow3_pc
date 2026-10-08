@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: prints a serialized D3D12 root signature (fsr4cap capture).
+// gow3: prints a serialized D3D12 root signature (fsr4cap capture).
 #define COBJMACROS
 #define WIDL_C_INLINE_WRAPPERS
 #include <windows.h>

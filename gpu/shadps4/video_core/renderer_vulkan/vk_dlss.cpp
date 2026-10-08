@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 IFreemz, bbport contributors
+// SPDX-FileCopyrightText: Copyright 2026 IFreemz, gow3 contributors
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
@@ -17,7 +17,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
-#include "../../../dlss_bridge/bbport_dlss_bridge.h"
+#include "../../../dlss_bridge/gow3_dlss_bridge.h"
 #endif
 
 namespace Vulkan {
@@ -30,7 +30,7 @@ int Dlss::QualityForScale(float scale) {
 #ifdef _WIN32
 
 namespace {
-constexpr wchar_t BridgeName[] = L"bbport_dlss.dll";
+constexpr wchar_t BridgeName[] = L"gow3_dlss.dll";
 constexpr wchar_t NgxName[] = L"nvngx_dlss.dll";
 
 std::filesystem::path ExecutableDirectory() {
@@ -71,7 +71,7 @@ bool CollectExtensions(const VkExtensionProperties* required, u32 count,
 
 struct Dlss::Impl {
     HMODULE module{};
-    const BbDlssApi* api{};
+    const Gow3DlssApi* api{};
     std::vector<std::string> instance_extensions, device_extensions;
     std::optional<FeatureDesc> feature;
     std::string problem;
@@ -86,7 +86,7 @@ struct Dlss::Impl {
 
 Dlss* Dlss::Get() {
     static Dlss* const dlss = []() -> Dlss* {
-        const char* setting = std::getenv("BB_DLSS");
+        const char* setting = std::getenv("GOW3_DLSS");
         if (setting && setting[0] == '0') {
             return nullptr;
         }
@@ -111,16 +111,16 @@ Dlss::Dlss() : impl{std::make_unique<Impl>()} {
     const auto directory = ExecutableDirectory();
     impl->module = LoadLibraryW((directory / BridgeName).c_str());
     const auto get_api =
-        impl->module ? reinterpret_cast<BbDlssGetApiFn>(GetProcAddress(impl->module, "BbDlssGetApi"))
+        impl->module ? reinterpret_cast<Gow3DlssGetApiFn>(GetProcAddress(impl->module, "Gow3DlssGetApi"))
                      : nullptr;
     impl->api = get_api ? get_api() : nullptr;
-    if (!impl->api || impl->api->abi != BBPORT_DLSS_BRIDGE_ABI) {
-        impl->Disable("bbport_dlss.dll is missing or from another version");
+    if (!impl->api || impl->api->abi != GOW3_DLSS_BRIDGE_ABI) {
+        impl->Disable("gow3_dlss.dll is missing or from another version");
         return;
     }
     // NGX writes its logs and model updates here: beside the saves and shader caches.
     std::filesystem::path data = directory / "dlss";
-    if (const char* user = std::getenv("BB_GPU_USER_DIR"); user && user[0]) {
+    if (const char* user = std::getenv("GOW3_GPU_USER_DIR"); user && user[0]) {
         data = std::filesystem::path{user} / "dlss";
     }
     std::error_code error;
@@ -204,7 +204,7 @@ bool Dlss::CreateFeature(vk::CommandBuffer command, const FeatureDesc& desc) {
         return false;
     }
     impl->feature.reset();
-    const BbDlssFeature feature{desc.input_width,  desc.input_height, desc.output_width,
+    const Gow3DlssFeature feature{desc.input_width,  desc.input_height, desc.output_width,
                                 desc.output_height, desc.quality,      0,
                                 0,                  desc.hdr ? 1 : 0};
     if (!impl->api->CreateFeature(command, &feature)) {
@@ -220,14 +220,14 @@ bool Dlss::Evaluate(vk::CommandBuffer command, const Frame& frame) {
     }
     const auto image = [](const Resource& r) {
         const vk::ImageSubresourceRange range{r.aspect, 0, 1, 0, 1};
-        return BbDlssImage{r.image,
+        return Gow3DlssImage{r.image,
                            r.view,
                            static_cast<VkImageSubresourceRange>(range),
                            static_cast<VkFormat>(r.format),
                            r.width,
                            r.height};
     };
-    const BbDlssEvaluate parameters{image(frame.color),  image(frame.depth), image(frame.motion),
+    const Gow3DlssEvaluate parameters{image(frame.color),  image(frame.depth), image(frame.motion),
                                     image(frame.output), frame.jitter_x,     frame.jitter_y,
                                     frame.reset ? 1 : 0, frame.frame_ms,     frame.sharpness};
     return impl->api->Evaluate(command, &parameters) != 0;

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: writes the upscaler's color back into the game's scene color, keeping the game's alpha
+// gow3: writes the upscaler's color back into the game's scene color, keeping the game's alpha
 // (post-processing reads data from it). Debug modes: 1 shows the reactive mask in red,
 // 2 the motion vectors given to the upscaler (red/green: |x|/|y|, 8 render pixels = full;
 // blue: the pixel has an object motion vector from its vertices, not camera motion).

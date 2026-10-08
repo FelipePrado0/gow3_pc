@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: D3D12 call recorder for fsr4cap.exe. Patches the vtables of the device, command list
+// gow3: D3D12 call recorder for fsr4cap.exe. Patches the vtables of the device, command list
 // and resource classes (vkd3d-proton shares one vtable per class across interface versions) and
 // writes every compute dispatch with its pipeline, root parameters and the descriptors they
 // resolve to into capture/trace.txt; shaders (DXIL), root signatures and buffer uploads go to

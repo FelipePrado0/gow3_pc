@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Builds dist/bbport-windows/ (and dist/bbport-windows.zip): Bloodborne.exe (the launcher, frozen
-# with PyInstaller so players need no Python), bb-probe.exe with the MSYS2 CLANG64 DLLs it needs,
+# Builds dist/gow3-windows/ (and dist/gow3-windows.zip): Bloodborne.exe (the launcher, frozen
+# with PyInstaller so players need no Python), gow3-probe.exe with the MSYS2 CLANG64 DLLs it needs,
 # the preparation scripts and run.py. Run from an MSYS2 CLANG64 shell after `bash build.sh`.
 # Freezing uses a Windows Python 3.10+ (python.org; WINPYTHON overrides) and a private venv in
 # out/pyenv with PyInstaller. FSR 4 assets in fsr4_shaders/ are included when present.
 set -euo pipefail
 cd -- "$(dirname -- "$0")/../.."
 source ./msys2-env.sh
-[[ -f out/bb-probe.exe && -f out/bb-gpu-capabilities.exe && -f out/bb-play.exe ]] || { echo 'Build first: bash build.sh' >&2; exit 1; }
+[[ -f out/gow3-probe.exe && -f out/gow3-gpu-capabilities.exe && -f out/gow3-play.exe ]] || { echo 'Build first: bash build.sh' >&2; exit 1; }
 
 # A Windows Python (not MSYS2's) for PyInstaller.
 python=${WINPYTHON:-}
@@ -32,54 +32,54 @@ done
 out/pyenv/Scripts/python.exe -m PyInstaller --noconfirm --clean --log-level WARN --windowed \
     --name Bloodborne --icon "$(cygpath -w "$PWD/launcher/bloodborne.ico")" --distpath out/pyi-dist \
     --workpath out/pyi-work --specpath out/pyi-work --paths "$(cygpath -w "$PWD/scripts")" "${hidden[@]}" \
-    "$(cygpath -w "$PWD/launcher/bbport_launcher_win.py")"
+    "$(cygpath -w "$PWD/launcher/gow3_launcher_win.py")"
 
-# The package is assembled in a fresh staging folder and zipped from there; dist/bbport-windows
+# The package is assembled in a fresh staging folder and zipped from there; dist/gow3-windows
 # (a playable copy that may hold saves and settings) is only refreshed afterwards.
-dest=out/stage/bbport-windows
+dest=out/stage/gow3-windows
 rm -rf -- out/stage
 mkdir -p "$dest/bin" "$dest/launcher"
 cp -r out/pyi-dist/Bloodborne/. "$dest/"
-llvm-strip -o "$dest/Play Bloodborne.exe" out/bb-play.exe
+llvm-strip -o "$dest/Play Bloodborne.exe" out/gow3-play.exe
 cp launcher/bloodborne.ico launcher/bloodborne.png "$dest/launcher/"
 # The executables without debug information (out/ keeps the symbols for crash reports).
-for exe in bb-probe.exe bb-gpu-capabilities.exe; do
+for exe in gow3-probe.exe gow3-gpu-capabilities.exe; do
     llvm-strip --strip-debug -o "$dest/bin/$exe" "out/$exe"
 done
 # Every DLL the executables load from the CLANG64 tree (SDL3, FFmpeg, Vulkan loader, ...).
-ldd "$dest/bin/bb-probe.exe" "$dest/bin/bb-gpu-capabilities.exe" |
+ldd "$dest/bin/gow3-probe.exe" "$dest/bin/gow3-gpu-capabilities.exe" |
     awk '/\/clang64\/bin\// {print $3}' | sort -u | while read -r dll; do
         cp -u "$dll" "$dest/bin/"
     done
 cp -r scripts patches "$dest/"
 cp run.py LICENSE README.md packaging/windows/README-Windows.txt "$dest/"
 if [[ -d fsr4_shaders ]]; then cp -r fsr4_shaders "$dest/"; fi
-# DLSS (NVIDIA RTX): the MSVC-built bridge and NVIDIA's runtime, next to bb-probe.exe
+# DLSS (NVIDIA RTX): the MSVC-built bridge and NVIDIA's runtime, next to gow3-probe.exe
 # (packaging/windows/build_dlss.sh). Without them the DLSS option stays unavailable.
-if [[ -f out/bbport_dlss.dll && -f out/nvngx_dlss.dll ]]; then
-    cp out/bbport_dlss.dll out/nvngx_dlss.dll "$dest/bin/"
+if [[ -f out/gow3_dlss.dll && -f out/nvngx_dlss.dll ]]; then
+    cp out/gow3_dlss.dll out/nvngx_dlss.dll "$dest/bin/"
     mkdir -p "$dest/licenses" && cp out/NVIDIA-DLSS-LICENSE.txt "$dest/licenses/"
-    cp gpu/dlss_bridge/LICENSE.txt "$dest/licenses/bbport_dlss-LICENSE.txt"
+    cp gpu/dlss_bridge/LICENSE.txt "$dest/licenses/gow3_dlss-LICENSE.txt"
 else
     echo "DLSS bridge not built (packaging/windows/build_dlss.sh): no DLSS in this package" >&2
 fi
 find "$dest" -name __pycache__ -prune -exec rm -r {} +
 mkdir -p dist
-rm -f dist/bbport-windows.zip
+rm -f dist/gow3-windows.zip
 (cd out/stage && powershell -NoProfile -Command \
-    "Compress-Archive -Path bbport-windows -DestinationPath ../../dist/bbport-windows.zip")
+    "Compress-Archive -Path gow3-windows -DestinationPath ../../dist/gow3-windows.zip")
 
-# Refresh dist/bbport-windows, keeping what players create there (saves, settings, mods), and
+# Refresh dist/gow3-windows, keeping what players create there (saves, settings, mods), and
 # only while nothing runs from it: deleting a running launcher's files breaks it.
-play=dist/bbport-windows
+play=dist/gow3-windows
 running=$(powershell -NoProfile -Command \
     "@(Get-Process | Where-Object { \$_.Path -like '$(cygpath -w "$PWD/$play")\\*' }).Count" | tr -d '\r')
 if [[ ${running:-0} != 0 ]]; then
-    echo "dist/bbport-windows is in use ($running processes): not refreshed; the zip is ready." >&2
+    echo "dist/gow3-windows is in use ($running processes): not refreshed; the zip is ready." >&2
 else
     mkdir -p "$play"
-    find "$play" -mindepth 1 -maxdepth 1 ! -name user ! -name mods ! -name bbport.ini \
+    find "$play" -mindepth 1 -maxdepth 1 ! -name user ! -name mods ! -name gow3.ini \
         ! -name mods.json ! -name patches.json -exec rm -rf {} +
     cp -r "$dest/." "$play/"
 fi
-du -sh "$dest" dist/bbport-windows.zip
+du -sh "$dest" dist/gow3-windows.zip

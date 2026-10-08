@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: FSR reactive mask from the scene color before and after the game's blended
+// gow3: FSR reactive mask from the scene color before and after the game's blended
 // (transparent: particles, fire, glass, effects) draws. Where they changed the color, the
 // upscaler relies less on history, so moving effects do not smear or ghost.
 #version 450

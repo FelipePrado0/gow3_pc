@@ -32,7 +32,7 @@ public:
         return opened;
     }
     void FinishPreload();
-    /// bbport: removes every cached blob (an incompatible cache is rebuilt, not ignored).
+    /// gow3: removes every cached blob (an incompatible cache is rebuilt, not ignored).
     void Clear();
 
     bool Save(BlobType type, const std::string& name, std::vector<u8>&& data);

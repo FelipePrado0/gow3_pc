@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: camera motion vectors from depth and the current/previous camera (the scene
+// gow3: camera motion vectors from depth and the current/previous camera (the scene
 // constants, see docs/upscaler.md; layout still to be recalibrated for God of War III). DEBUG_OVERLAY blends them as colors into the frame.
 #version 450
 #extension GL_EXT_samplerless_texture_functions : require

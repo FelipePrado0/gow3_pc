@@ -67,10 +67,10 @@ struct Liverpool {
     Regs regs{};
     std::array<CbDbExtent, NUM_COLOR_BUFFERS> last_cb_extent{};
     CbDbExtent last_db_extent{};
-    /// bbport: register blocks written since the last draw handed to the draw recording thread
+    /// gow3: register blocks written since the last draw handed to the draw recording thread
     /// (Rasterizer::PostDraw sends them along).
     RegDirty pipe_dirty;
-    /// bbport: fence writes handed to the draw recording thread and not yet done there: a
+    /// gow3: fence writes handed to the draw recording thread and not yet done there: a
     /// WaitRegMem on one of them is met in stream order without waiting for that thread.
     struct PendingFence {
         VAddr address;
@@ -82,7 +82,7 @@ struct Liverpool {
     void NotePendingFences(const auto& event);
     bool PendingFenceValue(VAddr address, u32& value);
     void NotePendingWrite(const struct PM4CmdWriteData& write_data, u32 num_bytes);
-    /// bbport: running checksum of graphics-register packets (see ApplyGraphicsRegisterPacket).
+    /// gow3: running checksum of graphics-register packets (see ApplyGraphicsRegisterPacket).
     u64 gfx_reg_checksum{};
     /// Top-level graphics submissions, numbered for the draw preparation workers.
     static constexpr u64 NoSeq = ~0ull;
@@ -112,11 +112,11 @@ public:
         submit_cv.wait(lk, [this] { return num_submits == 0; });
     }
 
-    /// bbport: also the draw recording thread and the fences it deferred are done (see
+    /// gow3: also the draw recording thread and the fences it deferred are done (see
     /// work_retired). sceGnmSubmitDone does not block the guest when this is true.
     bool IsGpuIdle() const {
         static const bool use_retired = [] {
-            const char* env = std::getenv("BB_WORK_RETIRED");
+            const char* env = std::getenv("GOW3_WORK_RETIRED");
             return !(env && env[0] == '0');
         }();
         return num_submits == 0 && (work_retired || !use_retired);
@@ -267,7 +267,7 @@ private:
     const bool guest_markers_enabled;
     std::jthread process_thread{};
     std::atomic<u32> num_submits{};
-    /// bbport: false from a submission until its draws and deferred fences are done (stage A
+    /// gow3: false from a submission until its draws and deferred fences are done (stage A
     /// decrements num_submits once it has decoded a submission, before that). Under
     /// submit_mutex with num_submits.
     std::atomic<bool> work_retired{true};

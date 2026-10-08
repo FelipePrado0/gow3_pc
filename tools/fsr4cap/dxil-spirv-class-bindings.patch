@@ -6,7 +6,7 @@ index 06227db..5970c44 100644
  
  	bool ssbo_uav = false;
  	bool ssbo_srv = false;
-+	bool class_bindings = false; // bbport: binding = register + 32 * class (SRV, UAV, CBV, sampler)
++	bool class_bindings = false; // gow3: binding = register + 32 * class (SRV, UAV, CBV, sampler)
  	bool ssbo_rtas = false;
  	bool input_attachments = false;
  };

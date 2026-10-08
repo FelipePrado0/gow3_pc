@@ -1,12 +1,12 @@
-#include "bbport_write_log.h"
-// bbport: glue between the C loader and the vendored shadPS4 video core.
-#include "bbport_overlay.h"
-#include "bbport_settings.h"
-#include "bbport_copy.h"
+#include "gow3_write_log.h"
+// gow3: glue between the C loader and the vendored shadPS4 video core.
+#include "gow3_overlay.h"
+#include "gow3_settings.h"
+#include "gow3_copy.h"
 #ifndef _WIN32
 #include <sys/resource.h>
 #endif
-#include "bbport_toggles.h"
+#include "gow3_toggles.h"
 #include <algorithm>
 #include <atomic>
 #include <condition_variable>
@@ -20,7 +20,7 @@
 #include <thread>
 #include <vector>
 #include <SDL3/SDL.h>
-#include "../bbgpu.h"
+#include "../gow3gpu.h"
 #include "common/elf_info.h"
 #include "common/logging/log.h"
 #include "common/rdtsc.h"
@@ -74,7 +74,7 @@ void SymbolsResolver::AddSymbol(const char* nid, const char* library, const char
 namespace Core {
 class Emulator {
 public:
-    static void FillElfInfo(const BbGpuConfig& config) {
+    static void FillElfInfo(const Gow3GpuConfig& config) {
         auto& info = Common::ElfInfo::Instance();
         info.initialized = true;
         info.game_serial = config.serial ? config.serial : "UNKNOWN";
@@ -118,28 +118,28 @@ static void CopySparseSerial(VAddr source, u8* dest, u64 size) {
     }
 }
 void MemoryManager::CopySparseMemory(VAddr source, u8* dest, u64 size) {
-    // bbport: large uploads (streaming) are split across the copy threads.
+    // gow3: large uploads (streaming) are split across the copy threads.
     constexpr u64 Chunk = 512 * 1024;
-    if (size < 4 * Chunk || !BbCopy::Enabled()) {
+    if (size < 4 * Chunk || !Gow3Copy::Enabled()) {
         return CopySparseSerial(source, dest, size);
     }
-    BbCopy::ParallelFor((size + Chunk - 1) / Chunk, [&](std::size_t i) {
+    Gow3Copy::ParallelFor((size + Chunk - 1) / Chunk, [&](std::size_t i) {
         const u64 offset = i * Chunk;
         CopySparseSerial(source + offset, dest + offset, std::min(Chunk, size - offset));
     });
 }
 bool MemoryManager::TryWriteBacking(void* address, const void* data, u64 size) {
-    BbWriteLog::Note(reinterpret_cast<uintptr_t>(address), data, size, BbWriteLog::Backing);
+    Gow3WriteLog::Note(reinterpret_cast<uintptr_t>(address), data, size, Gow3WriteLog::Backing);
     return runtime_memory_write_backing(reinterpret_cast<uintptr_t>(address), data, size) != 0;
 }
 void AddressSpace::Protect(VAddr virtual_addr, u64 size, MemoryPermission perms) {
-    BbStats::Timer timer{BbStats::t_protect};
+    Gow3Stats::Timer timer{Gow3Stats::t_protect};
     const u64 pages = (size + 4095) / 4096;
-    BbStats::protect_calls.fetch_add(1, std::memory_order_relaxed);
-    BbStats::protect_pages.fetch_add(pages, std::memory_order_relaxed);
+    Gow3Stats::protect_calls.fetch_add(1, std::memory_order_relaxed);
+    Gow3Stats::protect_pages.fetch_add(pages, std::memory_order_relaxed);
     if (!True(perms & MemoryPermission::Write)) {
-        BbStats::protect_revoke_calls.fetch_add(1, std::memory_order_relaxed);
-        BbStats::protect_revoke_pages.fetch_add(pages, std::memory_order_relaxed);
+        Gow3Stats::protect_revoke_calls.fetch_add(1, std::memory_order_relaxed);
+        Gow3Stats::protect_revoke_pages.fetch_add(pages, std::memory_order_relaxed);
     }
     runtime_memory_gpu_protect(virtual_addr, size, True(perms & MemoryPermission::Read),
                                True(perms & MemoryPermission::Write));
@@ -178,7 +178,7 @@ std::condition_variable g_window_cv;
 bool g_window_ready;
 } // namespace
 
-u32 BbDisplayRefreshHz() {
+u32 Gow3DisplayRefreshHz() {
     static const u32 hz = [] {
         const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(SDL_GetPrimaryDisplay());
         const u32 rate = mode && mode->refresh_rate > 0 ? u32(mode->refresh_rate + 0.5f) : 60;
@@ -188,15 +188,15 @@ u32 BbDisplayRefreshHz() {
     return hz;
 }
 
-#ifdef BB_PGO_GENERATE
+#ifdef GOW3_PGO_GENERATE
 extern "C" void __gcov_dump(void);
 extern "C" void __gcov_reset(void);
-// Instrumented build (BB_PGO=generate): the game often ends through _exit (watchdog, guest
+// Instrumented build (GOW3_PGO=generate): the game often ends through _exit (watchdog, guest
 // exit), which skips the profile write at exit. Write every 30 s and reset: the files sum the
 // intervals.
 static void StartProfileWriter() {
     std::thread([] {
-        Common::SetCurrentThreadName("bb:pgo");
+        Common::SetCurrentThreadName("gow3:pgo");
         for (;;) {
             std::this_thread::sleep_for(std::chrono::seconds(30));
             __gcov_dump();
@@ -207,22 +207,22 @@ static void StartProfileWriter() {
 }
 #endif
 
-extern "C" int bbgpu_init(const BbGpuConfig* config) {
-    BbSettings::Load();
-#ifdef BB_PGO_GENERATE
+extern "C" int gow3gpu_init(const Gow3GpuConfig* config) {
+    Gow3Settings::Load();
+#ifdef GOW3_PGO_GENERATE
     StartProfileWriter();
 #endif
     g_sdk_version = config->sdk_version;
 #ifdef _WIN32
-    if (config->user_dir && !std::getenv("BB_GPU_USER_DIR")) _putenv_s("BB_GPU_USER_DIR", config->user_dir);
+    if (config->user_dir && !std::getenv("GOW3_GPU_USER_DIR")) _putenv_s("GOW3_GPU_USER_DIR", config->user_dir);
 #else
-    if (config->user_dir) setenv("BB_GPU_USER_DIR", config->user_dir, 0);
+    if (config->user_dir) setenv("GOW3_GPU_USER_DIR", config->user_dir, 0);
 #endif
     Core::Emulator::FillElfInfo(*config);
     const std::string title = config->title ? config->title : "God of War III";
     const s32 width = config->width, height = config->height;
     g_window_thread = std::thread([title, width, height] {
-        Common::SetCurrentThreadName("bb:window");
+        Common::SetCurrentThreadName("gow3:window");
         auto* window = new Frontend::WindowSDL(width, height, title.c_str());
         {
             std::scoped_lock lock{g_window_mutex};
@@ -250,14 +250,14 @@ extern "C" int bbgpu_init(const BbGpuConfig* config) {
 }
 
 namespace Libraries::Kernel { void StartKernelService(); }
-extern "C" void bbgpu_register_kernel(void) {
+extern "C" void gow3gpu_register_kernel(void) {
     Libraries::Kernel::StartKernelService();
     Core::Loader::SymbolsResolver resolver;
     Libraries::Kernel::RegisterEventQueue(&resolver);
     Libraries::AvPlayer::RegisterLib(&resolver);
 }
 
-extern "C" uintptr_t bbgpu_resolve(const char* scoped_nid) {
+extern "C" uintptr_t gow3gpu_resolve(const char* scoped_nid) {
     const char* hash = std::strchr(scoped_nid, '#');
     const size_t length = hash ? size_t(hash - scoped_nid) : std::strlen(scoped_nid);
     for (const auto& symbol : g_symbols) {
@@ -268,11 +268,11 @@ extern "C" uintptr_t bbgpu_resolve(const char* scoped_nid) {
     return 0;
 }
 
-extern "C" int bbgpu_handle_fault(void* ucontext, void* address) {
+extern "C" int gow3gpu_handle_fault(void* ucontext, void* address) {
     return Core::Signals::Instance()->DispatchAccessViolation(ucontext, address) ? 1 : 0;
 }
 
-extern "C" unsigned bbgpu_symbol_count(void) {
+extern "C" unsigned gow3gpu_symbol_count(void) {
     return unsigned(g_symbols.size());
 }
 
@@ -291,7 +291,7 @@ void KernelSignalRequest() {
 }
 
 static void KernelServiceThread(std::stop_token stoken) {
-    Common::SetCurrentThreadName("bb:kernel_service");
+    Common::SetCurrentThreadName("gow3:kernel_service");
     while (!stoken.stop_requested()) {
         {
             std::unique_lock lock{m_asio_req};
@@ -327,27 +327,27 @@ u32 ConsumeWithOverlaysScreenshotRequests() { return 0; }
 ScreenshotRequests ConsumeScreenshotRequests() { return {}; }
 } // namespace VideoCore
 
-extern "C" int bbgpu_overlay_captures_input(void) {
-    return BbOverlay::CapturesInput() ? 1 : 0;
+extern "C" int gow3gpu_overlay_captures_input(void) {
+    return Gow3Overlay::CapturesInput() ? 1 : 0;
 }
 
-extern "C" int bbgpu_text_input_begin(const char* initial, const char* prompt) {
+extern "C" int gow3gpu_text_input_begin(const char* initial, const char* prompt) {
     if (!g_window) return 0;
     g_window->BeginTextInput(initial ? initial : "", prompt ? prompt : "Text");
     return 1;
 }
 
-extern "C" int bbgpu_choice_begin(const char* title, const char* const* items, int count, int focus) {
+extern "C" int gow3gpu_choice_begin(const char* title, const char* const* items, int count, int focus) {
     if (!g_window || count <= 0) return 0;
-    BbOverlay::BeginChoice(title ? title : "", std::vector<std::string>(items, items + count), focus);
+    Gow3Overlay::BeginChoice(title ? title : "", std::vector<std::string>(items, items + count), focus);
     return 1;
 }
 
-extern "C" int bbgpu_choice_poll(void) {
-    return BbOverlay::PollChoice();
+extern "C" int gow3gpu_choice_poll(void) {
+    return Gow3Overlay::PollChoice();
 }
 
-extern "C" int bbgpu_text_input_poll(char* out, uint64_t size) {
+extern "C" int gow3gpu_text_input_poll(char* out, uint64_t size) {
     if (!g_window) return 2;
     std::string text;
     const int state = g_window->PollTextInput(text);

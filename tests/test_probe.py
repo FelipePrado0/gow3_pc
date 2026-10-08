@@ -6,12 +6,12 @@ import subprocess
 import tempfile
 import unittest
 
-EXE = ROOT / 'out/bb-probe'
+EXE = ROOT / 'out/gow3-probe'
 
 
 def package(code, relocs=(), names=(), capabilities=None):
     image = code.ljust(4096, b'\0')
-    header = struct.pack('<8sQQQQQ', b'BBPROBE1' if capabilities is None else b'BBPROBE2', len(image), 0, 1, len(relocs), len(names))
+    header = struct.pack('<8sQQQQQ', b'G3PROBE1' if capabilities is None else b'G3PROBE2', len(image), 0, 1, len(relocs), len(names))
     if capabilities is not None:
         header += struct.pack('<Q', capabilities)
     segment = struct.pack('<QQQ', 0, len(image), 5)
@@ -25,7 +25,7 @@ def native_package(name='fixture-native', binding_address=4112, binding_kind=1,
     code = b'\x48\x83\xec\x08\xff\x15\x16\0\0\0\x48\x83\xc4\x08\xff\x25\x14\0\0\0'
     image = code.ljust(4096,b'\0') + init.ljust(16,b'\0') + native
     image = image.ljust(12288,b'\0')
-    header=struct.pack('<8s6Q',b'BBPROBE3',len(image),0,3,2,2,1)
+    header=struct.pack('<8s6Q',b'G3PROBE3',len(image),0,3,2,2,1)
     meta=metadata or (4096,8192,4096,8192,32,4,1,256)
     return (header + struct.pack('<8Q',*meta) + struct.pack('<3Q',0,binding_address,binding_kind)
             + struct.pack('<9Q',0,4096,5,4096,4096,lib_flags,8192,4096,6)
@@ -38,8 +38,8 @@ class LoaderTests(unittest.TestCase):
     def test_invalid_content_profile_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'content.bin'
-            for data in (b'BBCONT01',struct.pack('<8s5I',b'BBCONT01',2,0,0,0,0),
-                         struct.pack('<8s5I',b'BBCONT01',3,0,0,0,0)+b'extra'):
+            for data in (b'G3CONT01',struct.pack('<8s5I',b'G3CONT01',2,0,0,0,0),
+                         struct.pack('<8s5I',b'G3CONT01',3,0,0,0,0)+b'extra'):
                 with self.subTest(data=data):
                     path.write_bytes(data)
                     r=self.run_image(package(b'\xc3'),'--content-profile',str(path))

@@ -76,8 +76,8 @@ def link(game, out):
     libc = module(game/'sce_module/libc.prx')
     raw = (out/'boot.bin').read_bytes()
     magic, size, entry, ns, nr, ni, flags = unpack('<8s6Q', raw, 0)
-    if magic != b'BBPROBE2':
-        raise ValueError('linker expects freshly prepared BBPROBE2')
+    if magic != b'G3PROBE2':
+        raise ValueError('linker expects freshly prepared G3PROBE2')
     pos = 56
     segments = [unpack('<3Q', raw, pos+i*24) for i in range(ns)]
     pos += ns*24
@@ -183,7 +183,7 @@ def link(game, out):
     procparam = next(p for p in main['ph'] if p['type']==0x61000001)
     metadata = (base,libsize,base+libc['tags'][12],base+tls['vaddr'],tls['memsz'],tls['filesz'],len(bindings),procparam['vaddr'])
     with (out/'boot-libc.bin').open('wb') as f:
-        f.write(struct.pack('<8s6Q',b'BBPROBE4',len(image),entry,len(segments),len(relocs),len(names),flags))
+        f.write(struct.pack('<8s6Q',b'G3PROBE4',len(image),entry,len(segments),len(relocs),len(names),flags))
         f.write(struct.pack('<8Q',*metadata))
         f.write(struct.pack('<4Q',*main_tls_values))
         for binding in bindings: f.write(struct.pack('<3Q',*binding))

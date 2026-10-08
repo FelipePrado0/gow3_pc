@@ -12,10 +12,10 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 fail=0
 bench() { # bench <opt> <render> <out> <preset> <frames> <dump>
-    BB_FSR4_OPT=$1 BENCH_NOISE=1 BENCH_DUMP=$6 out/gpu/fsr4-bench "$2" "$3" "$4" "$5" >/dev/null 2>&1
+    GOW3_FSR4_OPT=$1 BENCH_NOISE=1 BENCH_DUMP=$6 out/gpu/fsr4-bench "$2" "$3" "$4" "$5" >/dev/null 2>&1
 }
 post_ms() {
-    BB_FSR4_OPT=$1 out/gpu/fsr4-bench "$2" "$3" "$4" 300 2>&1 |
+    GOW3_FSR4_OPT=$1 out/gpu/fsr4-bench "$2" "$3" "$4" 300 2>&1 |
         grep -E '^ +[0-9.]+ ms/frame  post$' | tail -1 | awk '{print $1}'
 }
 for out in 1920x1080 2560x1440 3840x2160; do

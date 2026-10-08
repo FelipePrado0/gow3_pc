@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<!-- bbport (Windows): UTF-8 for the C library's narrow file APIs (game, user and mod paths),
+<!-- gow3 (Windows): UTF-8 for the C library's narrow file APIs (game, user and mod paths),
      long paths, and per-monitor DPI awareness for the SDL window. -->
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity type="win32" name="bbport.bb-probe" version="1.0.0.0"/>
+  <assemblyIdentity type="win32" name="gow3.gow3-probe" version="1.0.0.0"/>
   <application xmlns="urn:schemas-microsoft-com:asm.v3">
     <windowsSettings>
       <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>

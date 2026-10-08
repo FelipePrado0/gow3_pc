@@ -23,7 +23,7 @@ static void drop(const char* name) {
     }
     // Kept for diagnostics (the launcher's log shows the environment problems).
     char saved[128];
-    snprintf(saved, sizeof saved, "BB_HOST_%s", name);
+    snprintf(saved, sizeof saved, "GOW3_HOST_%s", name);
     setenv(saved, value, 1);
     unsetenv(name);
 }
@@ -41,6 +41,6 @@ int main(int argc, char** argv) {
     setenv("DISABLE_VK_LAYER_VALVE_steam_fossilize_1", "1", 1);
     argv[0] = (char*)TARGET;
     execv(TARGET, argv);
-    perror("bbport: " TARGET);
+    perror("gow3: " TARGET);
     return 127;
 }

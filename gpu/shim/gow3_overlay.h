@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: in-game settings menu (Dear ImGui), drawn by the presenter into the swapchain image
+// gow3: in-game settings menu (Dear ImGui), drawn by the presenter into the swapchain image
 // after the game frame, at display resolution. Insert (keyboard) or L3+R3 (gamepad) opens it;
-// while it is open the game gets no pad/keyboard input. Settings live in bbport_settings.h.
+// while it is open the game gets no pad/keyboard input. Settings live in gow3_settings.h.
 
 #pragma once
 
@@ -17,7 +17,7 @@ namespace Vulkan {
 class Instance;
 }
 
-namespace BbOverlay {
+namespace Gow3Overlay {
 
 /// Present thread, once: the ImGui context and its Vulkan backend.
 void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count);
@@ -45,4 +45,4 @@ void SetTextEntry(bool active, const std::string& prompt, const std::string& tex
 void BeginChoice(const std::string& title, const std::vector<std::string>& items, int focus);
 int PollChoice();
 
-} // namespace BbOverlay
+} // namespace Gow3Overlay

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-#include "bbport_settings.h"
+#include "gow3_settings.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -8,13 +8,13 @@
 #include <string>
 #include <string_view>
 
-namespace BbSettings {
+namespace Gow3Settings {
 
 namespace {
 
 const char* Path() {
-    const char* env = std::getenv("BB_CONFIG");
-    return env && env[0] ? env : "bbport.ini";
+    const char* env = std::getenv("GOW3_CONFIG");
+    return env && env[0] ? env : "gow3.ini";
 }
 
 float Clamp(float v, float lo, float hi) {
@@ -91,17 +91,17 @@ void Load() {
         std::printf("Settings: %s\n", Path());
     }
     // Environment overrides (scripts, A/B tests).
-    if (const char* env = std::getenv("BB_UPSCALER")) {
+    if (const char* env = std::getenv("GOW3_UPSCALER")) {
         v.upscaler = UpscalerOff;
         for (int u = 0; u < UpscalerCount; ++u) {
             if (std::strcmp(env, UpscalerName(u)) == 0) v.upscaler = u;
         }
     }
     const std::pair<const char*, const char*> env_keys[] = {
-        {"BB_FSR_SHARPNESS", "sharpness"},        {"BB_JITTER", "jitter"},
-        {"BB_REACTIVE", "reactive"},              {"BB_REACTIVE_SCALE", "reactive_scale"},
-        {"BB_REACTIVE_THRESHOLD", "reactive_threshold"}, {"BB_REACTIVE_MAX", "reactive_max"},
-        {"BB_UPSCALE_PRESET", "preset"},            {"BB_OBJECT_MOTION", "object_motion"},
+        {"GOW3_FSR_SHARPNESS", "sharpness"},        {"GOW3_JITTER", "jitter"},
+        {"GOW3_REACTIVE", "reactive"},              {"GOW3_REACTIVE_SCALE", "reactive_scale"},
+        {"GOW3_REACTIVE_THRESHOLD", "reactive_threshold"}, {"GOW3_REACTIVE_MAX", "reactive_max"},
+        {"GOW3_UPSCALE_PRESET", "preset"},            {"GOW3_OBJECT_MOTION", "object_motion"},
     };
     for (const auto& [env, key] : env_keys) {
         if (const char* value = std::getenv(env)) {
@@ -137,13 +137,13 @@ void ConfigureDlssSupport(bool available, const char* problem) {
     v.dlss_problem = available || kept.empty() ? nullptr : kept.c_str();
     if (v.upscaler == UpscalerDlss && !available) {
         std::printf("Upscaler: DLSS unavailable (%s); falling back to FSR 3.1\n",
-                    kept.empty() ? "bbport_dlss.dll or nvngx_dlss.dll missing" : kept.c_str());
+                    kept.empty() ? "gow3_dlss.dll or nvngx_dlss.dll missing" : kept.c_str());
         v.upscaler = UpscalerFsr3;
     }
 }
 
 bool FixedRenderSession() {
-    const char* size = std::getenv("BB_RENDER_RES");
+    const char* size = std::getenv("GOW3_RENDER_RES");
     return size && size[0];
 }
 
@@ -170,7 +170,7 @@ void Save() {
         return;
     }
     std::fprintf(file,
-                 "# bbport settings (in-game menu: Insert / L3+R3)\n"
+                 "# gow3 settings (in-game menu: Insert / L3+R3)\n"
                  "upscaler=%s\npreset=%d\nsharpen=%d\nsharpness=%.2f\njitter=%d\n"
                  "reactive=%d\nobject_motion=%d\nreactive_scale=%.2f\nreactive_threshold=%.2f\nreactive_max=%.2f\n"
                  "debug_view=%d\nshow_fps=%d\nfsr4_auto_exposure=%d\nfsr4_invert_jitter=%d\n",
@@ -203,4 +203,4 @@ const char* UpscalerName(int upscaler) {
     return names[std::clamp(upscaler, 0, UpscalerCount - 1)];
 }
 
-} // namespace BbSettings
+} // namespace Gow3Settings

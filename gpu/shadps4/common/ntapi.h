@@ -509,7 +509,7 @@ typedef struct _TEB {                             /* win32/win64 */
 static_assert(offsetof(TEB, DeallocationStack) ==
               0x1478); /* The only member we care about at the moment */
 
-#ifndef __MINGW32__ // bbport: newer MinGW headers define it (processthreadsapi.h)
+#ifndef __MINGW32__ // gow3: newer MinGW headers define it (processthreadsapi.h)
 typedef enum _QUEUE_USER_APC_FLAGS {
     QueueUserApcFlagsNone,
     QueueUserApcFlagsSpecialUserApc,

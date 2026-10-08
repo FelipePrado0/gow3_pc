@@ -8,7 +8,7 @@ function (host contracts first) and otherwise binds the native export.
 Exports are matched by (NID, library identity, module identity). Imports of
 libSceLibcInternal are served by libc.prx's same-NID exports: the internal
 library is not shipped with the game and exposes the same functions.
-Output: out/boot-linked.bin (format BBPROBE5) and out/link.json.
+Output: out/boot-linked.bin (format G3PROBE5) and out/link.json.
 """
 import collections
 import hashlib
@@ -98,8 +98,8 @@ def link(game, out, module_names=DEFAULT_MODULES):
     main = module(game / 'eboot.bin')
     raw = (out / 'boot.bin').read_bytes()
     magic, size, entry, ns, nr, ni, flags = unpack('<8s6Q', raw, 0)
-    if magic != b'BBPROBE2':
-        raise ValueError('linker expects freshly prepared BBPROBE2')
+    if magic != b'G3PROBE2':
+        raise ValueError('linker expects freshly prepared G3PROBE2')
     pos = 56
     segments = [unpack('<3Q', raw, pos + i * 24) for i in range(ns)]
     pos += ns * 24
@@ -214,7 +214,7 @@ def link(game, out, module_names=DEFAULT_MODULES):
         raise ValueError('unsupported eboot TLS layout')
     procparam = next(p for p in main['ph'] if p['type'] == 0x61000001)
     with (out / 'boot-linked.bin').open('wb') as f:
-        f.write(struct.pack('<8s6Q', b'BBPROBE5', len(image), entry, len(segments), len(relocs), len(names), flags))
+        f.write(struct.pack('<8s6Q', b'G3PROBE5', len(image), entry, len(segments), len(relocs), len(names), flags))
         f.write(struct.pack('<Q', procparam['vaddr']))
         f.write(struct.pack('<4Q', *main_tls_values))
         f.write(struct.pack('<Q', len(table)))

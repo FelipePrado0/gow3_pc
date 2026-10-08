@@ -6,7 +6,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include "runtime.h"
-#include "gpu/bbgpu.h"
+#include "gpu/gow3gpu.h"
 #if !defined(__x86_64__) || !defined(__GNUC__)
 #error This prototype requires x86-64 GCC or Clang (including MinGW).
 #endif
@@ -125,7 +125,7 @@ static LONG fatal_exception(EXCEPTION_POINTERS *info) {
         fprintf(stderr,"Fault: exception 0x%08lx at %s (thread %lu)\n",record->ExceptionCode,where,GetCurrentThreadId());
     fprintf(stderr,"  rax=%016llx rbx=%016llx rcx=%016llx rdx=%016llx\n  rsi=%016llx rdi=%016llx rbp=%016llx rsp=%016llx\n",
             c->Rax,c->Rbx,c->Rcx,c->Rdx,c->Rsi,c->Rdi,c->Rbp,c->Rsp);
-    if (gpu_enabled) bbgpu_dump_guest_writes(info);
+    if (gpu_enabled) gow3gpu_dump_guest_writes(info);
     /* rbp chain (guest and host code keep frame pointers). */
     uintptr_t rbp=(uintptr_t)c->Rbp;
     for (int depth=0; depth<24 && rbp; ++depth) {
@@ -145,17 +145,17 @@ static LONG CALLBACK vectored_fault(EXCEPTION_POINTERS *info) {
     DWORD code=record->ExceptionCode;
     if (code==EXCEPTION_ACCESS_VIOLATION && record->NumberParameters>=2) {
         /* GPU page tracking (write-protected guest pages) is resolved first. */
-        if (gpu_enabled && bbgpu_handle_fault(info,(void *)record->ExceptionInformation[1])) return EXCEPTION_CONTINUE_EXECUTION;
+        if (gpu_enabled && gow3gpu_handle_fault(info,(void *)record->ExceptionInformation[1])) return EXCEPTION_CONTINUE_EXECUTION;
         if (runtime_fault_recover) {
             /* A speculative guest memory read (GPU draw preparation) faulted: the thread resumes
-             * in bb_longjmp, outside the exception dispatcher, back at its recovery point. */
+             * in gow3_longjmp, outside the exception dispatcher, back at its recovery point. */
             unsigned long long *buffer=*runtime_fault_recover;
             runtime_fault_recover=NULL;
             CONTEXT *c=info->ContextRecord;
             c->Rsp=((c->Rsp-128)&~(DWORD64)15)-40;
             c->Rcx=(DWORD64)(uintptr_t)buffer;
             c->Rdx=1;
-            c->Rip=(DWORD64)(uintptr_t)bb_longjmp;
+            c->Rip=(DWORD64)(uintptr_t)gow3_longjmp;
             return EXCEPTION_CONTINUE_EXECUTION;
         }
     }
@@ -170,7 +170,7 @@ static LONG CALLBACK vectored_fault(EXCEPTION_POINTERS *info) {
                  !module;
         if (ours) return fatal_exception(info);
     }
-    /* BB_STRICT_HANDLES=1: a closed or invalid handle used anywhere is reported (diagnostics). */
+    /* GOW3_STRICT_HANDLES=1: a closed or invalid handle used anywhere is reported (diagnostics). */
     if (code==0xC0000008 /* STATUS_INVALID_HANDLE */) return fatal_exception(info);
     return EXCEPTION_CONTINUE_SEARCH;
 }
@@ -194,7 +194,7 @@ static uint64_t patch_tcb_loads(const Segment *segments, uint64_t count) {
 #ifndef _WIN32
 static void fault(int sig, siginfo_t *info, void *context) {
     /* GPU page tracking (write-protected guest pages) is resolved first. */
-    if (gpu_enabled && sig == SIGSEGV && bbgpu_handle_fault(context, info->si_addr)) return;
+    if (gpu_enabled && sig == SIGSEGV && gow3gpu_handle_fault(context, info->si_addr)) return;
     /* A speculative guest memory read (runtime_memory.c) failed: resume its recovery point. */
     if ((sig == SIGSEGV || sig == SIGBUS) && runtime_fault_recover) {
         sigjmp_buf *recover = runtime_fault_recover;
@@ -219,7 +219,7 @@ static void fault(int sig, siginfo_t *info, void *context) {
     else
         snprintf(line, sizeof(line), "Fault (signal %d) at RIP %p, address %p\n", sig, (void *)rip, info->si_addr);
     { ssize_t written_=write(2, line, strlen(line)); (void)written_; }
-    if (gpu_enabled) bbgpu_dump_guest_writes(context);
+    if (gpu_enabled) gow3gpu_dump_guest_writes(context);
     /* Host call chain (frames with unwind info; guest frames end it). */
     void *frames[32];
     int depth = backtrace(frames, 32);
@@ -310,13 +310,13 @@ static int mapped(Segment *segments, uint64_t count, uint64_t address, uint64_t 
             address - segments[i].address <= segments[i].size - bytes) return 1;
     return 0;
 }
-/* BBPATCH2 (patches.py): the patches' image base, then byte writes at image offsets, applied
+/* G3PATCH2 (patches.py): the patches' image base, then byte writes at image offsets, applied
  * after relocation. A write may replace a whole base-relative pointer slot (60/90 FPS++ swap
  * function pointers): the patch holds the address at the patches' base, rebased here. */
 static void apply_patches(const char *path, Segment *segments, uint64_t ns, const Reloc *relocs, uint64_t nr) {
     FILE *f=fopen(path,"rb");
     char magic[8];
-    if (!f || fread(magic,1,8,f)!=8 || memcmp(magic,"BBPATCH2",8)) fail("invalid patch file");
+    if (!f || fread(magic,1,8,f)!=8 || memcmp(magic,"G3PATCH2",8)) fail("invalid patch file");
     uint64_t base=read64(f), count=read64(f), bytes=0, rebased=0;
     unsigned char data[4096];
     for (uint64_t i=0;i<count;++i) {
@@ -352,10 +352,10 @@ static void apply_patches(const char *path, Segment *segments, uint64_t ns, cons
 void runtime_restart(void) {
     fflush(NULL);
 #ifdef _WIN32
-    /* run.py sets BB_RESTART_COMMAND: the launch command line, started again (new patches). */
-    const char *command=getenv("BB_RESTART_COMMAND");
+    /* run.py sets GOW3_RESTART_COMMAND: the launch command line, started again (new patches). */
+    const char *command=getenv("GOW3_RESTART_COMMAND");
     puts("Runtime: restarting through run.py");
-    if (!command || !*command) { fputs("runtime_restart: BB_RESTART_COMMAND is not set\n",stderr); _exit(1); }
+    if (!command || !*command) { fputs("runtime_restart: GOW3_RESTART_COMMAND is not set\n",stderr); _exit(1); }
     char *line=_strdup(command);
     /* Same output handles: a launcher reading the game's log keeps reading the new launch. */
     STARTUPINFOA startup={.cb=sizeof(startup),.dwFlags=STARTF_USESTDHANDLES,
@@ -414,7 +414,7 @@ int main(int argc, char **argv) {
         FILE *profile=fopen(content_profile,"rb");
         unsigned char data[28];
         if (!profile) fail("cannot open content profile");
-        if (fread(data,1,sizeof(data),profile)!=sizeof(data) || fgetc(profile)!=EOF || memcmp(data,"BBCONT01",8)) fail("invalid content profile");
+        if (fread(data,1,sizeof(data),profile)!=sizeof(data) || fgetc(profile)!=EOF || memcmp(data,"G3CONT01",8)) fail("invalid content profile");
         fclose(profile);
         uint32_t values[5];
         for (unsigned i=0;i<5;++i) {
@@ -430,17 +430,17 @@ int main(int argc, char **argv) {
         if (sfo_value(sfo,"INSTALL_DIR_SAVEDATA",id,sizeof(id),NULL) || sfo_value(sfo,"TITLE_ID",id,sizeof(id),NULL))
             runtime_savedata_configure(id);
     }
-    bbgpu_register_kernel();
+    gow3gpu_register_kernel();
 #ifdef _WIN32
     SYSTEM_INFO system_info; GetSystemInfo(&system_info); page_size = system_info.dwPageSize;
     AddVectoredExceptionHandler(1, vectored_fault);
     SetUnhandledExceptionFilter(unhandled_fault);
-    if (getenv("BB_STRICT_HANDLES")) {
+    if (getenv("GOW3_STRICT_HANDLES")) {
         PROCESS_MITIGATION_STRICT_HANDLE_CHECK_POLICY strict={0};
         strict.RaiseExceptionOnInvalidHandleReference=1;
         strict.HandleExceptionsPermanentlyEnabled=1;
         if (!SetProcessMitigationPolicy(ProcessStrictHandleCheckPolicy,&strict,sizeof(strict)))
-            fprintf(stderr,"BB_STRICT_HANDLES: policy not set (%lu)\n",GetLastError());
+            fprintf(stderr,"GOW3_STRICT_HANDLES: policy not set (%lu)\n",GetLastError());
     }
     (void)timeout_seconds; /* no watchdog on Windows */
 #else
@@ -459,16 +459,16 @@ int main(int argc, char **argv) {
     FILE *f = fopen(argv[1], "rb");
     if (!f) fail("cannot open boot file; run prepare.py first");
     char magic[8];
-    if (fread(magic, 1, 8, f) != 8 || (memcmp(magic, "BBPROBE1", 8) && memcmp(magic, "BBPROBE2", 8) && memcmp(magic,"BBPROBE3",8) && memcmp(magic,"BBPROBE4",8) && memcmp(magic,"BBPROBE5",8))) fail("bad boot file signature");
+    if (fread(magic, 1, 8, f) != 8 || (memcmp(magic, "G3PROBE1", 8) && memcmp(magic, "G3PROBE2", 8) && memcmp(magic,"G3PROBE3",8) && memcmp(magic,"G3PROBE4",8) && memcmp(magic,"G3PROBE5",8))) fail("bad boot file signature");
     uint64_t size = read64(f), entry = read64(f), ns = read64(f), nr = read64(f);
     import_count = read64(f);
-    uint64_t capabilities = memcmp(magic, "BBPROBE1", 8) ? read64(f) : 0;
+    uint64_t capabilities = memcmp(magic, "G3PROBE1", 8) ? read64(f) : 0;
     if (capabilities & ~UINT64_C(1)) fail("unknown runtime capabilities");
     runtime_start(strict_imports ? 0 : capabilities);
     if (!size || size > 512*1024*1024 || entry >= size || !ns || ns > 64 || nr > 1000000 || import_count > 100000)
         fail("boot file limits exceeded");
-    int multi=!memcmp(magic,"BBPROBE5",8);
-    int linked=!memcmp(magic,"BBPROBE3",8) || !memcmp(magic,"BBPROBE4",8) || multi;
+    int multi=!memcmp(magic,"G3PROBE5",8);
+    int linked=!memcmp(magic,"G3PROBE3",8) || !memcmp(magic,"G3PROBE4",8) || multi;
     int native_libc=linked && !strict_imports && (capabilities&1);
     uint64_t main_tls[4]={0};
     uint64_t nb=0,procparam=0;
@@ -476,7 +476,7 @@ int main(int argc, char **argv) {
     uint64_t *binding_kinds=calloc(import_count ? import_count : 1,sizeof(*binding_kinds));
     if (!bindings || !binding_kinds) fail("allocation failed");
     if (multi) {
-        /* BBPROBE5: procparam, eboot TLS, module table, bindings (link_modules.py). */
+        /* G3PROBE5: procparam, eboot TLS, module table, bindings (link_modules.py). */
         procparam=read64(f);
         for (int i=0;i<4;++i) main_tls[i]=read64(f);
         module_count=read64(f);
@@ -493,7 +493,7 @@ int main(int argc, char **argv) {
         x->base=read64(f); x->size=read64(f); x->init=read64(f);
         x->tls_address=read64(f); x->tls_memsz=read64(f); x->tls_filesz=read64(f); x->tls_module=2; nb=read64(f);
         procparam=read64(f);
-        if (!memcmp(magic,"BBPROBE4",8)) for (int i=0;i<4;++i) main_tls[i]=read64(f);
+        if (!memcmp(magic,"G3PROBE4",8)) for (int i=0;i<4;++i) main_tls[i]=read64(f);
     }
     if (linked) {
         if (main_tls[1]>main_tls[2] || main_tls[2]>1024*1024 || main_tls[0]>size ||
@@ -566,10 +566,10 @@ int main(int argc, char **argv) {
         sfo_value(sfo,"ATTRIBUTE",NULL,0,&attributes);
         uint64_t sdk=0;
         if (procparam) memcpy(&sdk,image+procparam+16,8); /* procparam: size, magic, count, sdk_version */
-        BbGpuConfig gpu={title,serial,user_dir ? user_dir : "user",(uint32_t)sdk,attributes,1920,1080};
+        Gow3GpuConfig gpu={title,serial,user_dir ? user_dir : "user",(uint32_t)sdk,attributes,1920,1080};
         gpu_enabled=1; /* page tracking starts while the rasterizer registers guest memory */
-        if (bbgpu_init(&gpu)) fail("GPU initialization failed");
-        printf("GPU: window and Vulkan presenter ready; SDK 0x%08x, %u HLE symbols\n",(unsigned)sdk,bbgpu_symbol_count());
+        if (gow3gpu_init(&gpu)) fail("GPU initialization failed");
+        printf("GPU: window and Vulkan presenter ready; SDK 0x%08x, %u HLE symbols\n",(unsigned)sdk,gow3gpu_symbol_count());
     }
     unsigned char *traps = allocate(round_page((import_count + 1) * 32));
     unsigned char *data_traps = allocate((import_count + 1) * page_size);

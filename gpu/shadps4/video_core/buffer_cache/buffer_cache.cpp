@@ -9,8 +9,8 @@
 #include <bit>
 #include <cstdlib>
 #include <magic_enum/magic_enum.hpp>
-#include "bbport_copy.h"
-#include "bbport_toggles.h"
+#include "gow3_copy.h"
+#include "gow3_toggles.h"
 #include "common/alignment.h"
 #include "core/memory.h"
 #include "video_core/amdgpu/liverpool.h"
@@ -110,13 +110,13 @@ void BufferCache::InvalidateMemory(VAddr device_addr, u64 size, bool assume_lock
     });
 }
 
-// bbport: the game fills its per-frame buffers (constants, skinning output) sequentially and
+// gow3: the game fills its per-frame buffers (constants, skinning output) sequentially and
 // every 4 KiB page cost a protection fault (~110k/s in Hunter's Nightmare, a fifth of each
 // render worker's time in the kernel). A fault unprotects the aligned window around it instead;
 // pages marked CPU-modified without being written only cost an upload when bound.
 // Item: context = BufferCache, source = guest address, destination = host pointer, size,
 // extra = the Buffer whose mapping holds the destination (flushed after the copy).
-void BufferCache::RunGuestCopy(const BbCopy::Item& item) {
+void BufferCache::RunGuestCopy(const Gow3Copy::Item& item) {
     auto* cache = static_cast<BufferCache*>(item.context);
     auto* dst = reinterpret_cast<u8*>(item.destination);
     cache->memory->CopySparseMemory(item.source, dst, item.size);
@@ -126,21 +126,21 @@ void BufferCache::RunGuestCopy(const BbCopy::Item& item) {
 
 // Small guest copies run on the recording thread (it spins for work: no wakeup, and it is
 // idle most of the time); PoolSmallCopies (toggle 524288) batches them for the copy threads.
-void BufferCache::SmallGuestCopy(const BbCopy::Item& item) {
-    if (scheduler.IsRecordingDeferred() && !BbToggle::Disabled(BbToggle::PoolSmallCopies)) {
+void BufferCache::SmallGuestCopy(const Gow3Copy::Item& item) {
+    if (scheduler.IsRecordingDeferred() && !Gow3Toggle::Disabled(Gow3Toggle::PoolSmallCopies)) {
         scheduler.RecordHostCopy([item] { item.run(item); });
         return;
     }
-    BbCopy::QueueCopy(item);
+    Gow3Copy::QueueCopy(item);
 }
 
 void BufferCache::ExtendWriteFault(VAddr device_addr) {
     static const u64 window = [] {
-        const char* env = std::getenv("BB_FAULT_WINDOW");
+        const char* env = std::getenv("GOW3_FAULT_WINDOW");
         const u64 kib = env ? std::strtoull(env, nullptr, 10) : 256;
         return std::bit_ceil(std::clamp<u64>(kib, 4, 1024)) * 1024;
     }();
-    if (window <= TRACKER_BYTES_PER_PAGE || BbToggle::Disabled(BbToggle::FaultWindow)) {
+    if (window <= TRACKER_BYTES_PER_PAGE || Gow3Toggle::Disabled(Gow3Toggle::FaultWindow)) {
         return;
     }
     memory_tracker->ExtendWriteFault(Common::AlignDown(device_addr, window), window);
@@ -213,7 +213,7 @@ void BufferCache::DownloadMemory(const Buffer* arena, VAddr device_addr, u64 siz
 }
 
 namespace {
-// bbport: BB_BUFFER_STATS=1 — how buffer bindings reach the GPU, by guest region (256 MiB),
+// gow3: GOW3_BUFFER_STATS=1 — how buffer bindings reach the GPU, by guest region (256 MiB),
 // printed every 5 s: small read-only copies into the stream buffer, arena bindings, and the
 // bytes those re-upload after CPU writes. Input for engine-level short paths.
 struct BufferStats {
@@ -235,7 +235,7 @@ void NoteHotUse(VAddr address, u32 size) {
         return;
     }
     auto& st = Stats();
-    const u64 frame = BbStats::gpu_frames.load(std::memory_order_relaxed);
+    const u64 frame = Gow3Stats::gpu_frames.load(std::memory_order_relaxed);
     for (u64 block = address >> 16; block <= (address + size - 1) >> 16; ++block) {
         auto [it, inserted] = st.last_use.try_emplace(block, frame);
         if (!inserted && it->second != frame) {
@@ -250,7 +250,7 @@ u64 RegionKey(VAddr address) {
 }
 bool BufferStatsEnabled() {
     static const bool enabled = [] {
-        const char* value = std::getenv("BB_BUFFER_STATS");
+        const char* value = std::getenv("GOW3_BUFFER_STATS");
         return value && value[0] == '1';
     }();
     return enabled;
@@ -308,10 +308,10 @@ std::pair<const Buffer*, u64> BufferCache::ObtainBuffer(VAddr device_addr, u32 s
             ++region.stream_count;
             region.stream_bytes += size;
         }
-        // bbport: the guest data is copied on a copy thread, started now; submission and
+        // gow3: the guest data is copied on a copy thread, started now; submission and
         // guest-visible fences wait for it (Scheduler::WaitHostCopies).
         if (!stream_buffer.mapped_data.empty() &&
-            !BbToggle::Disabled(BbToggle::DeferredStreamCopies)) {
+            !Gow3Toggle::Disabled(Gow3Toggle::DeferredStreamCopies)) {
             if (const auto offset = stream_buffer.Reserve(size, instance.UniformMinAlignment())) {
                 SmallGuestCopy({
                     .run = &RunGuestCopy,
@@ -333,14 +333,14 @@ std::pair<const Buffer*, u64> BufferCache::ObtainBuffer(VAddr device_addr, u32 s
     const u64 last_block = (device_addr + size - 1) >> block_shift;
     const auto* arena = GetArena(first_block, last_block);
     EnsureResident(arena, first_block, last_block);
-    const u64 uploaded_before = BbStats::buffer_upload_bytes.load(std::memory_order_relaxed);
+    const u64 uploaded_before = Gow3Stats::buffer_upload_bytes.load(std::memory_order_relaxed);
     SynchronizeMemory(arena, device_addr, size, is_written, is_texel_buffer);
     if (stats) {
         auto& region = Stats().regions[RegionKey(device_addr)];
         ++region.arena_count;
         region.arena_bytes += size;
         region.upload_bytes +=
-            BbStats::buffer_upload_bytes.load(std::memory_order_relaxed) - uploaded_before;
+            Gow3Stats::buffer_upload_bytes.load(std::memory_order_relaxed) - uploaded_before;
     }
     if (is_written) {
         gpu_modified_ranges.Add(device_addr, size);
@@ -354,12 +354,12 @@ std::pair<const Buffer*, u64> BufferCache::ObtainBufferForImage(VAddr device_add
     }
     const auto staging = staging_pool.Request(size, VideoCore::MemoryType::HostUncached,
                                               instance.StorageMinAlignment());
-    if (!BbToggle::Disabled(BbToggle::DeferredUploads)) {
-        // bbport: texture data is copied on the copy threads (streaming: 100+ MB per frame);
+    if (!Gow3Toggle::Disabled(Gow3Toggle::DeferredUploads)) {
+        // gow3: texture data is copied on the copy threads (streaming: 100+ MB per frame);
         // the upload reads the staging only after submission, which waits for the copies.
         constexpr u64 Chunk = 1_MB;
         for (u64 offset = 0; offset < staging.size; offset += Chunk) {
-            const BbCopy::Item item{
+            const Gow3Copy::Item item{
                 .run = &RunGuestCopy,
                 .context = this,
                 .source = device_addr + offset,
@@ -370,7 +370,7 @@ std::pair<const Buffer*, u64> BufferCache::ObtainBufferForImage(VAddr device_add
             if (staging.size < Chunk) {
                 SmallGuestCopy(item);
             } else {
-                BbCopy::Async([item] { item.run(item); });
+                Gow3Copy::Async([item] { item.run(item); });
             }
         }
         return {staging.buffer, staging.offset};
@@ -466,7 +466,7 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
     if (bind_ranges.Empty()) {
         return;
     }
-    BbStats::Timer timer{BbStats::t_resident};
+    Gow3Stats::Timer timer{Gow3Stats::t_resident};
 
     const vk::MemoryAllocateInfo alloc_info = {
         .allocationSize = resident_blocks << block_shift,
@@ -539,12 +539,12 @@ const Buffer* BufferCache::UploadCopies(const Buffer* arena, std::span<vk::Buffe
     if (copies.empty()) {
         return nullptr;
     }
-    BbStats::buffer_upload_bytes.fetch_add(total_size_bytes, std::memory_order_relaxed);
+    Gow3Stats::buffer_upload_bytes.fetch_add(total_size_bytes, std::memory_order_relaxed);
     const auto staging = staging_pool.Request(total_size_bytes, MemoryType::HostUncached);
-    // bbport: the guest memory is copied into staging on the copy threads, started now in
+    // gow3: the guest memory is copied into staging on the copy threads, started now in
     // groups of about 1 MiB; submission and guest-visible fences wait for them
     // (Scheduler::WaitHostCopies).
-    if (!BbToggle::Disabled(BbToggle::DeferredUploads) && total_size_bytes < 1_MB) {
+    if (!Gow3Toggle::Disabled(Gow3Toggle::DeferredUploads) && total_size_bytes < 1_MB) {
         // Small uploads join the calling thread's batch.
         for (auto& copy : copies) {
             SmallGuestCopy({
@@ -560,7 +560,7 @@ const Buffer* BufferCache::UploadCopies(const Buffer* arena, std::span<vk::Buffe
         }
         return staging.buffer;
     }
-    if (!BbToggle::Disabled(BbToggle::DeferredUploads)) {
+    if (!Gow3Toggle::Disabled(Gow3Toggle::DeferredUploads)) {
         struct HostCopy {
             VAddr source;
             u8* destination;
@@ -570,7 +570,7 @@ const Buffer* BufferCache::UploadCopies(const Buffer* arena, std::span<vk::Buffe
         auto group = std::make_shared<Group>();
         u64 group_bytes = 0;
         const auto launch = [&] {
-            BbCopy::Async([group, memory = memory, staging] {
+            Gow3Copy::Async([group, memory = memory, staging] {
                 for (const auto& copy : *group) {
                     memory->CopySparseMemory(copy.source, copy.destination, copy.size);
                 }
@@ -598,7 +598,7 @@ const Buffer* BufferCache::UploadCopies(const Buffer* arena, std::span<vk::Buffe
                                  copies[i].size);
     };
     if (total_size_bytes >= 2_MB && copies.size() > 1) {
-        BbCopy::ParallelFor(copies.size(), copy);
+        Gow3Copy::ParallelFor(copies.size(), copy);
     } else {
         for (std::size_t i = 0; i < copies.size(); ++i) {
             copy(i);
@@ -622,11 +622,11 @@ bool BufferCache::SynchronizeMemoryFromImage(const Buffer* arena, VAddr device_a
             LOG_WARNING(Render_Vulkan, "Unhandled metadata type {}", magic_enum::enum_name(*type));
         }
     }
-    // bbport: most texel buffers alias no image; remember misses until images change.
+    // gow3: most texel buffers alias no image; remember misses until images change.
     const u64 generation = texture_cache.RegistryGeneration();
     auto& miss = image_miss_cache[((device_addr >> 6) ^ size * 0x9E3779B1u) % image_miss_cache.size()];
     if (miss.address == device_addr && miss.size == size && miss.generation == generation &&
-        !BbToggle::Disabled(BbToggle::TextureBindingMemo)) {
+        !Gow3Toggle::Disabled(Gow3Toggle::TextureBindingMemo)) {
         return false;
     }
     const ImageId image_id = texture_cache.FindImageFromRange(device_addr, size);
@@ -634,7 +634,7 @@ bool BufferCache::SynchronizeMemoryFromImage(const Buffer* arena, VAddr device_a
         miss = {device_addr, size, generation};
         return false;
     }
-    // bbport: the lookups above only read what the texture binding helper leaves alone; the
+    // gow3: the lookups above only read what the texture binding helper leaves alone; the
     // copy below changes image state, so the helper finishes first.
     runtime.BeforeImageAccess();
     Image& image = texture_cache.GetImage(image_id);

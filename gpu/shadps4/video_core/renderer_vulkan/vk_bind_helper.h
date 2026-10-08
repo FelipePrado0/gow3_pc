@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: a second thread for the GPU command thread's per-draw work (docs/parallel_gpu.md,
+// gow3: a second thread for the GPU command thread's per-draw work (docs/parallel_gpu.md,
 // "Texture binding on a helper thread"). The GPU thread forks one task per draw and joins it
 // before anything that depends on the task's results; the helper spins for the next task
 // while draws flow and sleeps after a short idle period.
@@ -39,7 +39,7 @@ public:
     }
 
     [[nodiscard]] bool Available() const noexcept {
-        return running; // bbport: not thread.joinable(), two system calls on Windows
+        return running; // gow3: not thread.joinable(), two system calls on Windows
     }
 
     /// True on the helper thread (its callees must not join it).
@@ -79,13 +79,13 @@ public:
         active = false;
     }
 
-    /// Cycles the GPU thread waited in Join() and the helper spent in tasks (BB_FRAME_STATS).
+    /// Cycles the GPU thread waited in Join() and the helper spent in tasks (GOW3_FRAME_STATS).
     u64 wait_cycles = 0;
     std::atomic<u64> task_cycles{0};
 
 private:
     void Run(std::stop_token stop) {
-        Common::SetCurrentThreadName("bb:TexBind");
+        Common::SetCurrentThreadName("gow3:TexBind");
         on_helper = true;
         u64 seen = 0;
         while (!stop.stop_requested()) {

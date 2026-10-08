@@ -1,4 +1,4 @@
-Bloodborne (bbport) for Windows
+Bloodborne (gow3) for Windows
 ===============================
 
 No game files are included. You need your own decrypted dump of Bloodborne CUSA03173
@@ -32,7 +32,7 @@ Starting
 
 Data
 - Saves and shader caches: user\ next to Bloodborne.exe (the launcher can pick another folder).
-- Settings: bbport.ini next to Bloodborne.exe; launcher options in %APPDATA%\bbport-launcher.
+- Settings: gow3.ini next to Bloodborne.exe; launcher options in %APPDATA%\gow3-launcher.
 - Generated files (prepared game image, patches): out\.
 
 Cheats
@@ -61,6 +61,6 @@ Mods and patches
 - Third-party patches: shadPS4/GoldHEN XML files for 1.09 in patches\.
 
 Credits
-- bbport (the Linux port this is built on): https://github.com/deadinside28/bloodborne_pc
+- gow3 (the Linux port this is built on): https://github.com/deadinside28/bloodborne_pc
 - Windows port: https://github.com/Supermedo/bloodborne_pc
 - The full list of projects and patch authors is in README.md (Credits and licenses).

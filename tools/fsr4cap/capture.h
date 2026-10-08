@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: D3D12 call recorder for fsr4cap.exe (capture.c, rootsig.c).
+// gow3: D3D12 call recorder for fsr4cap.exe (capture.c, rootsig.c).
 #pragma once
 #include <stdio.h>
 #include <d3d12.h>

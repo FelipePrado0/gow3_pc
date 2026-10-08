@@ -2,7 +2,7 @@ out/
 __pycache__/
 user/
 *.mp4
-bbport.ini
+gow3.ini
 fsr4_shaders/
 pgo/
 *.png

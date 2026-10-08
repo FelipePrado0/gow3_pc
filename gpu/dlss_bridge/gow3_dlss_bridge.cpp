@@ -1,7 +1,7 @@
-// SPDX-FileCopyrightText: Copyright 2026 IFreemz (shadps4_dlss bridge), bbport contributors
+// SPDX-FileCopyrightText: Copyright 2026 IFreemz (shadps4_dlss bridge), gow3 contributors
 // SPDX-License-Identifier: MIT
 //
-// bbport_dlss.dll: the only part of the project that uses the NVIDIA DLSS (NGX) SDK. Built with
+// gow3_dlss.dll: the only part of the project that uses the NVIDIA DLSS (NGX) SDK. Built with
 // MSVC (the SDK's libraries are MSVC only); the port loads it at run time.
 // Adapted from IFreemz/shadPS4-Bloodborne-DLSS-FSR (dlss_bridge).
 
@@ -10,7 +10,7 @@
 #include <cstdio>
 #include <string>
 
-#include "bbport_dlss_bridge.h" // Vulkan first: the NGX headers expect its types
+#include "gow3_dlss_bridge.h" // Vulkan first: the NGX headers expect its types
 
 #include <nvsdk_ngx_helpers.h>
 #include <nvsdk_ngx_vk.h>
@@ -19,10 +19,10 @@
 namespace {
 
 constexpr char ProjectId[] = "42359704-c9f3-4806-9fb5-d469000fdb8a";
-constexpr char EngineVersion[] = "bbport-windows";
+constexpr char EngineVersion[] = "gow3-windows";
 
 struct State {
-    BbDlssLogFn log{};
+    Gow3DlssLogFn log{};
     std::wstring dll_directory;
     std::wstring data_directory;
     const wchar_t* dll_path{};
@@ -31,7 +31,7 @@ struct State {
     NVSDK_NGX_Parameter* capabilities{};
     NVSDK_NGX_Parameter* parameters{};
     NVSDK_NGX_Handle* feature{};
-    BbDlssFeature feature_desc{};
+    Gow3DlssFeature feature_desc{};
     VkDevice device{};
     bool configured{};
     bool initialized{};
@@ -58,7 +58,7 @@ void NVSDK_CONV NgxLog(const char* message, NVSDK_NGX_Logging_Level, NVSDK_NGX_F
     Log(0, "NGX: %s", message ? message : "");
 }
 
-int32_t Configure(const wchar_t* dll_directory, const wchar_t* data_directory, BbDlssLogFn log) {
+int32_t Configure(const wchar_t* dll_directory, const wchar_t* data_directory, Gow3DlssLogFn log) {
     state.log = log;
     state.dll_directory = dll_directory ? dll_directory : L".";
     state.data_directory = data_directory ? data_directory : L".";
@@ -152,7 +152,7 @@ void ReleaseFeature() {
     }
 }
 
-int32_t CreateFeature(VkCommandBuffer command, const BbDlssFeature* desc) {
+int32_t CreateFeature(VkCommandBuffer command, const Gow3DlssFeature* desc) {
     if (!state.initialized || !state.capabilities || !desc)
         return 0;
     ReleaseFeature();
@@ -193,13 +193,13 @@ int32_t CreateFeature(VkCommandBuffer command, const BbDlssFeature* desc) {
     return 1;
 }
 
-NVSDK_NGX_Resource_VK Wrap(const BbDlssImage& image, bool writable) {
+NVSDK_NGX_Resource_VK Wrap(const Gow3DlssImage& image, bool writable) {
     return NVSDK_NGX_Create_ImageView_Resource_VK(image.view, image.image, image.range,
                                                   image.format, image.width, image.height,
                                                   writable);
 }
 
-int32_t Evaluate(VkCommandBuffer command, const BbDlssEvaluate* evaluate) {
+int32_t Evaluate(VkCommandBuffer command, const Gow3DlssEvaluate* evaluate) {
     if (!state.feature || !state.parameters || !evaluate)
         return 0;
     auto color = Wrap(evaluate->color, false);
@@ -239,12 +239,12 @@ void Shutdown() {
     }
 }
 
-const BbDlssApi api{BBPORT_DLSS_BRIDGE_ABI, Configure,      InstanceExtensions, DeviceExtensions,
+const Gow3DlssApi api{GOW3_DLSS_BRIDGE_ABI, Configure,      InstanceExtensions, DeviceExtensions,
                     Initialize,             CreateFeature,  Evaluate,           ReleaseFeature,
                     Shutdown};
 
 } // namespace
 
-extern "C" __declspec(dllexport) const BbDlssApi* BbDlssGetApi() {
+extern "C" __declspec(dllexport) const Gow3DlssApi* Gow3DlssGetApi() {
     return &api;
 }

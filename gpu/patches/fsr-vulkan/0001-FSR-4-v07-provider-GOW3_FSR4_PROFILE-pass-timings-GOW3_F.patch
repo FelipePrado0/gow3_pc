@@ -1,10 +1,10 @@
 From 707fe318eec1f9912b0e1fa700655a2e1679cd79 Mon Sep 17 00:00:00 2001
 From: deadinside <aa1372944@gmail.com>
 Date: Thu, 1 Oct 2026 05:31:00 +0300
-Subject: [PATCH] FSR 4 v07 provider: BB_FSR4_PROFILE pass timings,
- BB_FSR4_STATS driver statistics
+Subject: [PATCH] FSR 4 v07 provider: GOW3_FSR4_PROFILE pass timings,
+ GOW3_FSR4_STATS driver statistics
 
-bbport: GPU timestamps around each dispatch, read when the frame retires and
+gow3: GPU timestamps around each dispatch, read when the frame retires and
 printed every 300 frames; pipelines created with CAPTURE_STATISTICS print
 the driver's register/instruction statistics (the device must enable
 pipelineExecutableInfo).
@@ -31,7 +31,7 @@ index c30f7cf..eb42c16 100644
      VkBool32  dotProductSupported;
      VkBool32  computeDerivativesSupported;
 +
-+    /* bbport: BB_FSR4_PROFILE=1 — GPU time per pass (timestamps around each
++    /* gow3: GOW3_FSR4_PROFILE=1 — GPU time per pass (timestamps around each
 +     * dispatch, read back when the frame retires, printed every 300 frames). */
 +    VkQueryPool profPool;
 +    float       profPeriodNs;
@@ -47,7 +47,7 @@ index c30f7cf..eb42c16 100644
  
  // ── pipeline creation ─────────────────────────────────────────────────────────
  
-+/* bbport: BB_FSR4_STATS=1 (the device must enable pipelineExecutableInfo) prints the
++/* gow3: GOW3_FSR4_STATS=1 (the device must enable pipelineExecutableInfo) prints the
 + * driver's statistics of each pass: registers, spills, instruction counts. */
 +static void printPipelineStats(FfxFsr4VkContext* c, uint32_t passIdx, VkPipeline pipeline)
 +{
@@ -84,7 +84,7 @@ index c30f7cf..eb42c16 100644
      cpci.stage.pName=blob->entryPoint ? blob->entryPoint : "main";
      cpci.layout=out->layout;
  
-+    const char* statsEnv = getenv("BB_FSR4_STATS");
++    const char* statsEnv = getenv("GOW3_FSR4_STATS");
 +    const int stats = statsEnv && statsEnv[0] == '1';
 +    if (stats) cpci.flags |= VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR;
      r = vkCreateComputePipelines(c->dev, VK_NULL_HANDLE, 1, &cpci, c->alloc, &out->pipeline);
@@ -169,7 +169,7 @@ index c30f7cf..eb42c16 100644
      sci.maxLod=VK_LOD_CLAMP_NONE;
      r=vkCreateSampler(c->dev,&sci,c->alloc,&c->linearSampler);
 +    {
-+        const char* prof = getenv("BB_FSR4_PROFILE");
++        const char* prof = getenv("GOW3_FSR4_PROFILE");
 +        if (r == VK_SUCCESS && prof && prof[0] == '1') {
 +            VkPhysicalDeviceProperties props;
 +            vkGetPhysicalDeviceProperties(c->phys, &props);

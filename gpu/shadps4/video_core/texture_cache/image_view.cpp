@@ -117,7 +117,7 @@ ImageView::ImageView(const Vulkan::Instance& instance, const ImageViewInfo& info
         aspect = vk::ImageAspectFlagBits::eStencil;
     }
 
-    // bbport: storage writes never convert to sRGB and sRGB formats cannot be storage images
+    // gow3: storage writes never convert to sRGB and sRGB formats cannot be storage images
     // (AMD's driver loses the device on such a view; NVIDIA tolerates it): write through the
     // UNORM format, which stores the same bytes.
     if (info.is_storage) {

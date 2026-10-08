@@ -12,7 +12,7 @@
 
 #include "ffx_vk_fsr4_v07.h"
 #include "ffx_vk_fsr4_v07_assets.h"
-#include "bbport_settings.h"
+#include "gow3_settings.h"
 #include "video_core/renderer_vulkan/fsr411/fsr411.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
@@ -22,7 +22,7 @@ namespace Vulkan {
 namespace {
 
 std::string AssetDir() {
-    const char* dir = std::getenv("BB_FSR4_DIR");
+    const char* dir = std::getenv("GOW3_FSR4_DIR");
     return dir && dir[0] ? dir : "fsr4_shaders";
 }
 
@@ -67,7 +67,7 @@ struct Fsr4Upscaler::Impl {
     bool fatal = false;
     u64 next_frame_id = 1;
     std::deque<std::pair<u64, u64>> in_flight; ///< provider frame id, scheduler tick
-    // bbport: FSR 4.1.1 (upscaler=fsr411): the replay of AMD's 4.1.1 DLL (fsr411/).
+    // gow3: FSR 4.1.1 (upscaler=fsr411): the replay of AMD's 4.1.1 DLL (fsr411/).
     std::unique_ptr<Fsr411::Upscaler> fsr411;
     std::deque<u64> fsr411_ticks; ///< scheduler ticks of its recent frames (constant ring)
     std::string fsr411_described;
@@ -120,9 +120,9 @@ struct Fsr4Upscaler::Impl {
         const std::string dir = AssetDir() + "/";
         std::array<std::vector<u8>, FFX_FSR4_VK_PASS_COUNT> code;
         std::vector<u8> initializer, weights;
-        // bbport: tools/fsr4_optimize.sh puts fixed or faster passes into opt/ (post through
-        // shared memory, pass 11 without out-of-bounds writes); BB_FSR4_OPT=0 keeps the originals.
-        const char* opt_env = std::getenv("BB_FSR4_OPT");
+        // gow3: tools/fsr4_optimize.sh puts fixed or faster passes into opt/ (post through
+        // shared memory, pass 11 without out-of-bounds writes); GOW3_FSR4_OPT=0 keeps the originals.
+        const char* opt_env = std::getenv("GOW3_FSR4_OPT");
         const bool use_opt = !(opt_env && opt_env[0] == '0');
         u32 optimized = 0;
         const auto load = [&](const char* name, std::vector<u8>& data) {
@@ -237,7 +237,7 @@ struct Fsr4Upscaler::Impl {
             return false;
         }
         if (!fsr411) {
-            const char* env = std::getenv("BB_FSR411_DIR");
+            const char* env = std::getenv("GOW3_FSR411_DIR");
             fsr411 = std::make_unique<Fsr411::Upscaler>(instance.GetPhysicalDevice(), instance.GetDevice(),
                                                         env && env[0] ? env : "fsr4_411");
         }
@@ -276,7 +276,7 @@ struct Fsr4Upscaler::Impl {
     }
 
     bool Record(const Frame& f) {
-        if (BbSettings::Get().upscaler == BbSettings::UpscalerFsr411) {
+        if (Gow3Settings::Get().upscaler == Gow3Settings::UpscalerFsr411) {
             return Record411(f);
         }
         if (fatal) {
@@ -307,7 +307,7 @@ struct Fsr4Upscaler::Impl {
             Fail("no free provider frame (" + std::to_string(int(begin)) + ")", false);
             return false;
         }
-        // bbport: a frame begun here must reach RetireFrame even when it records nothing,
+        // gow3: a frame begun here must reach RetireFrame even when it records nothing,
         // or every later BeginFrame fails (VK_ERROR_VALIDATION_FAILED_EXT).
         const auto abandon = [&] { in_flight.emplace_back(frame_id, scheduler.CurrentTick()); };
         constexpr VkAccessFlags read = VK_ACCESS_SHADER_READ_BIT;

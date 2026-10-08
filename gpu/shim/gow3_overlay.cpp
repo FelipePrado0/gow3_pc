@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-#include "bbport_overlay.h"
+#include "gow3_overlay.h"
 
 #include <atomic>
 #include <cfloat>
@@ -11,7 +11,7 @@
 #include <vector>
 
 #include <SDL3/SDL.h>
-#include "bbport_settings.h"
+#include "gow3_settings.h"
 #include "common/elf_info.h"
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
@@ -22,30 +22,30 @@
 #ifdef _WIN32
 asm(".section .rdata,\"dr\"\n"
     ".balign 16\n"
-    ".global bb_font_ttf\n"
-    "bb_font_ttf:\n"
-    ".incbin \"" BB_FONT_PATH "\"\n"
-    ".global bb_font_ttf_end\n"
-    "bb_font_ttf_end:\n"
+    ".global gow3_font_ttf\n"
+    "gow3_font_ttf:\n"
+    ".incbin \"" GOW3_FONT_PATH "\"\n"
+    ".global gow3_font_ttf_end\n"
+    "gow3_font_ttf_end:\n"
     ".text\n");
 #else
 asm(".section .rodata\n"
     ".balign 16\n"
-    ".hidden bb_font_ttf\n"
-    ".global bb_font_ttf\n"
-    "bb_font_ttf:\n"
-    ".incbin \"" BB_FONT_PATH "\"\n"
-    ".hidden bb_font_ttf_end\n"
-    ".global bb_font_ttf_end\n"
-    "bb_font_ttf_end:\n"
+    ".hidden gow3_font_ttf\n"
+    ".global gow3_font_ttf\n"
+    "gow3_font_ttf:\n"
+    ".incbin \"" GOW3_FONT_PATH "\"\n"
+    ".hidden gow3_font_ttf_end\n"
+    ".global gow3_font_ttf_end\n"
+    "gow3_font_ttf_end:\n"
     ".previous\n");
 #endif
-extern "C" const unsigned char bb_font_ttf[];
-extern "C" const unsigned char bb_font_ttf_end[];
+extern "C" const unsigned char gow3_font_ttf[];
+extern "C" const unsigned char gow3_font_ttf_end[];
 
-extern "C" void runtime_restart(void); // bb-probe (probe.c)
+extern "C" void runtime_restart(void); // gow3-probe (probe.c)
 
-namespace BbOverlay {
+namespace Gow3Overlay {
 
 namespace {
 
@@ -76,7 +76,7 @@ void SetOpen(bool value) {
     ImGui::GetIO().MouseDrawCursor = value;
     if (!value && dirty) {
         dirty = false;
-        BbSettings::Save();
+        Gow3Settings::Save();
     }
 }
 
@@ -162,14 +162,14 @@ void Hint(const char* text) {
 }
 
 void Menu() {
-    auto& s = BbSettings::Get();
+    auto& s = Gow3Settings::Get();
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + 40.0f * base_scale,
                                    viewport->WorkPos.y + 40.0f * base_scale),
                             ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(ImVec2(620.0f * base_scale, 0.0f), ImGuiCond_Appearing);
     bool keep_open = true;
-    // bbport: the game's own title (param.sfo), not a fixed one.
+    // gow3: the game's own title (param.sfo), not a fixed one.
     static const std::string heading = [] {
         const std::string_view title = Common::ElfInfo::Instance().Title();
         return std::string(title.empty() ? "God of War III" : title) + " — настройки  (Insert / L3+R3)";
@@ -188,10 +188,10 @@ void Menu() {
     static const char* later[] = {"XeSS"};
     int upscaler = s.upscaler;
     if (ImGui::BeginCombo("Апскейлер", upscalers[upscaler])) {
-        for (int i = 0; i < BbSettings::UpscalerCount; ++i) {
-            const bool supported = i == BbSettings::UpscalerFsr4 ? s.fsr4_supported.load()
-                : i == BbSettings::UpscalerFsr411 ? s.fsr411_supported.load()
-                : i == BbSettings::UpscalerDlss   ? s.dlss_supported.load() : true;
+        for (int i = 0; i < Gow3Settings::UpscalerCount; ++i) {
+            const bool supported = i == Gow3Settings::UpscalerFsr4 ? s.fsr4_supported.load()
+                : i == Gow3Settings::UpscalerFsr411 ? s.fsr411_supported.load()
+                : i == Gow3Settings::UpscalerDlss   ? s.dlss_supported.load() : true;
             ImGui::BeginDisabled(!supported);
             if (ImGui::Selectable(upscalers[i], i == upscaler)) {
                 Store(s.upscaler, i, true);
@@ -211,18 +211,18 @@ void Menu() {
         }
         ImGui::EndCombo();
     }
-    if (const char* problem = s.dlss_problem.load(); problem && upscaler == BbSettings::UpscalerDlss) {
+    if (const char* problem = s.dlss_problem.load(); problem && upscaler == Gow3Settings::UpscalerDlss) {
         ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f), "DLSS: %s", problem);
     }
     if (const char* problem = s.fsr4_problem.load()) {
         ImGui::PushTextWrapPos();
         ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f), "FSR 4 недоступен: %s", problem);
-        if (!BbSettings::IsFsr4(s.upscaler))
+        if (!Gow3Settings::IsFsr4(s.upscaler))
             ImGui::TextUnformatted("Активен режим, выбранный выше. FSR 4 можно выбрать снова.");
         ImGui::PopTextWrapPos();
     }
-    if (BbSettings::IsFsr4(s.upscaler)) {
-        if (s.upscaler == BbSettings::UpscalerFsr411) {
+    if (Gow3Settings::IsFsr4(s.upscaler)) {
+        if (s.upscaler == Gow3Settings::UpscalerFsr411) {
             Hint("FSR 4.1.1 в режиме INT8: модель из DLL AMD 4.1.1, воспроизведённая в Vulkan "
                  "(результат совпадает с DLL). Одна модель для Native..Performance и отдельная "
                  "для Ultra Performance. Ассеты: tools/fsr4cap/build_assets.sh (нужны DLL и Proton).");
@@ -236,23 +236,23 @@ void Menu() {
         Hint("Проверка при гостинге: сеть FSR 4 нормирует цвет по экспозиции и по ней решает, "
              "когда отбросить прошлые кадры. Меняются сразу, без перезапуска.");
     }
-    const bool upscaler_on = s.upscaler != BbSettings::UpscalerOff;
-    const bool taa = s.upscaler == BbSettings::UpscalerTaa;
+    const bool upscaler_on = s.upscaler != Gow3Settings::UpscalerOff;
+    const bool taa = s.upscaler == Gow3Settings::UpscalerTaa;
     ImGui::BeginDisabled(!upscaler_on);
     ImGui::BeginDisabled(taa);
-    int preset = taa ? BbSettings::NativeAA : s.preset.load();
+    int preset = taa ? Gow3Settings::NativeAA : s.preset.load();
     char preset_label[64];
-    std::snprintf(preset_label, sizeof(preset_label), "%s (x%.1f)", BbSettings::PresetName(preset),
-                  BbSettings::PresetScale(preset));
+    std::snprintf(preset_label, sizeof(preset_label), "%s (x%.1f)", Gow3Settings::PresetName(preset),
+                  Gow3Settings::PresetScale(preset));
     if (ImGui::BeginCombo("Пресет", preset_label)) {
-        for (int i = 0; i < BbSettings::PresetCount; ++i) {
+        for (int i = 0; i < Gow3Settings::PresetCount; ++i) {
             char label[64];
-            const float scale = BbSettings::PresetScale(i);
+            const float scale = Gow3Settings::PresetScale(i);
             const int output = s.output_res;
             std::snprintf(label, sizeof(label), "%s (x%.1f, рендер %dx%d)",
-                          BbSettings::PresetName(i), scale,
-                          int(std::lround(BbSettings::OutputWidths[output] / scale / 2) * 2),
-                          int(std::lround(BbSettings::OutputHeights[output] / scale / 2) * 2));
+                          Gow3Settings::PresetName(i), scale,
+                          int(std::lround(Gow3Settings::OutputWidths[output] / scale / 2) * 2),
+                          int(std::lround(Gow3Settings::OutputHeights[output] / scale / 2) * 2));
             if (ImGui::Selectable(label, i == preset)) {
                 Store(s.preset, i, true);
             }
@@ -266,16 +266,16 @@ void Menu() {
     }
     ImGui::Text("Активный рендер сцены: %d x %d", s.active_render_width.load(),
                 s.active_render_height.load());
-    if (BbSettings::FixedRenderSession()) {
-        ImGui::Text("Пресет при запуске: %s", BbSettings::PresetName(s.startup_preset));
-        if (const char* automatic = std::getenv("BB_AUTO_RENDER_RES");
+    if (Gow3Settings::FixedRenderSession()) {
+        ImGui::Text("Пресет при запуске: %s", Gow3Settings::PresetName(s.startup_preset));
+        if (const char* automatic = std::getenv("GOW3_AUTO_RENDER_RES");
             automatic && automatic[0] == '1') {
             Hint("При выводе не 1080p вся игра рисуется в разрешении пресета (патч при запуске): "
                  "это быстрее всего на Steam Deck и слабых GPU. Смена пресета или разрешения "
                  "вывода — после перезапуска. Пункт «Смена разрешения на лету» ниже включает "
                  "смену без перезапуска (постобработка тогда остаётся в 1080p, медленнее).");
         } else {
-            Hint("BB_RENDER_RES фиксирует размер сцены при запуске. Уберите эту явную переменную "
+            Hint("GOW3_RENDER_RES фиксирует размер сцены при запуске. Уберите эту явную переменную "
                  "для смены разрешения и пресетов без перезапуска игры.");
         }
     } else {
@@ -302,9 +302,9 @@ void Menu() {
     Slider("Масштаб", s.reactive_scale, 0.0f, 4.0f);
     Slider("Порог", s.reactive_threshold, 0.0f, 1.0f);
     Slider("Максимум", s.reactive_max, 0.0f, 1.0f);
-    bool show_mask = s.debug_view == BbSettings::DebugReactive;
+    bool show_mask = s.debug_view == Gow3Settings::DebugReactive;
     if (ImGui::Checkbox("Показать маску (отладка)", &show_mask)) {
-        s.debug_view = show_mask ? BbSettings::DebugReactive : BbSettings::DebugNone;
+        s.debug_view = show_mask ? Gow3Settings::DebugReactive : Gow3Settings::DebugNone;
     }
     ImGui::EndDisabled();
     ImGui::EndDisabled();
@@ -312,9 +312,9 @@ void Menu() {
     Hint("Точные векторы для анимированных объектов: одежда и оружие меньше рассыпаются "
          "при движении. Статичная сцена не получает дополнительный проход. "
          "Изменение применяется после перезапуска игры.");
-    bool show_motion = s.debug_view == BbSettings::DebugMotion;
+    bool show_motion = s.debug_view == Gow3Settings::DebugMotion;
     if (ImGui::Checkbox("Показать векторы движения (отладка)", &show_motion)) {
-        s.debug_view = show_motion ? BbSettings::DebugMotion : BbSettings::DebugNone;
+        s.debug_view = show_motion ? Gow3Settings::DebugMotion : Gow3Settings::DebugNone;
     }
     Hint("Красный/зелёный: движение по горизонтали/вертикали (8 пикселей = полная яркость). "
          "Синий: пиксель получил точный вектор объекта, а не только движение камеры. "
@@ -326,14 +326,14 @@ void Menu() {
     static const char* outputs[] = {"1280 x 720", "1920 x 1080", "2560 x 1440", "3840 x 2160"};
     int output = s.output_res;
     if (ImGui::BeginCombo("Разрешение вывода", outputs[output])) {
-        for (int i = 0; i < BbSettings::OutputCount; ++i) {
+        for (int i = 0; i < Gow3Settings::OutputCount; ++i) {
             if (ImGui::Selectable(outputs[i], i == output)) {
                 Store(s.output_res, i, true);
             }
         }
         ImGui::EndCombo();
     }
-    if (BbSettings::FixedRenderSession()) {
+    if (Gow3Settings::FixedRenderSession()) {
         Hint("Размер готового кадра и интерфейса. Пресет задаёт размер сцены относительно "
              "вывода: 4K Performance = 1920x1080. Применяется после перезапуска игры.");
     } else {
@@ -357,12 +357,12 @@ void Menu() {
          "её на мощных дискретных видеокартах. Применяется после перезапуска игры.");
     bool restart = s.object_motion != s.startup_object_motion ||
                    s.live_resolution != s.startup_live_resolution ||
-                   BbSettings::ResolutionNeedsRestart();
+                   Gow3Settings::ResolutionNeedsRestart();
     if (restart) {
         ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f),
                            "Изменения применятся после перезапуска игры");
         if (ImGui::Button("Применить и перезапустить игру")) {
-            BbSettings::Save();
+            Gow3Settings::Save();
             runtime_restart();
         }
     }
@@ -375,7 +375,7 @@ void Menu() {
         keep_open = false;
     }
     ImGui::SameLine();
-    ImGui::TextDisabled("Настройки сохраняются в bbport.ini");
+    ImGui::TextDisabled("Настройки сохраняются в gow3.ini");
     ImGui::End();
     if (!keep_open) {
         SetOpen(false);
@@ -444,14 +444,14 @@ void FpsCounter() {
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
                      ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
                      ImGuiWindowFlags_NoFocusOnAppearing);
-    const auto& s = BbSettings::Get();
+    const auto& s = Gow3Settings::Get();
     ImGui::Text("%.0f FPS  %.1f мс  %s", frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f,
                 frame_ms_avg,
-                s.upscaler == BbSettings::UpscalerFsr3   ? "FSR 3.1"
-                : s.upscaler == BbSettings::UpscalerFsr4 ? "FSR 4"
-                : s.upscaler == BbSettings::UpscalerFsr411 ? "FSR 4.1.1"
-                : s.upscaler == BbSettings::UpscalerTaa ? "TAA"
-                : s.upscaler == BbSettings::UpscalerDlss ? "DLSS"
+                s.upscaler == Gow3Settings::UpscalerFsr3   ? "FSR 3.1"
+                : s.upscaler == Gow3Settings::UpscalerFsr4 ? "FSR 4"
+                : s.upscaler == Gow3Settings::UpscalerFsr411 ? "FSR 4.1.1"
+                : s.upscaler == Gow3Settings::UpscalerTaa ? "TAA"
+                : s.upscaler == Gow3Settings::UpscalerDlss ? "DLSS"
                                                          : "");
     ImGui::End();
 }
@@ -469,7 +469,7 @@ void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) 
     io.IniFilename = nullptr; // window positions are not kept
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
     io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
-    io.BackendPlatformName = "bbport";
+    io.BackendPlatformName = "gow3";
 
     ImGui::StyleColorsDark();
     ImGuiStyle& style = ImGui::GetStyle();
@@ -480,8 +480,8 @@ void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) 
 
     ImFontConfig font_config;
     font_config.FontDataOwnedByAtlas = false;
-    io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char*>(bb_font_ttf),
-                                   int(bb_font_ttf_end - bb_font_ttf), 18.0f, &font_config);
+    io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char*>(gow3_font_ttf),
+                                   int(gow3_font_ttf_end - gow3_font_ttf), 18.0f, &font_config);
 
     const vk::Instance vk_instance = instance.GetInstance();
     ImGui_ImplVulkan_LoadFunctions(
@@ -655,7 +655,7 @@ bool HandleEvent(const SDL_Event& event) {
 }
 
 bool Visible() {
-    return initialized && (menu_open || text_entry_active || choice_active || BbSettings::Get().show_fps);
+    return initialized && (menu_open || text_entry_active || choice_active || Gow3Settings::Get().show_fps);
 }
 
 bool CapturesInput() {
@@ -711,7 +711,7 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
     if (menu_open) {
         Menu();
     }
-    if (BbSettings::Get().show_fps && !menu_open) {
+    if (Gow3Settings::Get().show_fps && !menu_open) {
         FpsCounter();
     }
     if (text_entry_active) {
@@ -742,4 +742,4 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
     cmdbuf.endRendering();
 }
 
-} // namespace BbOverlay
+} // namespace Gow3Overlay

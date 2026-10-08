@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-#include "bbport_write_log.h"
+#include "gow3_write_log.h"
 
 #include <array>
 #include <atomic>
@@ -15,7 +15,7 @@
 #endif
 #include <x86intrin.h>
 
-namespace BbWriteLog {
+namespace Gow3WriteLog {
 namespace {
 struct Entry {
     std::uint64_t address, size, first, tsc;
@@ -38,7 +38,7 @@ void Record(std::uint64_t address, const void* data, std::uint64_t size, Source 
 
 int Mode() {
     static const int mode = [] {
-        const char* env = std::getenv("BB_WRITE_LOG");
+        const char* env = std::getenv("GOW3_WRITE_LOG");
         return env ? std::atoi(env) : 0;
     }();
     return mode;
@@ -82,10 +82,10 @@ void Record(std::uint64_t address, const void* data, std::uint64_t size, Source 
         }
     }
 }
-} // namespace BbWriteLog
+} // namespace Gow3WriteLog
 
-extern "C" void bbgpu_dump_guest_writes(void* ucontext) {
-    using namespace BbWriteLog;
+extern "C" void gow3gpu_dump_guest_writes(void* ucontext) {
+    using namespace Gow3WriteLog;
     if (Mode() == 0) {
         return;
     }

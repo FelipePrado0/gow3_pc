@@ -1,11 +1,11 @@
-// bbport: SDL3 window for the Vulkan swapchain (X11 or Wayland).
+// gow3: SDL3 window for the Vulkan swapchain (X11 or Wayland).
 #include <cstdlib>
 #include <cstring>
 #include <SDL3/SDL.h>
 #include "common/assert.h"
 #include "common/logging/log.h"
 #include "sdl_window.h"
-#include "bbport_overlay.h"
+#include "gow3_overlay.h"
 
 namespace Frontend {
 
@@ -22,14 +22,14 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, height_);
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, true);
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_VULKAN_BOOLEAN, true);
-    const char* fullscreen = std::getenv("BB_FULLSCREEN");
+    const char* fullscreen = std::getenv("GOW3_FULLSCREEN");
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_FULLSCREEN_BOOLEAN, fullscreen && fullscreen[0] == '1');
     base_title = title;
     window = SDL_CreateWindowWithProperties(props);
     SDL_DestroyProperties(props);
     ASSERT_MSG(window, "Failed to create window: {}", SDL_GetError());
-    // bbport: the game's own icon (run.py converts sce_sys/icon0.png to BMP, SDL's built-in format).
-    if (const char* icon_path = std::getenv("BB_WINDOW_ICON")) {
+    // gow3: the game's own icon (run.py converts sce_sys/icon0.png to BMP, SDL's built-in format).
+    if (const char* icon_path = std::getenv("GOW3_WINDOW_ICON")) {
         if (SDL_Surface* icon = SDL_LoadBMP(icon_path)) {
             SDL_SetWindowIcon(window, icon);
             SDL_DestroySurface(icon);
@@ -84,7 +84,7 @@ void WindowSDL::UpdateTextTitle() {
     const std::string title = text_active ? base_title + " \u2014 " + text_prompt + ": " + text + "_  (Enter = OK, Esc = cancel)"
                                           : base_title;
     SDL_SetWindowTitle(window, title.c_str());
-    BbOverlay::SetTextEntry(text_active, text_prompt, text);
+    Gow3Overlay::SetTextEntry(text_active, text_prompt, text);
 }
 
 bool WindowSDL::PollEvents() {
@@ -98,7 +98,7 @@ bool WindowSDL::PollEvents() {
         }
     }
     if (!text_active) {
-        BbOverlay::UpdateTextInput(window);
+        Gow3Overlay::UpdateTextInput(window);
     }
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -129,7 +129,7 @@ bool WindowSDL::PollEvents() {
             UpdateTextTitle();
             continue;
         }
-        if (BbOverlay::HandleEvent(event)) {
+        if (Gow3Overlay::HandleEvent(event)) {
             continue;
         }
         switch (event.type) {

@@ -1,4 +1,4 @@
-// bbport: no ImGui overlay in the port; hooks used by the renderer are no-ops.
+// gow3: no ImGui overlay in the port; hooks used by the renderer are no-ops.
 #pragma once
 #include "video_core/renderer_vulkan/vk_common.h"
 namespace Frontend { class WindowSDL; }

@@ -3,7 +3,7 @@
 
 #include <xxhash.h>
 
-#include "bbport_toggles.h"
+#include "gow3_toggles.h"
 #include "common/assert.h"
 #include "common/debug.h"
 #include "common/div_ceil.h"
@@ -63,7 +63,7 @@ TextureCache::TextureCache(const Vulkan::Instance& instance_, Vulkan::Scheduler&
 
 TextureCache::~TextureCache() = default;
 
-// bbport: every copy is recorded first and the GPU is waited for once. A wait per image (as
+// gow3: every copy is recorded first and the GPU is waited for once. A wait per image (as
 // before) left the GPU mostly idle in God of War III's gameplay, at about 2 FPS.
 void TextureCache::ProcessDownloadImages() {
     std::unique_lock lk{download_images_mutex};
@@ -571,7 +571,7 @@ ImageId TextureCache::FindImage(ImageDesc& desc, bool exact_fmt) {
         cached.format == info.pixel_format && cached.type == info.type &&
         cached.exact_fmt == exact_fmt && cached.binding == desc.type &&
         cached.levels == info.resources.levels && cached.layers == info.resources.layers &&
-        !BbToggle::Disabled(BbToggle::FindImageCache)) {
+        !Gow3Toggle::Disabled(Gow3Toggle::FindImageCache)) {
         Image& image = slot_images[cached.image_id];
         image.tick_accessed_last = scheduler.CurrentTick();
         TouchImage(image);
@@ -723,7 +723,7 @@ ImageView& TextureCache::FindTexture(ImageId image_id, const ImageDesc& desc, Vi
     if (refresh) {
         UpdateImage(image_id);
     }
-    if (memo && !BbToggle::Disabled(BbToggle::TextureViewMemo)) {
+    if (memo && !Gow3Toggle::Disabled(Gow3Toggle::TextureViewMemo)) {
         if (memo->image_id == image_id && memo->backing == image.backing && memo->view_id) {
             return slot_image_views[memo->view_id];
         }
@@ -808,7 +808,7 @@ void TextureCache::RefreshImage(Image& image) {
     if (False(image.flags & ImageFlagBits::Dirty) || image.info.num_samples > 1) {
         return;
     }
-    BbStats::Timer timer{BbStats::t_refresh};
+    Gow3Stats::Timer timer{Gow3Stats::t_refresh};
 
     RENDERER_TRACE;
     TRACE_HINT(fmt::format("{:x}:{:x}", image.info.guest_address, image.info.guest_size));
@@ -838,7 +838,7 @@ void TextureCache::RefreshImage(Image& image) {
     const bool is_gpu_modified = True(image.flags & ImageFlagBits::GpuModified);
     const bool is_gpu_dirty = True(image.flags & ImageFlagBits::GpuDirty);
 
-    BbStats::image_upload_bytes.fetch_add(image.info.guest_size, std::memory_order_relaxed);
+    Gow3Stats::image_upload_bytes.fetch_add(image.info.guest_size, std::memory_order_relaxed);
     boost::container::small_vector<vk::BufferImageCopy, 14> image_copies;
     for (u32 m = 0; m < num_mips; m++) {
         const u32 width = std::max(image.info.size.width >> m, 1u);
@@ -911,7 +911,7 @@ vk::Sampler TextureCache::GetSampler(const AmdGpu::Sampler& sampler,
 }
 
 void TextureCache::RegisterImage(ImageId image_id) {
-    BbStats::images_registered.fetch_add(1, std::memory_order_relaxed);
+    Gow3Stats::images_registered.fetch_add(1, std::memory_order_relaxed);
     Image& image = slot_images[image_id];
     ASSERT_MSG(False(image.flags & ImageFlagBits::Registered),
                "Trying to register an already registered image");
@@ -1059,14 +1059,14 @@ void TextureCache::UntrackImageTail(ImageId image_id) {
 void TextureCache::GarbageCollectImages() {
     if (instance.CanReportMemoryUsage()) {
         total_used_memory = instance.GetDeviceMemoryUsage();
-        // bbport: on integrated GPUs (Steam Deck) the usage covers system-memory heaps holding
+        // gow3: on integrated GPUs (Steam Deck) the usage covers system-memory heaps holding
         // much more than images (buffers backing guest memory), and the startup budget left
         // ~1 GB after its 8 GB system reserve: usage stayed above the critical mark, so the
         // collector evicted images used two or three frames ago on every submission and wrote
         // GPU-written ones back. Compare with the driver's current budget instead.
-        // BB_GC_BUDGET_MB=N: this rule with a fixed budget on any GPU (tests on a desktop).
+        // GOW3_GC_BUDGET_MB=N: this rule with a fixed budget on any GPU (tests on a desktop).
         static const u64 forced_budget = [] {
-            const char* env = std::getenv("BB_GC_BUDGET_MB");
+            const char* env = std::getenv("GOW3_GC_BUDGET_MB");
             return env ? std::strtoull(env, nullptr, 10) << 20 : 0;
         }();
         if (instance.IsIntegrated() || forced_budget) {
@@ -1110,7 +1110,7 @@ void TextureCache::GarbageCollectImages() {
             return false;
         }
         if (download) {
-            // bbport: synchronously, while the image still protects its pages. A deferred
+            // gow3: synchronously, while the image still protects its pages. A deferred
             // write-back landed after FreeImage had unprotected them, over whatever the game
             // had meanwhile stored there (e.g. its heap after unloading an area).
             DownloadImageMemory(image_id, true);
@@ -1141,7 +1141,7 @@ void TextureCache::GarbageCollectImages() {
         configure(true);
         lru_cache.ForEachItemBelow(gc_tick - ticks_to_destroy, clean_up);
     }
-    // bbport: evictions under memory pressure, at most every 5 s (BB_FRAME_STATS or not).
+    // gow3: evictions under memory pressure, at most every 5 s (GOW3_FRAME_STATS or not).
     if (pressured || gc_downloads != 0) {
         const auto now = std::chrono::steady_clock::now();
         if (now - gc_report_time >= std::chrono::seconds(5)) {

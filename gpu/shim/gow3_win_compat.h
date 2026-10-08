@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport (Windows): small POSIX helpers the renderer uses for diagnostics and thread
+// gow3 (Windows): small POSIX helpers the renderer uses for diagnostics and thread
 // identity. Force-included into the GPU library on Windows only (CMakeLists.txt); kept free
 // of <windows.h> so its macros do not reach every translation unit.
 #pragma once

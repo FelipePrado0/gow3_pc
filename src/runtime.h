@@ -1,13 +1,13 @@
-#ifndef BB_RUNTIME_H
-#define BB_RUNTIME_H
+#ifndef GOW3_RUNTIME_H
+#define GOW3_RUNTIME_H
 #include <stdint.h>
 #include <stddef.h>
 #ifdef _WIN32
 #include "compat_win.h"
-/* No signals on Windows: the exception handler resumes the thread in bb_longjmp
- * (gpu/shim/bbport_toggles.h uses the same buffer type). */
-typedef bb_jmp_buf sigjmp_buf;
-#define sigsetjmp(buffer, save) bb_setjmp(buffer)
+/* No signals on Windows: the exception handler resumes the thread in gow3_longjmp
+ * (gpu/shim/gow3_toggles.h uses the same buffer type). */
+typedef gow3_jmp_buf sigjmp_buf;
+#define sigsetjmp(buffer, save) gow3_setjmp(buffer)
 #else
 #include <setjmp.h>
 #endif

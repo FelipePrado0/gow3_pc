@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "bbport_copy.h"
+#include "gow3_copy.h"
 
 #include <deque>
 #include <boost/container/small_vector.hpp>
@@ -38,7 +38,7 @@ class PageManager;
 
 class BufferCache {
     static constexpr u64 ADDRESS_SPACE_BITS = 40;
-    // bbport: arena pages are 4 GiB unless the driver's buffer size limit is lower (AMD's
+    // gow3: arena pages are 4 GiB unless the driver's buffer size limit is lower (AMD's
     // Windows driver: 2 GiB); an arena spans up to two pages, so they shrink to half the limit.
     static constexpr u64 MAX_ARENA_PAGE_BITS = 32;
     static constexpr u64 MIN_ARENA_PAGE_BITS = 30;
@@ -46,7 +46,7 @@ class BufferCache {
     static constexpr u64 MIN_BLOCK_SIZE = 16_KB;
 
 public:
-    /// Read-only bindings up to this size are copied into a stream buffer (bbport: public for
+    /// Read-only bindings up to this size are copied into a stream buffer (gow3: public for
     /// the draw pipeline's constant ring).
     static constexpr u64 STREAM_THRESHOLD = 16_KB;
 
@@ -83,7 +83,7 @@ public:
     /// Invalidates any buffer in the logical page range.
     void InvalidateMemory(VAddr device_addr, u64 size, bool assume_locks = false);
 
-    /// bbport: a guest write fault at `device_addr` was handled; unprotect its neighbourhood.
+    /// gow3: a guest write fault at `device_addr` was handled; unprotect its neighbourhood.
     void ExtendWriteFault(VAddr device_addr);
 
     /// Flushes any GPU modified buffer in the logical page range back to CPU memory.
@@ -135,9 +135,9 @@ private:
     bool SynchronizeMemory(const Buffer* arena, VAddr device_addr, u32 size, bool is_written,
                            bool is_texel_buffer);
 
-    /// bbport: batched small copies on the copy threads (BbCopy::QueueCopy).
-    static void RunGuestCopy(const BbCopy::Item& item);
-    void SmallGuestCopy(const BbCopy::Item& item);
+    /// gow3: batched small copies on the copy threads (Gow3Copy::QueueCopy).
+    static void RunGuestCopy(const Gow3Copy::Item& item);
+    void SmallGuestCopy(const Gow3Copy::Item& item);
 
     const Buffer* UploadCopies(const Buffer* arena, std::span<vk::BufferCopy> copies,
                                size_t total_size_bytes);
@@ -146,7 +146,7 @@ private:
 
     const Vulkan::Instance& instance;
     Vulkan::Scheduler& scheduler;
-    // bbport: texel buffer ranges known not to alias an image, per image registry generation.
+    // gow3: texel buffer ranges known not to alias an image, per image registry generation.
     struct ImageMiss {
         VAddr address = 0;
         u32 size = 0;

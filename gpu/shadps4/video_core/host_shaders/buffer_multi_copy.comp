@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: many buffer-to-buffer copies in one dispatch (the guest's copy shader, HLE'd in
+// gow3: many buffer-to-buffer copies in one dispatch (the guest's copy shader, HLE'd in
 // vk_shader_hle.cpp: ~1024 small ranges per dispatch). One workgroup per range; offsets and
 // sizes in dwords, relative to the bound ranges of the source and destination buffers.
 #version 450

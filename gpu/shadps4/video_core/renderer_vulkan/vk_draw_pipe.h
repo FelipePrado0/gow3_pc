@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: two-stage draw pipeline (docs/parallel_gpu.md, "Two-stage draw pipeline").
+// gow3: two-stage draw pipeline (docs/parallel_gpu.md, "Two-stage draw pipeline").
 //
 // The GPU command thread (stage A) decodes PM4, keeps the register file and selects pipelines;
 // for a direct draw it writes a packet (the register blocks changed since the previous packet,
@@ -12,7 +12,7 @@
 #pragma once
 
 #include <cstdlib>
-#include "bbport_threads.h"
+#include "gow3_threads.h"
 
 #include <array>
 #include <atomic>
@@ -157,7 +157,7 @@ private:
     }
 
     void Run(std::stop_token stop) {
-        Common::SetCurrentThreadName("bb:DrawRec");
+        Common::SetCurrentThreadName("gow3:DrawRec");
         on_stage_b = true;
         stage_b_tid.store(static_cast<u32>(gettid()), std::memory_order_release);
         u64 at = 0;
@@ -167,12 +167,12 @@ private:
             u64 available = published.load(std::memory_order_acquire);
             if (available == at) {
                 // With few hardware threads (Steam Deck: 8) a long spin takes time from the
-                // game's own threads. BB_PIPE_SPIN_US overrides.
+                // game's own threads. GOW3_PIPE_SPIN_US overrides.
                 static const auto spin_time = std::chrono::microseconds([] {
-                    if (const char* env = std::getenv("BB_PIPE_SPIN_US")) {
+                    if (const char* env = std::getenv("GOW3_PIPE_SPIN_US")) {
                         return std::max(0, std::atoi(env));
                     }
-                    return BbThreads::Available() >= 12 ? 200 : 50;
+                    return Gow3Threads::Available() >= 12 ? 200 : 50;
                 }());
                 const auto spin_until = std::chrono::steady_clock::now() + spin_time;
                 for (u32 spins = 1; available == at; ++spins) {

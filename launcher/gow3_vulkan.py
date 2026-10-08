@@ -61,10 +61,10 @@ def configure(env, manifest_dirs=MANIFEST_DIRS, library_dirs=LIBRARY_DIRS):
     # VK_ICD_FILENAMES. In particular don't replace an explicit Lavapipe setup.
     if env.get("VK_DRIVER_FILES") or env.get("VK_ICD_FILENAMES"):
         return "Vulkan: using explicit driver override"
-    bundled = env.get("BB_BUNDLED_VK_DRIVER_FILES", "")
+    bundled = env.get("GOW3_BUNDLED_VK_DRIVER_FILES", "")
     if env.get("VK_ADD_DRIVER_FILES"):
         bundled = env["VK_ADD_DRIVER_FILES"] + (":" + bundled if bundled else "")
-    extra = env.get("BB_NVIDIA_LIB_DIR")
+    extra = env.get("GOW3_NVIDIA_LIB_DIR")
     if extra:
         library_dirs = (Path(extra), *library_dirs)
     found = host_nvidia(manifest_dirs, library_dirs)
@@ -77,8 +77,8 @@ def configure(env, manifest_dirs=MANIFEST_DIRS, library_dirs=LIBRARY_DIRS):
     # The driver version/path and mtime give each installed driver its own small
     # cache. exec preserves process/signal behavior; the cache survives launch.
     key = hashlib.sha256(f"{driver}:{driver.stat().st_mtime_ns}".encode()).hexdigest()[:16]
-    data_dir = Path(env.get("BB_DATA_DIR") or
-                    str(Path(env.get("XDG_DATA_HOME", str(Path.home() / ".local/share"))) / "bbport"))
+    data_dir = Path(env.get("GOW3_DATA_DIR") or
+                    str(Path(env.get("XDG_DATA_HOME", str(Path.home() / ".local/share"))) / "gow3"))
     cache = data_dir / "vulkan" / "nvidia" / key
     libraries = cache / "lib"
     libraries.mkdir(parents=True, exist_ok=True)
@@ -109,17 +109,17 @@ def configure(env, manifest_dirs=MANIFEST_DIRS, library_dirs=LIBRARY_DIRS):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: bbport_vulkan.py <program> [args...]", file=sys.stderr)
+        print("Usage: gow3_vulkan.py <program> [args...]", file=sys.stderr)
         return 1
     try:
         print(configure(os.environ), file=sys.stderr, flush=True)
     except OSError as error:
         # Startup diagnostics should identify driver/cache failures rather than
         # falling through to an unrelated Vulkan assertion.
-        print(f"bbport: cannot prepare NVIDIA driver: {error}", file=sys.stderr)
+        print(f"gow3: cannot prepare NVIDIA driver: {error}", file=sys.stderr)
         return 1
     if "--vulkan-info" in sys.argv[1:]:
-        tool = os.environ.get("BB_VULKANINFO", "vulkaninfo")
+        tool = os.environ.get("GOW3_VULKANINFO", "vulkaninfo")
         os.environ.setdefault("VK_LOADER_DEBUG", "error,warn,driver")
         for key in ("VK_DRIVER_FILES", "VK_ICD_FILENAMES", "LD_LIBRARY_PATH"):
             print(f"{key}={os.environ.get(key, '')}", file=sys.stderr, flush=True)

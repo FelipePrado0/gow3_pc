@@ -14,7 +14,7 @@ def prepare(game, out, sku='full'):
     profile=dict(title_id=values.get('TITLE_ID'),sku=sku,sku_source='explicit probe setting',
                  user_params=params, mounted_addons=[],boot_attr=0)
     out.mkdir(parents=True,exist_ok=True)
-    (out/'content.bin').write_bytes(struct.pack('<8s5I',b'BBCONT01',{'full':3,'trial':1}[sku],*params))
+    (out/'content.bin').write_bytes(struct.pack('<8s5I',b'G3CONT01',{'full':3,'trial':1}[sku],*params))
     (out/'content-profile.json').write_text(json.dumps(profile,indent=2)+'\n')
     print(f'AppContent profile: SKU={sku} (probe setting), user params={params}, mounted add-ons=0')
 

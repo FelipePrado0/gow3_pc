@@ -1,4 +1,4 @@
-From: bbport
+From: gow3
 Subject: [PATCH] ffx_vk.cpp: include <mutex> (libc++ / MSYS2 CLANG64 builds)
 
 ---
@@ -10,7 +10,7 @@ index b2439b6..d3e4eac 100644
  // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  // THE SOFTWARE.
  
-+#include <mutex> // bbport: libc++ does not include it transitively
++#include <mutex> // gow3: libc++ does not include it transitively
  #include <FidelityFX/host/ffx_interface.h>
  #include <FidelityFX/host/ffx_util.h>
  #include <FidelityFX/host/ffx_assert.h>

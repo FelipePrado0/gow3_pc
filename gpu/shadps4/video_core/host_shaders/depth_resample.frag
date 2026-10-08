@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: nearest resample of a depth/stencil image between native and reduced scene
+// gow3: nearest resample of a depth/stencil image between native and reduced scene
 // targets. Used where the format has no blit support (D32S8 on RADV).
 
 #version 450 core

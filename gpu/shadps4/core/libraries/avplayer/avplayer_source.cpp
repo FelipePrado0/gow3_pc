@@ -81,7 +81,7 @@ bool AvPlayerSource::Init(const AvPlayerInitData& init_data, std::string_view pa
             return false;
         }
     } else {
-        // bbport: guest paths are translated by the port's file system (runtime_file.c).
+        // gow3: guest paths are translated by the port's file system (runtime_file.c).
         char host[1024];
         if (runtime_file_translate(std::string(path).c_str(), host, sizeof(host)) != 0) {
             LOG_ERROR(Lib_AvPlayer, "Cannot translate guest path {}", path);

@@ -1,10 +1,10 @@
-// bbport: parallel copies of guest memory. Streaming a new area uploads 50-400 MB of textures
+// gow3: parallel copies of guest memory. Streaming a new area uploads 50-400 MB of textures
 // and buffers per frame; copied on one thread that is tens of milliseconds (stutter).
 #pragma once
 #include <cstddef>
 #include <functional>
 
-namespace BbCopy {
+namespace Gow3Copy {
 
 /// Runs `task(i)` for every i in [0, count) on the copy threads and the caller; returns when
 /// all are done. Runs inline when count is 1, the pool is disabled, or when called from a copy
@@ -42,4 +42,4 @@ void WaitAsync();
 /// Callbacks run in the order they were registered.
 void AfterCopies(std::function<void()> callback);
 
-} // namespace BbCopy
+} // namespace Gow3Copy

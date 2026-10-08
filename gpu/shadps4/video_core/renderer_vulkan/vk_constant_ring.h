@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: small read-only guest buffers (constants) copied by the GPU command thread (stage A of
+// gow3: small read-only guest buffers (constants) copied by the GPU command thread (stage A of
 // the draw pipeline, vk_draw_pipe.h) into this ring, so the draw recording thread only binds
 // them. Positions are monotonic byte counts; a region is reused once the submission that
 // recorded its last draw has completed on the GPU. Stage B stamps each packet it records with
@@ -23,7 +23,7 @@ public:
 
     ConstantRing(const Instance& instance, Scheduler& scheduler_)
         : scheduler{scheduler_},
-          buffer{instance, 0, Capacity, VideoCore::MemoryType::Stream, "bbport constant ring"} {
+          buffer{instance, 0, Capacity, VideoCore::MemoryType::Stream, "gow3 constant ring"} {
         ASSERT(!buffer.mapped_data.empty());
     }
 

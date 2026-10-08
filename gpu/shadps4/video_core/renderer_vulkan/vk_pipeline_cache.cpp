@@ -330,9 +330,9 @@ PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
         .supports_shader_subgroup_clock = instance_.IsShaderSubgroupClockSupported(),
         .needs_manual_interpolation = instance.IsFragmentShaderBarycentricSupported() &&
                                       instance.GetDriverID() == vk::DriverId::eNvidiaProprietary,
-        // bbport: older NVIDIA (Pascal) has no barycentrics; BB_INTERP_INT_FIX=0/1 overrides.
+        // gow3: older NVIDIA (Pascal) has no barycentrics; GOW3_INTERP_INT_FIX=0/1 overrides.
         .needs_integer_interpolation_fix = [&] {
-            if (const char* env = std::getenv("BB_INTERP_INT_FIX")) {
+            if (const char* env = std::getenv("GOW3_INTERP_INT_FIX")) {
                 return env[0] == '1';
             }
             return !instance.IsFragmentShaderBarycentricSupported() &&
@@ -355,17 +355,17 @@ PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
 
 PipelineCache::~PipelineCache() = default;
 
-// bbport: shader/pipeline compile time on the GPU thread, reported by BB_FRAME_STATS.
-std::atomic<u64> g_bb_compile_ns;
-std::atomic<u32> g_bb_compiles;
+// gow3: shader/pipeline compile time on the GPU thread, reported by GOW3_FRAME_STATS.
+std::atomic<u64> g_gow3_compile_ns;
+std::atomic<u32> g_gow3_compiles;
 namespace {
 struct CompileTimer {
     std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
     ~CompileTimer() {
-        g_bb_compile_ns += u64(std::chrono::duration_cast<std::chrono::nanoseconds>(
+        g_gow3_compile_ns += u64(std::chrono::duration_cast<std::chrono::nanoseconds>(
                                    std::chrono::steady_clock::now() - start)
                                    .count());
-        ++g_bb_compiles;
+        ++g_gow3_compiles;
     }
 };
 } // namespace
@@ -565,10 +565,10 @@ bool PipelineCache::RefreshGraphicsKey(PipelineSelection& sel) {
                 }
             }
         }
-        // BB_MOTION_SELECT_LOG=1: each G-buffer vertex shader once, with its buffer sizes
+        // GOW3_MOTION_SELECT_LOG=1: each G-buffer vertex shader once, with its buffer sizes
         // and the selection, to find animated models that the size rule leaves out.
         static const bool select_log = [] {
-            const char* value = std::getenv("BB_MOTION_SELECT_LOG");
+            const char* value = std::getenv("GOW3_MOTION_SELECT_LOG");
             return value && value[0] == '1';
         }();
         if (select_log && vs) {
@@ -589,7 +589,7 @@ bool PipelineCache::RefreshGraphicsKey(PipelineSelection& sel) {
         }
         // Keep the old broad path available for visual A/B tests.
         static const bool all_motion = [] {
-            const char* value = std::getenv("BB_OBJECT_MOTION_ALL");
+            const char* value = std::getenv("GOW3_OBJECT_MOTION_ALL");
             return value && value[0] == '1';
         }();
         if (all_motion) {
@@ -830,7 +830,7 @@ PipelineCache::Result PipelineCache::GetProgram(PipelineSelection& sel, HwStage 
                                                 Shader::Backend::Bindings& binding) {
     auto runtime_info = BuildRuntimeInfo(sel, hw_stage, sw_stage);
     if (sel.worker) {
-        // bbport: draw-preparation worker: look up only, with the worker's own Info copy.
+        // gow3: draw-preparation worker: look up only, with the worker's own Info copy.
         auto& worker = *sel.worker;
         std::shared_lock lk{programs_mutex};
         const auto found_program = program_cache.find(params.hash);
@@ -907,7 +907,7 @@ PipelineCache::Result PipelineCache::GetProgram(PipelineSelection& sel, HwStage 
 
     vk::ShaderModule module{};
 
-    // bbport: consecutive draws of a program almost always use the same permutation.
+    // gow3: consecutive draws of a program almost always use the same permutation.
     auto it = program->last_used < program->modules.size() &&
                       program->modules[program->last_used].spec == spec
                   ? program->modules.begin() + program->last_used

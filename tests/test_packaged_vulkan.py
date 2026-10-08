@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-spec = importlib.util.spec_from_file_location("bbport_vulkan", ROOT / "launcher/bbport_vulkan.py")
+spec = importlib.util.spec_from_file_location("gow3_vulkan", ROOT / "launcher/gow3_vulkan.py")
 vulkan = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(vulkan)
 
@@ -20,8 +20,8 @@ class PackagedVulkanTests(unittest.TestCase):
         self.libs = self.root / "host-libs"
         self.icds.mkdir()
         self.libs.mkdir()
-        self.env = {"BB_DATA_DIR": str(self.root / "data"),
-                    "BB_BUNDLED_VK_DRIVER_FILES": "/bundled/radeon.json:/bundled/intel.json",
+        self.env = {"GOW3_DATA_DIR": str(self.root / "data"),
+                    "GOW3_BUNDLED_VK_DRIVER_FILES": "/bundled/radeon.json:/bundled/intel.json",
                     "LD_LIBRARY_PATH": "/bundled/lib"}
 
     def library(self, name, bits=64):
@@ -41,7 +41,7 @@ class PackagedVulkanTests(unittest.TestCase):
 
     def test_amd_intel_keep_bundled_drivers(self):
         self.configure()
-        self.assertEqual(self.env["VK_DRIVER_FILES"], self.env["BB_BUNDLED_VK_DRIVER_FILES"])
+        self.assertEqual(self.env["VK_DRIVER_FILES"], self.env["GOW3_BUNDLED_VK_DRIVER_FILES"])
         self.assertEqual(self.env["LD_LIBRARY_PATH"], "/bundled/lib")
         self.assertFalse((self.root / "data").exists())
 
@@ -89,7 +89,7 @@ class PackagedVulkanTests(unittest.TestCase):
         self.manifest()
         (self.icds / "broken_nvidia.json").write_text("not JSON")
         self.configure()
-        self.assertEqual(self.env["VK_DRIVER_FILES"], self.env["BB_BUNDLED_VK_DRIVER_FILES"])
+        self.assertEqual(self.env["VK_DRIVER_FILES"], self.env["GOW3_BUNDLED_VK_DRIVER_FILES"])
 
     def test_additional_user_icds_are_not_lost(self):
         self.env["VK_ADD_DRIVER_FILES"] = "/user/extra.json"
@@ -100,6 +100,6 @@ class PackagedVulkanTests(unittest.TestCase):
     def test_host_driver_can_be_supplied_outside_hidden_nix_store(self):
         self.library("libGLX_nvidia.so.0")
         self.manifest("/nix/store/hidden/lib/libGLX_nvidia.so.0")
-        self.env["BB_NVIDIA_LIB_DIR"] = str(self.libs)
+        self.env["GOW3_NVIDIA_LIB_DIR"] = str(self.libs)
         vulkan.configure(self.env, (self.icds,), ())
         self.assertIn("nvidia_icd.json", self.env["VK_DRIVER_FILES"])

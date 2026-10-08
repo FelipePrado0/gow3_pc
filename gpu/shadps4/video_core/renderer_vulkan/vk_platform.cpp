@@ -288,7 +288,7 @@ vk::UniqueInstance CreateInstance(Frontend::WindowSystemType window_type, bool e
 
     const auto layers = GetInstanceLayers(enable_validation, enable_crash_diagnostic);
     auto extensions = GetLayerExtensions(GetInstanceExtensions(window_type, true), layers);
-    // bbport: DLSS (optional bridge DLL) needs its own instance extensions.
+    // gow3: DLSS (optional bridge DLL) needs its own instance extensions.
     if (Dlss* dlss = Dlss::Get()) {
         dlss->AppendInstanceExtensions(extensions);
     }

@@ -5,7 +5,7 @@
 
 #include <atomic>
 #include <chrono>
-#include "bbport_toggles.h"
+#include "gow3_toggles.h"
 #include <optional>
 #include "video_core/renderer_vulkan/vk_staging_buffer_pool.h"
 
@@ -91,12 +91,12 @@ public:
                  PageManager& tracker);
     ~TextureCache();
 
-    /// bbport: changes whenever an image is registered or unregistered.
+    /// gow3: changes whenever an image is registered or unregistered.
     [[nodiscard]] u64 RegistryGeneration() const noexcept {
         return registry_generation.load(std::memory_order_acquire);
     }
 
-    /// bbport: FindImage's access tick for an image found by a memoized lookup. The LRU touch
+    /// gow3: FindImage's access tick for an image found by a memoized lookup. The LRU touch
     /// FindImage also does happens in UpdateImage (FindTexture), which every binding reaches.
     void MarkFound(ImageId image_id) {
         slot_images[image_id].tick_accessed_last = scheduler.CurrentTick();
@@ -124,7 +124,7 @@ public:
     /// Retrieves image whose address matches provided
     [[nodiscard]] ImageId FindImageFromRange(VAddr address, size_t size, bool ensure_valid = true);
 
-    /// bbport: a FindView result remembered by the caller for the same image and view info.
+    /// gow3: a FindView result remembered by the caller for the same image and view info.
     struct ViewMemo {
         ImageId image_id{};
         const void* backing = nullptr;
@@ -143,7 +143,7 @@ public:
     /// Retrieves the depth target with specified properties
     [[nodiscard]] ImageView& FindDepthTarget(ImageId image_id, const ImageDesc& desc);
 
-    /// bbport: whether UpdateImage has nothing to do for this image (its fast path).
+    /// gow3: whether UpdateImage has nothing to do for this image (its fast path).
     [[nodiscard]] bool IsUpToDate(ImageId image_id) const {
         const Image& image = slot_images[image_id];
         const u32 flags = std::atomic_ref<u32>(const_cast<u32&>(reinterpret_cast<const u32&>(image.flags)))
@@ -157,11 +157,11 @@ public:
 
     /// Updates image contents if it was modified by CPU.
     void UpdateImage(ImageId image_id) {
-        // bbport: a clean image already tracked and touched in this GC period needs nothing.
+        // gow3: a clean image already tracked and touched in this GC period needs nothing.
         // Every texture binding comes here; the mutex (shared with the fault handlers of the
         // guest threads) was ~3% of the GPU thread. Flags are read atomically: an invalidation
         // racing with this check races the same way with the locked path.
-        if (!BbToggle::Disabled(BbToggle::UpdateImageFastPath)) {
+        if (!Gow3Toggle::Disabled(Gow3Toggle::UpdateImageFastPath)) {
             const Image& image = slot_images[image_id];
             const u32 flags = std::atomic_ref<u32>(const_cast<u32&>(reinterpret_cast<const u32&>(image.flags)))
                                   .load(std::memory_order_acquire);
@@ -197,7 +197,7 @@ public:
     void RefreshImage(Image& image);
 
     /// Retrieves the sampler that matches the provided S# descriptor.
-    /// extra_lod_bias: bbport, added to the S#'s bias (reduced scene rendering).
+    /// extra_lod_bias: gow3, added to the S#'s bias (reduced scene rendering).
     [[nodiscard]] vk::Sampler GetSampler(const AmdGpu::Sampler& sampler,
                                          AmdGpu::BorderColorBuffer border_color_base,
                                          bool is_depth, float extra_lod_bias = 0.0f);
@@ -348,7 +348,7 @@ private:
     /// Copies image memory back to CPU.
     void DownloadImageMemory(ImageId image_id, bool sync = false);
 
-    /// bbport: a recorded image-to-staging copy, written to guest memory after a GPU wait.
+    /// gow3: a recorded image-to-staging copy, written to guest memory after a GPU wait.
     struct PendingDownload {
         VAddr guest_address;
         u32 size;
@@ -410,7 +410,7 @@ private:
     tsl::robin_map<u64, Sampler> samplers;
     std::unordered_set<ImageId> download_images;
     u64 total_used_memory = 0;
-    u64 gc_evictions = 0, gc_downloads = 0; ///< bbport: pressure report
+    u64 gc_evictions = 0, gc_downloads = 0; ///< gow3: pressure report
     std::chrono::steady_clock::time_point gc_report_time{};
     u64 trigger_gc_memory = 0;
     u64 pressure_gc_memory = 0;
@@ -425,7 +425,7 @@ private:
     const bool readback_linear_images;
     PageTable page_table;
     std::mutex mutex;
-    // bbport: FindImage results for unchanged image registrations (guarded by `mutex`).
+    // gow3: FindImage results for unchanged image registrations (guarded by `mutex`).
     struct FindImageCacheEntry {
         VAddr address = 0;
         u64 size = 0;

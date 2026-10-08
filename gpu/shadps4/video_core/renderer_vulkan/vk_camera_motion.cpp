@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "bbport_toggles.h"
+#include "gow3_toggles.h"
 
 #include "video_core/host_shaders/camera_motion_comp.h"
 #include "video_core/host_shaders/camera_motion_debug_comp.h"
@@ -51,11 +51,11 @@ std::array<float, 12> Multiply(const std::array<float, 12>& a, const std::array<
 CameraMotion::CameraMotion(const Instance& instance_, Scheduler& scheduler_,
                            VideoCore::TextureCache& texture_cache_, Runtime& runtime_)
     : instance{instance_}, scheduler{scheduler_}, texture_cache{texture_cache_}, runtime{runtime_} {
-    const char* env = std::getenv("BB_DEBUG_MOTION");
+    const char* env = std::getenv("GOW3_DEBUG_MOTION");
     debug_overlay = env && env[0] == '1';
-    const char* upscaler = std::getenv("BB_UPSCALER");
+    const char* upscaler = std::getenv("GOW3_UPSCALER");
     // The upscaler can be switched on from the menu at any time: the camera is always tracked
-    // unless BB_UPSCALER=none.
+    // unless GOW3_UPSCALER=none.
     for_upscaler = !(upscaler && std::strcmp(upscaler, "none") == 0);
     const auto device = instance.GetDevice();
     if (for_upscaler) {
@@ -300,10 +300,10 @@ void CameraMotion::Overlay(VideoCore::ImageId frame) {
         .size = {float(color.info.size.width), float(color.info.size.height)},
         .jitter = jitter,
         .previous_jitter = previous_jitter,
-        .mode = BbToggle::Disabled(1u << 20)   ? 1u
-                : BbToggle::Disabled(1u << 21) ? 2u
-                : BbToggle::Disabled(1u << 22) ? 3u
-                : BbToggle::Disabled(1u << 23) ? 4u
+        .mode = Gow3Toggle::Disabled(1u << 20)   ? 1u
+                : Gow3Toggle::Disabled(1u << 21) ? 2u
+                : Gow3Toggle::Disabled(1u << 22) ? 3u
+                : Gow3Toggle::Disabled(1u << 23) ? 4u
                                                : 0u,
     };
     static u32 log_counter = 0;

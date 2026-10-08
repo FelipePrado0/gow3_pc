@@ -78,7 +78,7 @@ struct SwVertexRuntimeInfo {
     bool operator==(const SwVertexRuntimeInfo& other) const noexcept = default;
 };
 
-/// bbport: object motion vectors for temporal upscaling. G-buffer vertex shaders store their
+/// gow3: object motion vectors for temporal upscaling. G-buffer vertex shaders store their
 /// clip-space positions per referenced vertex and read the previous frame's; the
 /// fragment shader writes the screen-space difference to an extra color attachment.
 struct MotionVectors {
@@ -111,7 +111,7 @@ struct HwVertexRuntimeInfo {
     bool emulate_depth_negative_one_to_one{};
     bool clip_disable{};
     u32 user_clip_plane_mask{};
-    /// bbport: object motion vectors (G-buffer draws), see MotionVectors below.
+    /// gow3: object motion vectors (G-buffer draws), see MotionVectors below.
     bool motion_vectors{};
 
     bool operator==(const HwVertexRuntimeInfo& other) const noexcept = default;
@@ -227,7 +227,7 @@ struct HwFragmentRuntimeInfo {
     bool front_face_all_bits{false};
     bool dual_source_blending{false};
     bool clip_distance_emulation{false};
-    /// bbport: writes the object motion vector to MotionVectors::Output.
+    /// gow3: writes the object motion vector to MotionVectors::Output.
     bool motion_vectors{false};
 
     bool operator==(const HwFragmentRuntimeInfo& other) const noexcept {

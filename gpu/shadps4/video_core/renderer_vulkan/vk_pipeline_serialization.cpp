@@ -12,9 +12,9 @@
 
 namespace Serialization {
 /* You should increment versions below once corresponding serialization scheme is changed. */
-static constexpr u32 ShaderBinaryVersion = 7u; // bbport: interpolated integer fix (Pascal)
-static constexpr u32 ShaderMetaVersion = 7u; // bbport: ImageResource::needs_native
-static constexpr u32 PipelineKeyVersion = 5u; // bbport: Info layout (ImageResource::needs_native)
+static constexpr u32 ShaderBinaryVersion = 7u; // gow3: interpolated integer fix (Pascal)
+static constexpr u32 ShaderMetaVersion = 7u; // gow3: ImageResource::needs_native
+static constexpr u32 PipelineKeyVersion = 5u; // gow3: Info layout (ImageResource::needs_native)
 } // namespace Serialization
 
 namespace Vulkan {
@@ -335,7 +335,7 @@ void PipelineCache::WarmUp() {
         std::memcpy(&cached_profile, profile_data.data(), sizeof(cached_profile));
     }
     if (profile_data.size() != sizeof(Shader::Profile) || cached_profile != profile) {
-        // bbport: upstream closed the cache for the session here, so it was never rewritten
+        // gow3: upstream closed the cache for the session here, so it was never rewritten
         // and every later session compiled every shader again (stutters on each new area).
         // Start a fresh cache for this build and GPU instead.
         LOG_WARNING(Render, "Pipeline cache isn't compatible with current system: rebuilding it");

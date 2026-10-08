@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # tools/fsr4_optimize.sh: builds fixed/faster variants of FSR 4 v07 passes into
-# fsr4_shaders/opt/ (vk_fsr4.cpp prefers files there; BB_FSR4_OPT=0 uses the originals):
+# fsr4_shaders/opt/ (vk_fsr4.cpp prefers files there; GOW3_FSR4_OPT=0 uses the originals):
 #   *_post.spv    stores through shared memory, bit-exact, ~3.5x faster (fsr4_post_lds.pl);
 #   *_pass11.spv  no out-of-bounds writes (a data race at the 1080 tier; fsr4_pass11_guard.pl).
 # Each pass is decompiled (spirv-cross), rewritten and compiled again (glslang). Needs
 # spirv-cross and glslangValidator (shell.nix). tools/fsr4_verify.sh checks the results.
 set -euo pipefail
 cd -- "$(dirname -- "$0")/.."
-src=${BB_FSR4_DIR:-fsr4_shaders}
+src=${GOW3_FSR4_DIR:-fsr4_shaders}
 dest=$src/opt
 mkdir -p "$dest"
 tmp=$(mktemp -d)

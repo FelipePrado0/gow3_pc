@@ -252,7 +252,7 @@ public:
     Id vertex_index{};
     Id instance_id{};
     Id push_data_block{};
-    // bbport: object motion vectors (runtime_info.h, MotionVectors).
+    // gow3: object motion vectors (runtime_info.h, MotionVectors).
     Id motion_out_cur{};
     Id motion_out_prev{};
     Id motion_in_cur{};

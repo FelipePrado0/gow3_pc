@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# bbport: summarizes an fsr4cap capture (capture/trace.txt): per dispatch of one frame the shader
+# gow3: summarizes an fsr4cap capture (capture/trace.txt): per dispatch of one frame the shader
 # name (from the DXIL), groups, bindings and the first words of its constant buffer.
 #   analyze.py <capture dir> [frame] [words]
 import os, re, struct, sys

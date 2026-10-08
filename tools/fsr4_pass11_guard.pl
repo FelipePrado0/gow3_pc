@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 # fsr4_pass11_guard.pl < pass11.comp > pass11_guard.comp
-# bbport: fixes a data race in FSR 4 v07 model pass 11 (decoder, 1/4 -> 1/2 resolution).
+# gow3: fixes a data race in FSR 4 v07 model pass 11 (decoder, 1/4 -> 1/2 resolution).
 #
 # Each invocation is a pixel of its 1/4-resolution input and writes a 2x2 block of the 1/2-
 # resolution output. The dispatch rounds the width up to 64 invocations, and invocations past
@@ -25,7 +25,7 @@ $src = Fsr4SpirvCrossFixes::signed_unpack($src);
 my $guard = <<"GLSL";
 void main()
 {
-    // bbport: invocations past the input width would write the next row's first pixels.
+    // gow3: invocations past the input width would write the next row's first pixels.
     if (gl_GlobalInvocationID.x >= ${w}u || gl_GlobalInvocationID.y >= ${h}u)
     {
         return;

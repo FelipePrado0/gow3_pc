@@ -1,4 +1,4 @@
-// bbport: GPU-side assertion failures stop the port with exit code 23.
+// gow3: GPU-side assertion failures stop the port with exit code 23.
 #include <cstdio>
 #include <cstdlib>
 #include <stdexcept>

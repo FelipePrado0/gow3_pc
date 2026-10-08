@@ -4,14 +4,14 @@
 #include <assert.h>
 
 uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *nid) { (void)table; (void)count; (void)nid; return 0; }
-int bbgpu_text_input_begin(const char *text, const char *prompt) { (void)text; (void)prompt; return 0; }
-int bbgpu_text_input_poll(char *text, uint64_t size) { (void)text; (void)size; return 0; }
+int gow3gpu_text_input_begin(const char *text, const char *prompt) { (void)text; (void)prompt; return 0; }
+int gow3gpu_text_input_poll(char *text, uint64_t size) { (void)text; (void)size; return 0; }
 int64_t runtime_file_open(const char *path, int flags, int mode) { (void)path; (void)flags; (void)mode; return -1; }
 int64_t runtime_file_read(int fd, void *buffer, uint64_t size) { (void)fd; (void)buffer; (void)size; return -1; }
 int64_t runtime_file_close(int fd) { (void)fd; return 0; }
 static int choice_next=-1;
-int bbgpu_choice_begin(const char *title, const char *const *items, int count, int focus) { (void)title; (void)items; (void)focus; return count>0; }
-int bbgpu_choice_poll(void) { return choice_next; }
+int gow3gpu_choice_begin(const char *title, const char *const *items, int count, int focus) { (void)title; (void)items; (void)focus; return count>0; }
+int gow3gpu_choice_poll(void) { return choice_next; }
 int runtime_savedata_param(int32_t user, const char *dir, void *param) { (void)user; (void)dir; (void)param; return -1; }
 
 int main(void) {

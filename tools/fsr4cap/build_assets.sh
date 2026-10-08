@@ -19,8 +19,8 @@ loader=$(realpath "${2:?loader DLL}")
 work=$PWD/out/fsr4cap
 mkdir -p "$work"
 
-if [[ -z ${BB_FSR4CAP_SHELL:-} ]] && command -v nix-shell >/dev/null; then
-    exec env BB_FSR4CAP_SHELL=1 nix-shell -p pkgsCross.mingwW64.buildPackages.gcc cmake ninja gcc \
+if [[ -z ${GOW3_FSR4CAP_SHELL:-} ]] && command -v nix-shell >/dev/null; then
+    exec env GOW3_FSR4CAP_SHELL=1 nix-shell -p pkgsCross.mingwW64.buildPackages.gcc cmake ninja gcc \
         python3 spirv-tools umu-launcher git --run "bash $(printf %q "$0") $(printf %q "$upscaler") $(printf %q "$loader")"
 fi
 
@@ -58,4 +58,4 @@ if [[ ${VERIFY:-0} == 1 ]]; then
     ninja -C out/gpu fsr4-bench >/dev/null
     bash tools/fsr4cap/verify.sh "$work"
 fi
-echo "FSR 4.1.1 assets in $PWD/fsr4_411 (bbport.ini: upscaler=fsr411)"
+echo "FSR 4.1.1 assets in $PWD/fsr4_411 (gow3.ini: upscaler=fsr411)"

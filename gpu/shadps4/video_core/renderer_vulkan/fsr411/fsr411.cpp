@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: FSR 4.1.1 replay on Vulkan (fsr411.h). The frame is the DLL's 29 dispatches: SPD auto
+// gow3: FSR 4.1.1 replay on Vulkan (fsr411.h). The frame is the DLL's 29 dispatches: SPD auto
 // exposure, prepass, pass0_post, model passes 1..12 each followed by its _post pass (tensor border
 // clears), postpass, RCAS. The rules for group counts, the tensor size table and the constants
 // are the ones tools/fsr4cap/extract.py checks against the recorded D3D12 frames.
@@ -238,7 +238,7 @@ struct Upscaler::Impl {
     std::vector<uint8_t> initializer_data;
     uint64_t frame_index = 0;
     float previous_pre_exposure = 0.0f;
-    // BB_FSR4_PROFILE=1: GPU time per pass, read when a ring slot is reused, printed every 300 frames.
+    // GOW3_FSR4_PROFILE=1: GPU time per pass, read when a ring slot is reused, printed every 300 frames.
     VkQueryPool profile_pool = VK_NULL_HANDLE;
     float period_ns = 1.0f;
     std::array<uint32_t, kFramesInFlight> profile_count{};
@@ -255,7 +255,7 @@ struct Upscaler::Impl {
         push_descriptors = reinterpret_cast<PFN_vkCmdPushDescriptorSetKHR>(
             vkGetDeviceProcAddr(device, "vkCmdPushDescriptorSetKHR"));
         period_ns = props.limits.timestampPeriod;
-        const char* profile = std::getenv("BB_FSR4_PROFILE");
+        const char* profile = std::getenv("GOW3_FSR4_PROFILE");
         if (profile && profile[0] == '1') {
             VkQueryPoolCreateInfo qci{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
             qci.queryType = VK_QUERY_TYPE_TIMESTAMP;

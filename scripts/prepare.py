@@ -207,7 +207,7 @@ def prepare(game, out):
     out.mkdir(parents=True, exist_ok=True)
     # A deliberately small format, consumed by probe.c; no host struct packing.
     with (out / 'boot.bin').open('wb') as f:
-        f.write(struct.pack('<8sQQQQQQ', b'BBPROBE2', size, header[4], len(loads), len(relocs), len(names),
+        f.write(struct.pack('<8sQQQQQQ', b'G3PROBE2', size, header[4], len(loads), len(relocs), len(names),
                             int(libc_evidence['init_env_is_ret'])))
         for p in loads:
             f.write(struct.pack('<QQQ', p['vaddr'], p['memsz'], p['flags']))

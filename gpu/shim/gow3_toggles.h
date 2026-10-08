@@ -1,4 +1,4 @@
-// bbport: optimizations that can be switched off while the game runs (BB_TOGGLE_FILE,
+// gow3: optimizations that can be switched off while the game runs (GOW3_TOGGLE_FILE,
 // see runtime_memory.c), to find which one changes rendering without restarting.
 #pragma once
 #include <atomic>
@@ -7,18 +7,18 @@
 #include <cstdint>
 #include <cstdlib>
 #ifdef _WIN32
-// bbport (Windows): no signals. The loader's exception handler resumes the faulting thread
-// in bb_longjmp (src/compat_win.c: no unwinding through the faulting frames).
+// gow3 (Windows): no signals. The loader's exception handler resumes the faulting thread
+// in gow3_longjmp (src/compat_win.c: no unwinding through the faulting frames).
 typedef unsigned long long sigjmp_buf[32];
-extern "C" __attribute__((returns_twice)) int bb_setjmp(sigjmp_buf buffer);
-#define sigsetjmp(buffer, save) bb_setjmp(buffer)
+extern "C" __attribute__((returns_twice)) int gow3_setjmp(sigjmp_buf buffer);
+#define sigsetjmp(buffer, save) gow3_setjmp(buffer)
 #endif
 
 extern "C" std::uint64_t runtime_disabled_optimizations;
 /// Recovery point for speculative guest memory reads on this thread (runtime_memory.c).
 extern "C" __thread sigjmp_buf* runtime_fault_recover;
 
-namespace BbToggle {
+namespace Gow3Toggle {
 enum : std::uint64_t {
     RegionCache = 1,
     FetchShaderCache = 2,
@@ -74,13 +74,13 @@ enum : std::uint64_t {
 inline bool Disabled(std::uint64_t bit) {
     return (__atomic_load_n(&runtime_disabled_optimizations, __ATOMIC_RELAXED) & bit) != 0;
 }
-} // namespace BbToggle
+} // namespace Gow3Toggle
 
-namespace BbStats {
+namespace Gow3Stats {
 /// Guest writes caught by page protection, and pages currently left unprotected as hot.
 inline std::atomic<std::uint64_t> tracker_faults{0};
 inline std::atomic<std::int64_t> hot_pages{0};
-/// Stall diagnostics (BB_FRAME_STATS): per-frame deltas printed for frames over 40 ms.
+/// Stall diagnostics (GOW3_FRAME_STATS): per-frame deltas printed for frames over 40 ms.
 inline std::atomic<std::uint64_t> images_registered{0};
 inline std::atomic<std::uint64_t> image_upload_bytes{0};
 inline std::atomic<std::uint64_t> buffer_upload_bytes{0};
@@ -92,9 +92,9 @@ inline std::atomic<std::uint64_t> gpu_frames{0};
 inline std::atomic<std::uint64_t> t_resident{0}, t_protect{0}, t_image_create{0}, t_refresh{0},
     t_staging{0}, t_host_wait{0}, t_copy{0}, copy_bytes{0}, t_read_faults{0}, read_faults{0},
     t_write_faults{0}, t_copy_cpu{0}, copy_sys_us{0}, copy_minflt{0};
-/// Diagnostics are collected only with BB_FRAME_STATS=1.
+/// Diagnostics are collected only with GOW3_FRAME_STATS=1.
 inline const bool enabled = [] {
-    const char* env = std::getenv("BB_FRAME_STATS");
+    const char* env = std::getenv("GOW3_FRAME_STATS");
     return env && env[0] == '1';
 }();
 struct Timer {
@@ -136,4 +136,4 @@ inline std::atomic<std::uint64_t> gpu_signal_faults{0};
 /// Protection changes: calls and pages, those removing write access (TLB shootdowns) apart.
 inline std::atomic<std::uint64_t> protect_calls{0}, protect_pages{0}, protect_revoke_calls{0},
     protect_revoke_pages{0};
-} // namespace BbStats
+} // namespace Gow3Stats

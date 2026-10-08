@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: fsr4cap.exe — runs AMD's FSR 4 upscaler DLL through the FidelityFX API on D3D12 (under
+// gow3: fsr4cap.exe — runs AMD's FSR 4 upscaler DLL through the FidelityFX API on D3D12 (under
 // Wine/Proton with vkd3d-proton) on synthetic inputs, for recording what it does (docs/upscaler.md,
 // FSR 4.1.1). Step 1: list the upscaler versions, create a context with a chosen version, run
 // frames, read back the output.

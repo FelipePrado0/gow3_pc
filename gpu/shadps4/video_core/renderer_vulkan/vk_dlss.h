@@ -1,10 +1,10 @@
-// SPDX-FileCopyrightText: Copyright 2026 IFreemz, bbport contributors
+// SPDX-FileCopyrightText: Copyright 2026 IFreemz, gow3 contributors
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// bbport: NVIDIA DLSS Super Resolution through the optional bbport_dlss.dll bridge (gpu/
-// dlss_bridge, MIT), loaded at run time from next to bb-probe.exe together with NVIDIA's
+// gow3: NVIDIA DLSS Super Resolution through the optional gow3_dlss.dll bridge (gpu/
+// dlss_bridge, MIT), loaded at run time from next to gow3-probe.exe together with NVIDIA's
 // nvngx_dlss.dll. The port itself contains no NVIDIA code; without the DLLs, on other GPUs or
-// with BB_DLSS=0 nothing changes. Adapted from IFreemz/shadPS4-Bloodborne-DLSS-FSR
+// with GOW3_DLSS=0 nothing changes. Adapted from IFreemz/shadPS4-Bloodborne-DLSS-FSR
 // (vk_dlss_ngx).
 
 #pragma once
@@ -20,7 +20,7 @@ namespace Vulkan {
 
 class Dlss {
 public:
-    /// The process-wide instance, or null when the DLLs are absent or BB_DLSS=0.
+    /// The process-wide instance, or null when the DLLs are absent or GOW3_DLSS=0.
     static Dlss* Get();
     ~Dlss();
 

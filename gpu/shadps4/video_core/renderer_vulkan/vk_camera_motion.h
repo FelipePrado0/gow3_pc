@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: camera motion vectors for temporal upscaling (docs/upscaler.md). The scene constants
-// give the camera of each frame; the previous one is kept here. BB_DEBUG_MOTION=1 blends the
+// gow3: camera motion vectors for temporal upscaling (docs/upscaler.md). The scene constants
+// give the camera of each frame; the previous one is kept here. GOW3_DEBUG_MOTION=1 blends the
 // motion vectors as colors into the frame before it is copied to the display.
 
 #pragma once

@@ -135,7 +135,7 @@ struct Image {
 
 public:
     struct BackingImage;
-    // bbport: fields every binding of the image reads, together ahead of the large ImageInfo
+    // gow3: fields every binding of the image reads, together ahead of the large ImageInfo
     // (they were spread over several cache lines: one miss each per texture per draw).
     ImageFlagBits flags = ImageFlagBits::Dirty;
     struct {
@@ -151,13 +151,13 @@ public:
         u32 depth_target : 1;
         u32 vo_surface : 1;
     } usage{};
-    bool scene_proxy = false; ///< bbport: SceneTargets holds a reduced-size proxy of it
+    bool scene_proxy = false; ///< gow3: SceneTargets holds a reduced-size proxy of it
     VAddr track_addr = 0;
     VAddr track_addr_end = 0;
     VAddr guest_begin = 0; ///< info.guest_address
     VAddr guest_end = 0;   ///< info.guest_address + info.guest_size
     BackingImage* backing{};
-    /// bbport: gc tick of the last LRU touch; skips the LRU list (a cache miss) when current.
+    /// gow3: gc tick of the last LRU touch; skips the LRU list (a cache miss) when current.
     mutable u64 lru_touched_tick = ~0ULL;
     u64 tick_accessed_last{};
     ImageId depth_id{};
@@ -183,7 +183,7 @@ public:
         std::vector<State> subresource_states;
         boost::container::small_vector<ImageViewInfo, 4> image_view_infos;
         boost::container::small_vector<ImageViewId, 4> image_view_ids;
-        u32 last_view = 0; ///< bbport: index of the view FindView returned last
+        u32 last_view = 0; ///< gow3: index of the view FindView returned last
         u32 num_samples;
     };
     std::deque<BackingImage> backing_images;

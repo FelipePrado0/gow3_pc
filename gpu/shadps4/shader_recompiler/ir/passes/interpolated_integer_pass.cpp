@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: integer attributes passed as smooth float varyings (instanced objects can pass the
+// gow3: integer attributes passed as smooth float varyings (instanced objects can pass the
 // instance index this way, then truncate it with v_cvt_u32_f32). AMD hardware interpolates
 // three equal values exactly; NVIDIA does not, and a value such as 0.99999994 truncates to 0 on
 // part of the triangle: the object flickers with noise (coffins on the bridge, shadPS4 PR 1644).

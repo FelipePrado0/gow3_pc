@@ -144,13 +144,13 @@ class ModTests(unittest.TestCase):
         probe = self.root / 'probe'
         probe.write_text(f'#!{sys.executable}\nimport json,sys,os\nfrom pathlib import Path\n'
             'game=Path(sys.argv[sys.argv.index("--app0")+1])\n'
-            'Path(os.environ["BB_DATA_DIR"],"mounted.json").write_text(json.dumps({\n'
+            'Path(os.environ["GOW3_DATA_DIR"],"mounted.json").write_text(json.dumps({\n'
             '"path":str(game),"content":(game/"dvdroot_ps4/data/a.wad").read_text()}))\n'
             'sys.exit(7)\n')
         probe.chmod(0o755)
-        env = dict(os.environ, BB_PREBUILT='1', BB_PROBE=str(probe), PYTHON=str(python),
-            BB_DATA_DIR=str(self.root), BB_GAME_DIR=str(self.game),
-            BB_MODS_DIR=str(self.moddir), BB_MODS_ENABLED='1', BB_MODS_CONFIG=str(self.root/'mods.json'))
+        env = dict(os.environ, GOW3_PREBUILT='1', GOW3_PROBE=str(probe), PYTHON=str(python),
+            GOW3_DATA_DIR=str(self.root), GOW3_GAME_DIR=str(self.game),
+            GOW3_MODS_DIR=str(self.moddir), GOW3_MODS_ENABLED='1', GOW3_MODS_CONFIG=str(self.root/'mods.json'))
         result = subprocess.run(['bash', 'run.sh'], cwd=ROOT, env=env, capture_output=True, timeout=30)
         self.assertEqual(result.returncode, 7, result.stderr)
         mounted = json.loads((self.root / 'mounted.json').read_text())

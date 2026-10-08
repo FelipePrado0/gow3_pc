@@ -8,7 +8,7 @@
  *   IJKL d-pad (I up, K down, J left, L right). */
 #define _GNU_SOURCE
 #include "runtime.h"
-#include "gpu/bbgpu.h"
+#include "gpu/gow3gpu.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -99,7 +99,7 @@ static void sample_host(PadData *d) {
     d->connected=1; d->connected_count=connected_count ? connected_count : 1;
     d->timestamp=now_us();
     SDL_Gamepad *g=current_gamepad();
-    if (bbgpu_overlay_captures_input()) return; /* settings menu open: neutral input */
+    if (gow3gpu_overlay_captures_input()) return; /* settings menu open: neutral input */
     const bool *k=SDL_WasInit(SDL_INIT_VIDEO) ? SDL_GetKeyboardState(NULL) : NULL;
     if (g) {
         static const struct { SDL_GamepadButton sdl; uint32_t ps; } map[]={
@@ -153,17 +153,17 @@ static void sample_host(PadData *d) {
     key_axis(&d->right_y,k[SDL_SCANCODE_UP],k[SDL_SCANCODE_DOWN]);
 }
 
-/* BB_PAD_FILE=<file>: scripted input for automated runs. The file holds whitespace-separated
+/* GOW3_PAD_FILE=<file>: scripted input for automated runs. The file holds whitespace-separated
  * tokens, re-read when it changes: button names (cross circle square triangle l1 r1 l2 r2 l3 r3
  * options touchpad touchpad_left touchpad_right up down left right) are held while listed;
  * touchpad defaults to a left-side click; lx= ly= rx= ry= (0..255) override
  * the sticks. An empty file releases everything. */
 static struct { uint32_t buttons; int stick[4]; int touch_side; } injected={0,{-1,-1,-1,-1},-1};
-static int replay_armed;      /* 1 while a BB_PAD_REPLAY recording plays, 2 once it ended */
+static int replay_armed;      /* 1 while a GOW3_PAD_REPLAY recording plays, 2 once it ended */
 static uint64_t replay_start; /* 0: (re)start at the next sample */
 static void read_inject(void) {
     static const char *path; static int checked; static uint64_t last_check; static struct timespec mtime;
-    if (!checked) { path=getenv("BB_PAD_FILE"); checked=1; }
+    if (!checked) { path=getenv("GOW3_PAD_FILE"); checked=1; }
     if (!path || !*path) return;
     uint64_t now=now_us();
     if (now-last_check<20000) return;
@@ -192,7 +192,7 @@ static void read_inject(void) {
     for (int i=0;i<4;++i) injected.stick[i]=-1;
     char token[64];
     while (fscanf(f,"%63s",token)==1) {
-        if (!strcmp(token,"replay") && replay_armed!=1) { replay_armed=1; replay_start=0; } /* BB_PAD_REPLAY */
+        if (!strcmp(token,"replay") && replay_armed!=1) { replay_armed=1; replay_start=0; } /* GOW3_PAD_REPLAY */
         if (!strcmp(token,"touchpad_left") || !strcmp(token,"touchpad_right")) {
             injected.buttons|=BTN_TOUCHPAD;
             injected.touch_side=!strcmp(token,"touchpad_right");
@@ -204,9 +204,9 @@ static void read_inject(void) {
     printf("Runtime: pad file: buttons 0x%x sticks %d %d %d %d\n",injected.buttons,
            injected.stick[0],injected.stick[1],injected.stick[2],injected.stick[3]);
 }
-/* BB_PAD_RECORD=<file>: F9 starts and stops recording the pad state (gamepad or keyboard) with
- * the time since F9; BB_PAD_REPLAY=<file> plays such a recording back, started by the token
- * "replay" in BB_PAD_FILE (scripted tests repeat a route the player ran once). Lines: ms buttons
+/* GOW3_PAD_RECORD=<file>: F9 starts and stops recording the pad state (gamepad or keyboard) with
+ * the time since F9; GOW3_PAD_REPLAY=<file> plays such a recording back, started by the token
+ * "replay" in GOW3_PAD_FILE (scripted tests repeat a route the player ran once). Lines: ms buttons
  * lx ly rx ry l2 r2, written when the state changes. */
 typedef struct { uint32_t ms, buttons; uint8_t axes[4], l2, r2; } PadSample;
 static FILE *record_file;
@@ -214,7 +214,7 @@ static uint64_t record_start;
 static PadSample record_last;
 static void record_sample(const PadData *d) {
     static const char *path; static int checked, f9_was_down;
-    if (!checked) { path=getenv("BB_PAD_RECORD"); checked=1; }
+    if (!checked) { path=getenv("GOW3_PAD_RECORD"); checked=1; }
     if (!path || !*path || !sdl_ready) return;
     const bool *k=SDL_GetKeyboardState(NULL);
     const int f9=k && k[SDL_SCANCODE_F9];
@@ -246,7 +246,7 @@ static void replay_sample(PadData *d) {
         static int loaded;
         if (!loaded) {
             loaded=1;
-            const char *path=getenv("BB_PAD_REPLAY");
+            const char *path=getenv("GOW3_PAD_REPLAY");
             FILE *f=path ? fopen(path,"r") : NULL;
             PadSample s; unsigned v[8]; size_t cap=0;
             while (f && fscanf(f,"%u %u %u %u %u %u %u %u",&v[0],&v[1],&v[2],&v[3],&v[4],&v[5],&v[6],&v[7])==8) {
@@ -277,7 +277,7 @@ static void replay_sample(PadData *d) {
 static int hold_after_capture;
 static void sample(PadData *d) {
     sample_host(d);
-    if (bbgpu_overlay_captures_input()) { hold_after_capture=1; return; }
+    if (gow3gpu_overlay_captures_input()) { hold_after_capture=1; return; }
     record_sample(d);
     read_inject();
     replay_sample(d);

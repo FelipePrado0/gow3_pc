@@ -113,7 +113,7 @@ private:
     void DrawLastFrame();  // Used when there is no flip request
     void SubmitFlipInternal(VideoOutPort* port, s32 index, s64 flip_arg, bool is_eop = false);
     void PresentThread(std::stop_token token);
-    /// bbport: runs presenter work (acquire, blit, vkQueuePresent) off the vblank thread, in
+    /// gow3: runs presenter work (acquire, blit, vkQueuePresent) off the vblank thread, in
     /// order. Acquire and present block while the GPU is the bottleneck (much longer on NVIDIA);
     /// on the vblank thread that delayed the guest's vblank events and its frame timing jumped.
     /// The presenter's frame pool still bounds how far the GPU command thread runs ahead.
@@ -128,7 +128,7 @@ private:
     std::jthread swap_thread; ///< before present_thread: destroyed after it
 
     std::mutex mutex;
-    std::condition_variable request_cv; ///< bbport: a flip was queued (immediate flips)
+    std::condition_variable request_cv; ///< gow3: a flip was queued (immediate flips)
     VideoOutPort main_port{};
     std::jthread present_thread;
     std::queue<Request> requests;

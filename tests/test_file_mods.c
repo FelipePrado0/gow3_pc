@@ -9,7 +9,7 @@ uintptr_t runtime_lookup(const RuntimeExport *table,size_t n,const char *name) {
     return 0;
 }
 int main(void) {
-    char root[]="/tmp/bbport-mod-files-XXXXXX";
+    char root[]="/tmp/gow3-mod-files-XXXXXX";
     assert(mkdtemp(root));
     char game[512],user[512],source[512],link[512];
     snprintf(game,sizeof(game),"%s/game",root);

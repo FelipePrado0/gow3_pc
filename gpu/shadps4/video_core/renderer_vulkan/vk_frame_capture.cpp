@@ -52,7 +52,7 @@ void AddBuffers(Entry& entry) {
 bool pass_open = false;
 std::mutex display_mutex;
 std::vector<VAddr> display_buffers;
-// bbport: read on every draw; the game registers a handful of display buffers once.
+// gow3: read on every draw; the game registers a handful of display buffers once.
 std::array<std::atomic<VAddr>, 16> display_list{};
 std::atomic<u32> display_count{0};
 
@@ -84,7 +84,7 @@ void AddShader(Entry& entry, u64 hash) {
 }
 
 void Write(VAddr presented) {
-    const char* dir = std::getenv("BB_CAPTURE_DIR");
+    const char* dir = std::getenv("GOW3_CAPTURE_DIR");
     const std::string path =
         std::format("{}/frame_{}.txt", dir ? dir : ".", static_cast<long long>(std::time(nullptr)));
     FILE* f = std::fopen(path.c_str(), "w");
@@ -130,7 +130,7 @@ void Write(VAddr presented) {
 void FrameCapture::OnFlip(VAddr presented_address) {
     last_presented.store(presented_address, std::memory_order_relaxed);
     flips.fetch_add(1, std::memory_order_release);
-    static const char* trigger = std::getenv("BB_CAPTURE_TRIGGER");
+    static const char* trigger = std::getenv("GOW3_CAPTURE_TRIGGER");
     if (trigger && state.load(std::memory_order_relaxed) == Idle &&
         std::filesystem::exists(trigger)) {
         std::error_code ec;

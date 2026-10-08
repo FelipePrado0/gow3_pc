@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""God of War III (bbport) launcher for Windows (Tkinter; launcher/bbport_launcher.py is the Linux one).
+"""God of War III (gow3) launcher for Windows (Tkinter; launcher/gow3_launcher.py is the Linux one).
 
-Every setting of the port in one window: the game folder and saves, bbport.ini (upscaler,
+Every setting of the port in one window: the game folder and saves, gow3.ini (upscaler,
 preset, output, effects), start-up options passed to run.py as environment variables
 (frame rate, presentation, HDR, ...), mods, third-party patches and the FSR 4 assets.
-Launcher options live in %APPDATA%/bbport-launcher/settings.json.
+Launcher options live in %APPDATA%/gow3-launcher/settings.json.
 
 Frozen with PyInstaller (packaging/windows/package.sh) the same Bloodborne.exe also runs the
 game without the window (`--play`), run.py (`--run`) and the preparation scripts (`--script`),
@@ -31,8 +31,8 @@ import zipfile
 FROZEN = getattr(sys, 'frozen', False)
 PORT_DIR = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PORT_DIR / 'scripts'))
-DATA_DIR = Path(os.environ.get('BB_DATA_DIR', PORT_DIR))
-CONFIG_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'bbport-launcher'
+DATA_DIR = Path(os.environ.get('GOW3_DATA_DIR', PORT_DIR))
+CONFIG_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'gow3-launcher'
 CONFIG_FILE = CONFIG_DIR / 'settings.json'
 APP_NAME = 'God of War III'
 MAX_LOG_LINES = 6000
@@ -41,9 +41,9 @@ NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 VERSION = '1.5'
 RELEASES_API = 'https://api.github.com/repos/FelipePrado0/gow3_pc/releases/latest'
 RELEASES_PAGE = 'https://github.com/FelipePrado0/gow3_pc/releases/latest'
-UPDATE_DIR = Path(tempfile.gettempdir()) / 'bbport-update'
+UPDATE_DIR = Path(tempfile.gettempdir()) / 'gow3-update'
 # Never copied over an installation by an update (the package does not hold them either).
-USER_FILES = ('user', 'out', 'mods', 'bbport.ini', 'mods.json', 'patches.json', 'last_run.log')
+USER_FILES = ('user', 'out', 'mods', 'gow3.ini', 'mods.json', 'patches.json', 'last_run.log')
 
 
 # ---------------------------------------------------------------------------------------------
@@ -93,10 +93,10 @@ def run_command():
 
 # ---------------------------------------------------------------------------------------------
 # Languages: every text is written in English with the Russian next to it; the other
-# languages are in bbport_lang.py, keyed by the English text.
+# languages are in gow3_lang.py, keyed by the English text.
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import bbport_lang  # noqa: E402
+import gow3_lang  # noqa: E402
 
 LANG = 'en'
 
@@ -109,7 +109,7 @@ def _(en, ru=None):
         return _(en[:-len(WARN)], ru and ru.removesuffix(WARN)) + WARN
     if LANG == 'ru':
         return ru or en
-    return bbport_lang.table(LANG).get(en) or en
+    return gow3_lang.table(LANG).get(en) or en
 
 
 def windows_language():
@@ -117,18 +117,18 @@ def windows_language():
         primary = ctypes.windll.kernel32.GetUserDefaultUILanguage() & 0x3ff
     except (AttributeError, OSError):
         return 'en'
-    return bbport_lang.WINDOWS_LANGUAGES.get(primary, 'en')
+    return gow3_lang.WINDOWS_LANGUAGES.get(primary, 'en')
 
 
 # ---------------------------------------------------------------------------------------------
-# Settings. bbport.ini keys (the game reads them, the in-game menu edits them) and the
+# Settings. gow3.ini keys (the game reads them, the in-game menu edits them) and the
 # launcher's own settings.json (passed to run.py as environment variables).
 
 INI_FLAGS = {'sharpen', 'object_motion', 'show_fps'}
 INI_DEFAULTS = {'upscaler': 'fsr4', 'preset': '1', 'sharpen': '1', 'sharpness': '0.50',
                 'object_motion': '1', 'show_fps': '1', 'output_res': '1920x1080',
                 'live_resolution': 'auto'}
-APP_DEFAULTS = {'ui_language': '', 'game_dir': os.environ.get('BB_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623')), 'user_dir': '',
+APP_DEFAULTS = {'ui_language': '', 'game_dir': os.environ.get('GOW3_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623')), 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
                 'player_name': '', 'fullscreen': False, 'hdr': False, 'present_mode': 'Mailbox',
                 'frame_cap': '', 'draw_pipe': '', 'readbacks': '',
@@ -158,13 +158,13 @@ DRAW_PIPE = [('', ('Auto (8+ threads)', 'Авто (8+ потоков)')), ('1', 
              ('0', ('Off (more stable)', 'Выключен (стабильнее)'))]
 READBACKS = [('', ('Relaxed (default)', 'Relaxed (по умолчанию)')), ('0', ('Off', 'Выключены')),
              ('2', ('Precise',))]
-# Frame cap of the unlocked mode (BB_FPS_LIMIT). '' leaves the port's own: the display refresh,
+# Frame cap of the unlocked mode (GOW3_FPS_LIMIT). '' leaves the port's own: the display refresh,
 # at most 120, because the game's movement timing breaks above about 120 FPS.
 FRAME_CAPS = [('', ('Auto: display refresh, max 120 (recommended)', 'Авто: частота монитора, макс. 120 (рекомендуется)')),
               ('60', ('60',)), ('90', ('90',)), ('120', ('120',)), ('144', ('144  ⚠',)), ('165', ('165  ⚠',)),
               ('240', ('240  ⚠',)), ('0', ('No limit  ⚠', 'Без ограничения  ⚠'))]
 FRAMES_AHEAD = [('', ('1 (default)', '1 (по умолчанию)')), ('2', ('2',)), ('0', ('Unbounded', 'Без ограничения'))]
-UI_LANGUAGES = bbport_lang.LANGUAGE_NAMES
+UI_LANGUAGES = gow3_lang.LANGUAGE_NAMES
 
 FSR4_COMMIT = 'ae8d628fae208813172446d1e49ed94150b04658'
 FSR4_BASE = f'https://raw.githubusercontent.com/FireBurn/Q2RTX/{FSR4_COMMIT}/baseq2/fsr4_shaders'
@@ -195,7 +195,7 @@ def load_json(path, default):
 
 
 def ini_path():
-    return Path(os.environ.get('BB_CONFIG', DATA_DIR / 'bbport.ini'))
+    return Path(os.environ.get('GOW3_CONFIG', DATA_DIR / 'gow3.ini'))
 
 
 def load_ini():
@@ -223,7 +223,7 @@ def save_ini(values, lines):
                 continue
         out.append(line)
     if not lines:
-        out.append('# bbport settings (in-game menu: Insert / L3+R3)')
+        out.append('# gow3 settings (in-game menu: Insert / L3+R3)')
     out += [f'{key}={value}' for key, value in values.items() if key not in written]
     ini_path().write_text('\n'.join(out) + '\n', encoding='utf-8')
 
@@ -250,34 +250,34 @@ def game_profile_of(folder):
 
 def game_environment(s):
     env = dict(os.environ)
-    env['BB_GAME_DIR'] = s['game_dir']
+    env['GOW3_GAME_DIR'] = s['game_dir']
     # The launcher's patch selection is the whole list (run.py, patches.py).
     title_id, profile = game_profile_of(s['game_dir'])
     chosen = s.get('game_patches', {}).get(title_id) if title_id else None
     if profile and chosen is not None:
-        env['BB_PATCHES'] = ';'.join(chosen)
-        env['BB_PATCHES_ONLY'] = '1'
+        env['GOW3_PATCHES'] = ';'.join(chosen)
+        env['GOW3_PATCHES_ONLY'] = '1'
     if s['user_dir']:
-        env['BB_USER_DIR'] = s['user_dir']
-    env['BB_MODS_DIR'] = s['mods_dir'] or str(DATA_DIR / 'mods')
-    env['BB_MODS_CONFIG'] = str(DATA_DIR / 'mods.json')
-    env['BB_MODS_ENABLED'] = '1' if s['mods_enabled'] else '0'
-    env['BB_PATCHES_DIR'] = s['patches_dir'] or str(DATA_DIR / 'patches')
-    env['BB_PATCHES_CONFIG'] = str(DATA_DIR / 'patches.json')
-    env['BB_LANGUAGE'] = s['language']
+        env['GOW3_USER_DIR'] = s['user_dir']
+    env['GOW3_MODS_DIR'] = s['mods_dir'] or str(DATA_DIR / 'mods')
+    env['GOW3_MODS_CONFIG'] = str(DATA_DIR / 'mods.json')
+    env['GOW3_MODS_ENABLED'] = '1' if s['mods_enabled'] else '0'
+    env['GOW3_PATCHES_DIR'] = s['patches_dir'] or str(DATA_DIR / 'patches')
+    env['GOW3_PATCHES_CONFIG'] = str(DATA_DIR / 'patches.json')
+    env['GOW3_LANGUAGE'] = s['language']
     if str(s['player_name']).strip():
-        env['BB_USER_NAME'] = str(s['player_name']).strip()
-    env['BB_FULLSCREEN'] = '1' if s['fullscreen'] else '0'
-    env['BB_PRESENT_MODE'] = s['present_mode']
+        env['GOW3_USER_NAME'] = str(s['player_name']).strip()
+    env['GOW3_FULLSCREEN'] = '1' if s['fullscreen'] else '0'
+    env['GOW3_PRESENT_MODE'] = s['present_mode']
     if s['hdr']:
-        env['BB_HDR'] = '1'
+        env['GOW3_HDR'] = '1'
     if s.get('frame_cap', ''):
-        env['BB_FPS_LIMIT'] = s['frame_cap']
-    for key, name in (('draw_pipe', 'BB_DRAW_PIPE'), ('readbacks', 'BB_READBACKS'), ('frames_ahead', 'BB_FRAMES_AHEAD')):
+        env['GOW3_FPS_LIMIT'] = s['frame_cap']
+    for key, name in (('draw_pipe', 'GOW3_DRAW_PIPE'), ('readbacks', 'GOW3_READBACKS'), ('frames_ahead', 'GOW3_FRAMES_AHEAD')):
         if s[key]:
             env[name] = s[key]
-    for key, name in (('frame_stats', 'BB_FRAME_STATS'), ('gpu_profile', 'BB_GPU_PROFILE'),
-                      ('vk_validation', 'BB_VK_VALIDATION')):
+    for key, name in (('frame_stats', 'GOW3_FRAME_STATS'), ('gpu_profile', 'GOW3_GPU_PROFILE'),
+                      ('vk_validation', 'GOW3_VK_VALIDATION')):
         if s[key]:
             env[name] = '1'
     for item in str(s['extra_env']).split():
@@ -683,8 +683,8 @@ class Launcher:
     def build_graphics(self):
         ttk = self.ttk
         f = self.scrolled_page('graphics', _('Graphics', 'Графика'),
-                               _('Stored in bbport.ini; the in-game menu (Insert or L3+R3) changes the same values.',
-                                 'Хранится в bbport.ini; в игре меняется через меню (Insert или L3+R3).'))
+                               _('Stored in gow3.ini; the in-game menu (Insert or L3+R3) changes the same values.',
+                                 'Хранится в gow3.ini; в игре меняется через меню (Insert или L3+R3).'))
         self.section(f, _('Upscaling', 'Апскейлинг'), top=4)
         self.row(f, _('Upscaler', 'Апскейлер'), self.choice(f, 'upscaler', 'ini', UPSCALERS),
                  _("Temporal upscaling with the game's own motion vectors. FSR 4 needs its assets (below) and "
@@ -869,7 +869,7 @@ class Launcher:
         holder.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(10, 0))
         ttk.Button(holder, text=_('Desktop shortcut', 'Ярлык на рабочем столе'), command=self.shortcut).pack(side='left')
         ttk.Button(holder, text=_('Port folder', 'Папка порта'), command=lambda: self.open_path(DATA_DIR)).pack(side='left', padx=6)
-        ttk.Button(holder, text='bbport.ini', command=lambda: self.open_path(ini_path())).pack(side='left')
+        ttk.Button(holder, text='gow3.ini', command=lambda: self.open_path(ini_path())).pack(side='left')
         holder = ttk.Frame(f)
         holder.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(10, 0))
         ttk.Button(holder, text=_('Check for updates', 'Проверить обновления'),
@@ -962,9 +962,9 @@ class Launcher:
         return _('{} · {} more patches', '{} · ещё патчей: {}').format(resolution, others)
 
     def detect_gpu(self):
-        exe = PORT_DIR / 'bin' / 'bb-gpu-capabilities.exe'
+        exe = PORT_DIR / 'bin' / 'gow3-gpu-capabilities.exe'
         if not exe.is_file():
-            exe = PORT_DIR / 'out' / 'bb-gpu-capabilities.exe'
+            exe = PORT_DIR / 'out' / 'gow3-gpu-capabilities.exe'
         env = dict(os.environ)
         if not (exe.parent / 'SDL3.dll').is_file():
             clang64 = Path(os.environ.get('MSYS2_ROOT', r'C:\msys64')) / 'clang64' / 'bin'
@@ -1076,7 +1076,7 @@ class Launcher:
             self.refresh_lists()
 
     def collect(self):
-        """Writes settings.json, bbport.ini, mods.json and patches.json."""
+        """Writes settings.json, gow3.ini, mods.json and patches.json."""
         self.store_game_patches()
         for key, var in self.vars.items():
             try:
@@ -1260,7 +1260,7 @@ class Launcher:
                 shutil.rmtree(UPDATE_DIR, ignore_errors=True)
                 UPDATE_DIR.mkdir(parents=True, exist_ok=True)
                 archive = UPDATE_DIR / 'update.zip'
-                request = urllib.request.Request(url, headers={'User-Agent': 'bbport-launcher'})
+                request = urllib.request.Request(url, headers={'User-Agent': 'gow3-launcher'})
                 with urllib.request.urlopen(request, timeout=60) as response, open(archive, 'wb') as out:
                     total, done, shown = int(response.headers.get('Content-Length') or 0), 0, -1
                     while chunk := response.read(1 << 20):
@@ -1327,7 +1327,7 @@ class Launcher:
 
 
 class GameJob:
-    """A Windows job holding run.py and everything it starts: bb-probe.exe and the launches made
+    """A Windows job holding run.py and everything it starts: gow3-probe.exe and the launches made
     by the in-game restart (no longer descendants of the first process)."""
 
     def __init__(self, process):
@@ -1374,7 +1374,7 @@ def version_tuple(text):
 def latest_release():
     """(version, zip URL, page URL) of the newest GitHub release."""
     request = urllib.request.Request(RELEASES_API, headers={'Accept': 'application/vnd.github+json',
-                                                            'User-Agent': 'bbport-launcher'})
+                                                            'User-Agent': 'gow3-launcher'})
     with urllib.request.urlopen(request, timeout=15) as response:
         release = json.load(response)
     version = '.'.join(re.findall(r'\d+', release['tag_name']))

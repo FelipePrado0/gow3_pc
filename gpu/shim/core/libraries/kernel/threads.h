@@ -1,4 +1,4 @@
-// bbport: host threads that may call guest code (AvPlayer allocator callbacks).
+// gow3: host threads that may call guest code (AvPlayer allocator callbacks).
 // Each thread gets a guest TCB (GS base, TLS) from the C runtime before running.
 #pragma once
 #include <atomic>
@@ -21,13 +21,13 @@ public:
     void Run(std::function<void(std::stop_token)>&& func) {
         finished = std::make_shared<std::atomic<bool>>(false);
         thread = std::jthread([func = std::move(func), done = finished](std::stop_token stop) {
-            runtime_thread_attach_host("bb:hle");
+            runtime_thread_attach_host("gow3:hle");
             func(stop);
             done->store(true);
         });
     }
     // A thread may stop its own Thread object (AvPlayer does); it detaches instead of joining.
-    // bbport: these are called from guest code, which a C++ exception cannot unwind: a failed
+    // gow3: these are called from guest code, which a C++ exception cannot unwind: a failed
     // join is logged and the thread detached instead.
     void Join() {
         if (!thread.joinable()) return;

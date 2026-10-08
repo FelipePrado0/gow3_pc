@@ -23,7 +23,7 @@ void LowerWave64BallotPass(IR::Program& program, const RuntimeInfo& runtime_info
 void LowerHardwareIntrinsics(IR::Program& program);
 void LowerPhisToRegsPass(IR::Program& program);
 void DeadCodeEliminationPass(IR::Program& program);
-/// bbport: exact integers from interpolated float varyings on GPUs without manual interpolation.
+/// gow3: exact integers from interpolated float varyings on GPUs without manual interpolation.
 void InterpolatedIntegerPass(IR::Program& program);
 void ConstantPropagationPass(IR::BlockList& program);
 void FlattenExtendedUserdataPass(IR::Program& program);

@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
     const int live_mode = argc > 1 && !strcmp(argv[1], "--live-resolution");
     const VkApplicationInfo app = {
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-        .pApplicationName = "bbport scene scaling probe",
+        .pApplicationName = "gow3 scene scaling probe",
         .apiVersion = VK_API_VERSION_1_3,
     };
     const VkInstanceCreateInfo create = {
@@ -93,13 +93,13 @@ int main(int argc, char **argv) {
         vkDestroyInstance(instance, NULL);
         return 1;
     }
-    /* Match vk_instance.cpp's default ranking or its explicit BB_GPU_ID index. */
+    /* Match vk_instance.cpp's default ranking or its explicit GOW3_GPU_ID index. */
     VkPhysicalDevice selected = devices[0];
-    const char *gpu_id = getenv("BB_GPU_ID");
+    const char *gpu_id = getenv("GOW3_GPU_ID");
     if (gpu_id && atoi(gpu_id) >= 0) {
         const unsigned long index = strtoul(gpu_id, NULL, 10);
         if (index >= count) {
-            fputs("GPU scene scaling: BB_GPU_ID is outside the device list\n", stderr);
+            fputs("GPU scene scaling: GOW3_GPU_ID is outside the device list\n", stderr);
             free(devices);
             vkDestroyInstance(instance, NULL);
             return 1;

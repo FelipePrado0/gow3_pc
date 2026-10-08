@@ -2,7 +2,7 @@ Vendored from https://github.com/shadps4-emu/shadPS4 commit b4e7ae776071ceb1dd35
 Directories: src/video_core, src/shader_recompiler, src/common, src/core/libraries/{gnmdriver,videoout}, externals/gcn, externals/sirit, externals/half.
 Also: src/core/libraries/kernel/{orbis_error,posix_error,time,process,equeue}.h, equeue.cpp, src/core/libraries/error_codes.h, src/core/platform.h, src/core/libraries/system/{userservice,systemservice}.h.
 Also: src/core/libraries/avplayer (without the handle streamer), src/core/libraries/videodec/video_utils.{h,cpp}.
-Local changes are marked with "bbport:" comments.
+Local changes are marked with "gow3:" comments.
 Backported from upstream after b4e7ae7 (2026-10-02), recompiler correctness fixes only:
   233562929 V_INTERP_MOV_F32 P10/P20 selectors (#5087), d96278e1e compute shader floating-point
   mode (#5126), e518a6515 S_SUBB_U32 SCC wrap (#5031), 282e5c792 S_ADDC_U32 SCC carry-out (#5030),

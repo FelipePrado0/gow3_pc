@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# bbport: builds the FSR 4.1.1 asset set for vk_fsr411.cpp from fsr4cap captures
+# gow3: builds the FSR 4.1.1 asset set for vk_fsr411.cpp from fsr4cap captures
 # (capture_<render>_<output> directories written by capture_all.sh).
 #
 #   extract.py <dxil-spirv> <capture root> <output dir>
