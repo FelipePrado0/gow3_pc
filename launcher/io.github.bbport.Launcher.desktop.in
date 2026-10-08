@@ -1,7 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Bloodborne
-Comment=Native Bloodborne port launcher
-Exec=@LAUNCHER@
-Icon=applications-games
-Categories=Game;

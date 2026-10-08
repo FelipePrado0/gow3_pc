@@ -172,7 +172,7 @@ void Menu() {
     // bbport: the game's own title (param.sfo), not a fixed one.
     static const std::string heading = [] {
         const std::string_view title = Common::ElfInfo::Instance().Title();
-        return std::string(title.empty() ? "Bloodborne" : title) + " — настройки  (Insert / L3+R3)";
+        return std::string(title.empty() ? "God of War III" : title) + " — настройки  (Insert / L3+R3)";
     }();
     if (!ImGui::Begin(heading.c_str(), &keep_open,
                       ImGuiWindowFlags_NoCollapse)) {
@@ -355,37 +355,9 @@ void Menu() {
          "остаётся в 1080p — на Steam Deck и старых видеокартах это заметно медленнее. "
          "Выключена: всё рисуется в разрешении пресета, смена — через перезапуск. Авто включает "
          "её на мощных дискретных видеокартах. Применяется после перезапуска игры.");
-    ImGui::SeparatorText("Эффекты игры (после перезапуска)");
-    static const char* lods[] = {"Максимальная (-2)", "Как в игре", "Ниже (1)", "Минимальная (2)"};
-    static constexpr int lod_values[] = {-2, 0, 1, 2};
-    int lod_index = 1;
-    for (int i = 0; i < 4; ++i) {
-        if (lod_values[i] == s.model_lod) lod_index = i;
-    }
-    if (ImGui::BeginCombo("Детализация моделей", lods[lod_index])) {
-        for (int i = 0; i < 4; ++i) {
-            if (ImGui::Selectable(lods[i], i == lod_index)) {
-                Store(s.model_lod, lod_values[i], true);
-            }
-        }
-        ImGui::EndCombo();
-    }
-    for (int e = 0; e < BbSettings::EffectCount; ++e) {
-        Checkbox(BbSettings::Effects[e].label, s.effects[e]);
-    }
-    Hint("Эффекты включаются и выключаются патчами игры при запуске (patches/Bloodborne.xml). "
-         "Размытие в движении и тени от динамических источников заметно нагружают GPU.");
-    Hint("Свободная камера: удерживайте Cross и нажимайте L3 (клавиатура: Space + Z). "
-         "Debug menu: левый touchpad / Tab. Нужны DbgFont14h.ccm и DbgFont14h.tpf "
-         "в dvdroot_ps4/font из мода Nexus #253. Правый touchpad: Backspace.");
-
     bool restart = s.object_motion != s.startup_object_motion ||
-                   s.model_lod != s.startup_model_lod ||
                    s.live_resolution != s.startup_live_resolution ||
                    BbSettings::ResolutionNeedsRestart();
-    for (int e = 0; e < BbSettings::EffectCount; ++e) {
-        restart |= s.effects[e] != s.startup_effects[e];
-    }
     if (restart) {
         ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f),
                            "Изменения применятся после перезапуска игры");

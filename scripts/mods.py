@@ -9,12 +9,6 @@ import shutil
 import sys
 import tempfile
 
-# Top-level folders of the game's dvdroot_ps4: a mod made of these is a dvdroot_ps4 itself.
-GAME_FOLDERS = {'action', 'chr', 'event', 'facegen', 'font', 'map', 'menu', 'movie', 'msg', 'mtd',
-                'obj', 'other', 'param', 'paramdef', 'parts', 'remo', 'script', 'sfx', 'shader',
-                'sound'}
-
-
 def child(folder, name):
     """`name` inside `folder`, matching an existing entry case-insensitively (mods made on
     Windows often differ from the game's lower-case names)."""
@@ -28,21 +22,18 @@ def child(folder, name):
 def content_root(folder):
     """(root, prefix): where a mod's files are and the game path they go to, or None.
 
-    Accepted layouts: <mod>/dvdroot_ps4, <mod>/app0/dvdroot_ps4, <mod>/CUSA03173/dvdroot_ps4,
-    one wrapper folder around any of these (an archive extracted into a folder of its name), and
-    the game's folders without dvdroot_ps4 (<mod>/chr, <mod>/parts, ...)."""
+    Accepted layouts: <mod>/dvdroot_ps4, <mod>/app0/dvdroot_ps4 and one wrapper folder around
+    either (an archive extracted into a folder of its name)."""
     folder = Path(folder)
     if not folder.is_dir():
         return None
-    for wrapper in ('', 'app0', 'CUSA03173'):
+    for wrapper in ('', 'app0'):
         base = child(folder, wrapper) if wrapper else folder
         dvdroot = child(base, 'dvdroot_ps4')
         if dvdroot.is_dir():
             return base, ''
     entries = [e for e in folder.iterdir() if not e.name.startswith('.')]
     folders = [e for e in entries if e.is_dir()]
-    if folders and all(e.name.casefold() in GAME_FOLDERS for e in folders):
-        return folder, 'dvdroot_ps4'
     if len(folders) == 1 and not [e for e in entries if e.is_file() and
                                   e.suffix.casefold() not in ('.txt', '.md', '.jpg', '.png', '.ini')]:
         return content_root(folders[0])

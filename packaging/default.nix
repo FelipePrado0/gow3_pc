@@ -106,16 +106,8 @@ pkgs.stdenv.mkDerivation {
     mkdir -p $out/libexec
     gcc -O2 -Wall -Werror -static -L${pkgs.glibc.static}/lib -DTARGET="\"$out/libexec/bbport\"" \
       ${./bbport-entry.c} -o $out/bin/bbport
-    makeShellWrapper ${python}/bin/python3 $out/libexec/bbport \
-      "''${gappsWrapperArgs[@]}" \
-      ${common}      --add-flags "$out/share/bbport/launcher/bbport_vulkan.py ${python}/bin/python3 $out/share/bbport/launcher/bbport_launcher.py" \
-      --set BB_PREBUILT 1 \
-      --set PYTHON ${pkgs.python3}/bin/python3 \
-      --set BB_BUNDLED_VK_DRIVER_FILES ${icds} \
-      --prefix PATH : ${lib.makeBinPath [ pkgs.bash pkgs.coreutils pkgs.util-linux ]} \
-      --run 'export BB_DATA_DIR=''${BB_DATA_DIR:-''${XDG_DATA_HOME:-$HOME/.local/share}/bbport}; mkdir -p "$BB_DATA_DIR"'
-    # The game alone, without the launcher (settings from the data directory's bbport.ini).
-    makeShellWrapper ${pkgs.python3}/bin/python3 $out/bin/bbport-game \
+    # The game (settings from the data directory's bbport.ini).
+    makeShellWrapper ${pkgs.python3}/bin/python3 $out/libexec/bbport \
       ${common}      --add-flags "$out/share/bbport/launcher/bbport_vulkan.py ${pkgs.bash}/bin/bash $out/share/bbport/run.sh" \
       --set BB_PREBUILT 1 \
       --set PYTHON ${pkgs.python3}/bin/python3 \

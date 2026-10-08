@@ -7,7 +7,7 @@
     fprintf(stderr, "Vulkan: %s returned %d\n", #call, r); exit(1); } } while (0)
 
 int vulkan_smoke(void) {
-    VkApplicationInfo app = {.sType=VK_STRUCTURE_TYPE_APPLICATION_INFO, .pApplicationName="Bloodborne native probe", .apiVersion=VK_API_VERSION_1_0};
+    VkApplicationInfo app = {.sType=VK_STRUCTURE_TYPE_APPLICATION_INFO, .pApplicationName="God of War III native probe", .apiVersion=VK_API_VERSION_1_0};
     VkInstanceCreateInfo ici = {.sType=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, .pApplicationInfo=&app};
     VkInstance instance; CHECK(vkCreateInstance(&ici, NULL, &instance));
     uint32_t count = 0; CHECK(vkEnumeratePhysicalDevices(instance, &count, NULL));

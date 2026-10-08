@@ -70,39 +70,8 @@ static char memory_path[720];
 static uint64_t memory_size;
 static size_t mounts_done, memory_writes;
 
-/* Bloodborne "sound hack" (rainvmaker, from the Diegolix29 shadPS4 fork): the game data
- * save carries a flag at 0x204E of userdata0010; with it clear, parts of the game's audio
- * (e.g. the player's weapon sounds) never play. It is set before the game reads the save.
- * BB_SOUND_HACK=0 leaves saves untouched. */
-static void bloodborne_sound_hack(void) {
-    static const char *const ids[]={"CUSA00207","CUSA00208","CUSA00299","CUSA00900","CUSA01363","CUSA03014","CUSA03023","CUSA03173"};
-    const char *env=getenv("BB_SOUND_HACK");
-    if (env && env[0]=='0') return;
-    int bloodborne=0;
-    for (size_t i=0;i<sizeof(ids)/sizeof(*ids);++i) if (!strcmp(title_id,ids[i])) bloodborne=1;
-    if (!bloodborne) return;
-    char users[700];
-    snprintf(users,sizeof(users),"%s/savedata",runtime_file_user_dir());
-    DIR *dir=opendir(users);
-    if (!dir) return;
-    for (struct dirent *e; (e=readdir(dir));) {
-        if (e->d_name[0]=='.') continue;
-        char path[1100];
-        snprintf(path,sizeof(path),"%s/%s/%s/SPRJ0005/userdata0010",users,e->d_name,title_id);
-        FILE *f=fopen(path,"r+b");
-        if (!f) continue;
-        int old=fseek(f,0x204E,SEEK_SET) ? EOF : fgetc(f);
-        if (old!=EOF && old!=1 && !fseek(f,0x204E,SEEK_SET)) {
-            fputc(1,f);
-            printf("Runtime: Bloodborne sound flag set in %s (was %d)\n",path,old);
-        }
-        fclose(f);
-    }
-    closedir(dir);
-}
 void runtime_savedata_configure(const char *title) {
     if (title && *title) snprintf(title_id,sizeof(title_id),"%s",title);
-    bloodborne_sound_hack();
 }
 
 static int make_dirs(const char *path) {

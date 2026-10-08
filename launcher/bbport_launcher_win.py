@@ -34,7 +34,6 @@ sys.path.insert(0, str(PORT_DIR / 'scripts'))
 DATA_DIR = Path(os.environ.get('BB_DATA_DIR', PORT_DIR))
 CONFIG_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'bbport-launcher'
 CONFIG_FILE = CONFIG_DIR / 'settings.json'
-PATCH_VERSION = '01.09'
 APP_NAME = 'God of War III'
 MAX_LOG_LINES = 6000
 NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
@@ -125,47 +124,14 @@ def windows_language():
 # Settings. bbport.ini keys (the game reads them, the in-game menu edits them) and the
 # launcher's own settings.json (passed to run.py as environment variables).
 
-EFFECTS = [
-    ('effect_chromatic_aberration', ('Chromatic aberration', 'Хроматическая аберрация'), True),
-    ('effect_dof', ('Depth of field', 'Глубина резкости (DoF)'), True),
-    ('effect_motion_blur', ('Motion blur', 'Размытие в движении'), True),
-    ('effect_ssao', ('Ambient occlusion (SSAO)', 'Затенение SSAO'), True),
-    ('effect_game_aa', ("The game's own anti-aliasing", 'Собственное сглаживание игры'), True),
-    ('effect_dynamic_shadows', ('Shadows of dynamic lights', 'Тени от динамических источников'), True),
-    ('effect_ssr', ('Screen-space reflections (not in the original)', 'Отражения SSR (не было в игре)'), False),
-]
-EXTRAS = [
-    ('skip_intro', ('Skip the intro logos and movie', 'Пропуск заставок при запуске'), False),
-    ('debug_camera', ('Free camera (hold Cross + L3; keyboard Space + Z)', 'Свободная камера (Cross + L3 / Space + Z)'), False),
-    ('debug_menu', ('Game debug menu (left touchpad / Tab; needs the debug fonts)',
-                    'Debug menu (левый touchpad / Tab; нужны шрифты)'), False),
-]
-# Cheats and gameplay tweaks: game patches for 1.09 (patches.py EFFECTS), off by default.
-CHEATS = [
-    ('cheat_no_death', ('Never die (health stops at 1 HP)', 'Бессмертие (здоровье не ниже 1 HP)'), False),
-    ('cheat_stealth', ('Enemies do not see you (unless attacked)', 'Враги не видят вас (пока не атакованы)'), False),
-    ('cheat_silent', ('Enemies do not hear you', 'Враги не слышат вас'), False),
-    ('cheat_rally_no_decay', ('Rally never fades', 'Rally не угасает'), False),
-    ('cheat_enemy_control', ('Control the targeted enemy (R3; L3 to go back; not with the free camera)',
-                             'Управление выбранным врагом (R3; L3 — назад; не вместе со свободной камерой)'), False),
-]
-TWEAKS = [
-    ('tweak_no_rally', ('No Rally (hits do not give health back)', 'Без Rally (удары не возвращают здоровье)'), False),
-    ('tweak_camera_distance', ('Camera further from the character', 'Камера дальше от персонажа'), False),
-    ('tweak_no_camera_rotation', ('No camera auto-rotation while moving', 'Без автоповорота камеры при движении'), False),
-    ('tweak_easy_run', ('Run with less stick tilt (about 70%)', 'Бег при меньшем наклоне стика (около 70%)'), False),
-    ('tweak_ragdoll', ('Dark Souls-style ragdoll physics (corpses fly further)',
-                       'Физика тел как в Dark Souls (тела отлетают дальше)'), False),
-]
-INI_FLAGS = {'sharpen', 'object_motion', 'show_fps', *(k for k, _t, _o in EFFECTS + EXTRAS + CHEATS + TWEAKS)}
+INI_FLAGS = {'sharpen', 'object_motion', 'show_fps'}
 INI_DEFAULTS = {'upscaler': 'fsr4', 'preset': '1', 'sharpen': '1', 'sharpness': '0.50',
-                'object_motion': '1', 'show_fps': '1', 'output_res': '1920x1080', 'model_lod': '0',
-                'live_resolution': 'auto',
-                **{key: '1' if on else '0' for key, _t, on in EFFECTS + EXTRAS + CHEATS + TWEAKS}}
+                'object_motion': '1', 'show_fps': '1', 'output_res': '1920x1080',
+                'live_resolution': 'auto'}
 APP_DEFAULTS = {'ui_language': '', 'game_dir': os.environ.get('BB_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623')), 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
                 'player_name': '', 'fullscreen': False, 'hdr': False, 'present_mode': 'Mailbox',
-                'fps_mode': 'uncap', 'frame_cap': '', 'draw_pipe': '', 'readbacks': '',
+                'frame_cap': '', 'draw_pipe': '', 'readbacks': '',
                 'frames_ahead': '', 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'extra_env': '', 'close_on_play': False,
                 'check_updates': False, 'game_patches': {}}
@@ -182,10 +148,6 @@ OUTPUTS = [('1280x720', ('1280 × 720 (Steam Deck)',)), ('1920x1080', ('1920 × 
            ('2560x1440', ('2560 × 1440',)), ('3840x2160', ('3840 × 2160 (4K)',))]
 LIVE = [('auto', ('Auto (by graphics card)', 'Авто (по видеокарте)')), ('0', ('Off (faster)', 'Выключена (быстрее)')),
         ('1', ('On (change without restarting)', 'Включена (без перезапуска)'))]
-LODS = [('0', ('As in the game', 'Как в игре')), ('-2', ('Highest (−2)', 'Максимальная (−2)')),
-        ('1', ('Lower (1)', 'Ниже (1)')), ('2', ('Lowest (2)', 'Минимальная (2)'))]
-FPS_MODES = [('uncap', ('Unlocked (frame-time patch)', 'Без ограничения (патч)')), ('60', ('60 FPS',)),
-             ('90', ('90 FPS',)), ('30', ('30 FPS (as on PS4)', '30 FPS (как на PS4)'))]
 PRESENT_MODES = [('Mailbox', ('Mailbox (low latency, no tearing)', 'Mailbox (без разрывов)')),
                  ('Fifo', ('FIFO (VSync)',)), ('FifoRelaxed', ('FIFO Relaxed',)),
                  ('Immediate', ('Immediate (tearing)', 'Immediate (с разрывами)'))]
@@ -286,19 +248,13 @@ def game_profile_of(folder):
     return title_id, game_profile(title_id)
 
 
-def is_bloodborne(folder):
-    from patches import BLOODBORNE_IDS
-    title_id, profile = game_profile_of(folder)
-    return profile is None or profile[0] is BLOODBORNE_IDS
-
-
 def game_environment(s):
     env = dict(os.environ)
     env['BB_GAME_DIR'] = s['game_dir']
-    # Other games: the launcher's patch selection is the whole list (run.py, patches.py).
+    # The launcher's patch selection is the whole list (run.py, patches.py).
     title_id, profile = game_profile_of(s['game_dir'])
     chosen = s.get('game_patches', {}).get(title_id) if title_id else None
-    if profile and not is_bloodborne(s['game_dir']) and chosen is not None:
+    if profile and chosen is not None:
         env['BB_PATCHES'] = ';'.join(chosen)
         env['BB_PATCHES_ONLY'] = '1'
     if s['user_dir']:
@@ -315,7 +271,6 @@ def game_environment(s):
     env['BB_PRESENT_MODE'] = s['present_mode']
     if s['hdr']:
         env['BB_HDR'] = '1'
-    env['BB_FPS'] = s['fps_mode']
     if s.get('frame_cap', ''):
         env['BB_FPS_LIMIT'] = s['frame_cap']
     for key, name in (('draw_pipe', 'BB_DRAW_PIPE'), ('readbacks', 'BB_READBACKS'), ('frames_ahead', 'BB_FRAMES_AHEAD')):
@@ -588,7 +543,7 @@ class Launcher:
         for name, title in (('play', _('Play', 'Играть')), ('graphics', _('Graphics', 'Графика')),
                             ('display', _('Display & FPS', 'Экран и FPS')), ('game', _('Game & effects', 'Игра и эффекты')),
                             ('gamepatches', _('Game patches', 'Патчи игры')),
-                            ('cheats', _('Cheats', 'Читы')), ('mods', _('Mods & patches', 'Моды и патчи')),
+                            ('mods', _('Mods & patches', 'Моды и патчи')),
                             ('advanced', _('Advanced', 'Дополнительно')),
                             ('log', _('Log', 'Журнал'))):
             item = tk.Label(side, text='    ' + title, bg=BG, fg=TEXT, anchor='w', font=('Segoe UI', 11),
@@ -598,6 +553,9 @@ class Launcher:
             item.bind('<Enter>', lambda _e, n=name: n != self.current_page and self.nav[n].configure(bg='#1a1613'))
             item.bind('<Leave>', lambda _e, n=name: n != self.current_page and self.nav[n].configure(bg=BG))
             self.nav[name] = item
+        # The temporal upscalers are not calibrated for this game yet (run.py turns them off):
+        # their page stays in the code, out of the menu.
+        self.nav['graphics'].pack_forget()
         tk.Frame(side, bg=BG).pack(fill='both', expand=True)
         self.update_box = None
         self.side_note = tk.Label(side, text=_('In the game: Insert or L3+R3\nopens the port\'s menu.',
@@ -624,7 +582,6 @@ class Launcher:
         self.build_graphics()
         self.build_display()
         self.build_game()
-        self.build_cheats()
         self.build_game_patches()
         self.build_mods()
         self.build_advanced()
@@ -669,21 +626,15 @@ class Launcher:
         info.grid(row=0, column=0, sticky='nw', padx=(0, 24))
         ttk.Label(info, text=_('Ready check', 'Проверка'), style='Section.TLabel').pack(anchor='w', pady=(0, 6))
         self.checks = {}
-        for key in ('game', 'saves', 'gpu', 'fsr4'):
+        for key in ('game', 'saves', 'gpu'):
             self.checks[key] = ttk.Label(info, text='', justify='left', wraplength=self.px(440))
             self.checks[key].pack(anchor='w', pady=3)
         quick = ttk.Frame(body)
         quick.grid(row=0, column=1, sticky='nw')
         ttk.Label(quick, text=_('Quick settings', 'Основное'), style='Section.TLabel').grid(
             row=0, column=0, columnspan=2, sticky='w', pady=(0, 2))
-        self.row(quick, _('Frame rate', 'Частота кадров'), self.choice(quick, 'fps_mode', 'app', FPS_MODES, 26))
-        self.row(quick, _('Upscaler', 'Апскейлер'), self.choice(quick, 'upscaler', 'ini', UPSCALERS, 26))
-        self.row(quick, _('Preset', 'Пресет'), self.choice(quick, 'preset', 'ini', PRESETS, 26))
-        self.row(quick, _('Output', 'Разрешение'), self.choice(quick, 'output_res', 'ini', OUTPUTS, 26))
         ttk.Checkbutton(quick, text=_('Fullscreen', 'Полный экран'), variable=self.var('fullscreen', 'app')).grid(
             row=self.next_row(quick), column=1, sticky='w', pady=(8, 0))
-        for key in ('fps_mode', 'upscaler', 'output_res'):
-            self.vars[key].trace_add('write', lambda *_a: self.refresh_status())
 
     def draw_banner(self):
         """The cover art of the selected dump (sce_sys/pic1.png) under the title."""
@@ -777,28 +728,18 @@ class Launcher:
                        'about 30 MB, into the fsr4_shaders folder of the port.',
                        'С GitHub FireBurn/Q2RTX (собраны из MIT-исходников AMD FidelityFX), около 30 МБ, '
                        'в папку fsr4_shaders порта.'), top=6)
-        self.section(f, _('Detail', 'Детализация'))
-        self.row(f, _('Model detail (LOD)', 'Детализация моделей'), self.choice(f, 'model_lod', 'ini', LODS),
-                 _('A game patch (game version 1.09).', 'Патч игры (версия 1.09).'))
         self.check(f, 'show_fps', 'ini', _('Show the FPS counter', 'Показывать FPS'))
 
     def build_display(self):
         ttk = self.ttk
         f = self.scrolled_page('display', _('Display & FPS', 'Экран и FPS'),
                                _('Applied when the game starts.', 'Применяется при запуске игры.'))
-        self.version_warning(f)
         self.section(f, _('Frame rate', 'Частота кадров'), top=4)
-        self.row(f, _('Frame rate', 'Режим'), self.choice(f, 'fps_mode', 'app', FPS_MODES),
-                 _("Community patches for game version 1.09. Unlocked makes the game use the real frame time. "
-                   'Other game versions always run at 30 FPS (the patches would corrupt them).',
-                   'Патчи сообщества для версии 1.09. «Без ограничения» — игра использует реальное время кадра. '
-                   'Другие версии всегда работают в 30 FPS.'))
-        self.row(f, _('Frame cap (unlocked mode)', 'Ограничение FPS (режим без ограничения)'),
-                 self.choice(f, 'frame_cap', 'app', FRAME_CAPS),
-                 _("Above about 120 FPS the game's movement timing breaks (running and rolling get slower, "
-                   'physics and animations can glitch): higher caps are at your own risk.',
-                   'Выше ~120 FPS ломается тайминг движения игры (бег и перекаты замедляются, возможны '
-                   'сбои физики и анимаций): более высокие значения — на ваш риск.'))
+        self.row(f, _('Frame cap', 'Ограничение FPS'), self.choice(f, 'frame_cap', 'app', FRAME_CAPS),
+                 _('Below its target frame rate the game runs slower than real time: higher caps are at '
+                   'your own risk.',
+                   'Ниже целевой частоты кадров игра идёт медленнее реального времени: более высокие '
+                   'значения на ваш риск.'))
         self.row(f, _('Frames ahead of the GPU', 'Кадров впереди GPU'), self.choice(f, 'frames_ahead', 'app', FRAMES_AHEAD),
                  _('1 keeps frame pacing even; more can raise FPS when the graphics card is the limit.',
                    '1 — ровная подача кадров; больше может поднять FPS, если упирается в видеокарту.'))
@@ -826,35 +767,6 @@ class Launcher:
         self.row(f, _('Game language', 'Язык игры'), self.choice(f, 'language', 'app', LANGUAGES))
         self.row(f, _('Player name', 'Имя игрока'), self.ttk.Entry(f, textvariable=self.var('player_name', 'app'), width=30),
                  _('Where the game shows the PSN name; empty: the default.', 'Где игра показывает имя PSN; пусто — по умолчанию.'))
-        fx = self.bloodborne_effects = self.ttk.Frame(f)
-        fx.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we')
-        fx.columnconfigure(1, weight=1)
-        self.section(fx, _('Effects', 'Эффекты'))
-        self.version_warning(fx)
-        for key, title, _on in EFFECTS:
-            self.check(fx, key, 'ini', _(*title))
-        self.section(fx, _('Extras', 'Дополнительно'))
-        for key, title, _on in EXTRAS:
-            self.check(fx, key, 'ini', _(*title))
-        self.note(fx, _('Effects and extras are game patches for version 1.09, applied at start.',
-                        'Эффекты и дополнения — патчи игры для версии 1.09, применяются при запуске.'))
-
-    def build_cheats(self):
-        f = self.scrolled_page('cheats', _('Cheats', 'Читы'),
-                               _('Game patches for version 1.09, applied at start. Leave them off for a normal '
-                                 'play-through.', 'Патчи игры для версии 1.09, применяются при запуске. Для обычного '
-                                 'прохождения оставьте их выключенными.'))
-        self.version_warning(f)
-        self.section(f, _('Cheats', 'Читы'), top=4)
-        for key, title, _on in CHEATS:
-            self.check(f, key, 'ini', _(*title))
-        self.section(f, _('Gameplay tweaks', 'Изменения игрового процесса'))
-        for key, title, _on in TWEAKS:
-            self.check(f, key, 'ini', _(*title))
-        # Enemy control and the free camera share their buttons: one at a time.
-        control, camera = self.var('cheat_enemy_control', 'ini'), self.var('debug_camera', 'ini')
-        control.trace_add('write', lambda *_a: control.get() and camera.set(False))
-        camera.trace_add('write', lambda *_a: camera.get() and control.set(False))
 
     def build_game_patches(self):
         """Patches of the selected game's built-in XML (God of War III): one resolution, the rest
@@ -877,9 +789,8 @@ class Launcher:
         folder = self.var('game_dir', 'app').get()
         title_id, profile = game_profile_of(folder)
         self.game_patch_title, self.game_patch_res, self.game_patch_vars = None, None, {}
-        if is_bloodborne(folder):
-            self.note(f, _("This game's patches are on Game & effects, Display & FPS and Cheats.",
-                           'Патчи этой игры — на страницах «Игра и эффекты», «Экран и FPS» и «Читы».'), top=0)
+        if not profile:
+            self.note(f, _('No built-in patches for this game.', 'Для этой игры нет встроенных патчей.'), top=0)
             return
         _ids, xml, version = profile[:3]
         metas = [m for m in ET.parse(xml).getroot().iter('Metadata') if m.get('AppVer') == version]
@@ -927,16 +838,16 @@ class Launcher:
                                  'Файлы игры не меняются: моды накладываются при запуске.'))
         self.section(f, _('Mods', 'Моды'), top=4)
         self.check(f, 'mods_enabled', 'app', _('Load mods', 'Загружать моды'),
-                   _('Loose-file mods, each in its own folder (with dvdroot_ps4, or chr\\, parts\\ … directly).',
-                     'Моды из файлов, каждый в своей папке (с dvdroot_ps4 или chr\\, parts\\ … напрямую).'))
+                   _('Loose-file mods, each in its own folder with dvdroot_ps4.',
+                     'Моды из файлов, каждый в своей папке с dvdroot_ps4.'))
         self.folder(f, 'mods_dir', _('Mods folder', 'Папка модов'), _('Choose the mods folder', 'Выберите папку модов'),
                     _('Empty: {}', 'Пусто: {}').format(DATA_DIR / 'mods'), on_change=self.refresh_lists)
         self.mods_frame = self.ttk.Frame(f)
         self.mods_frame.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we', pady=(8, 0))
         self.section(f, _('Third-party patches', 'Сторонние патчи'))
         self.folder(f, 'patches_dir', _('Patches folder', 'Папка патчей'), _('Choose the patches folder', 'Выберите папку патчей'),
-                    _('shadPS4/GoldHEN XML patch files for version 1.09. Empty: {}',
-                      'XML-патчи shadPS4/GoldHEN для версии 1.09. Пусто: {}').format(DATA_DIR / 'patches'),
+                    _('shadPS4/GoldHEN XML patch files for this game version. Empty: {}',
+                      'XML-патчи shadPS4/GoldHEN для этой версии игры. Пусто: {}').format(DATA_DIR / 'patches'),
                     on_change=self.refresh_lists)
         self.patches_frame = self.ttk.Frame(f)
         self.patches_frame.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we', pady=(8, 0))
@@ -1001,17 +912,6 @@ class Launcher:
         bar.pack(side='right', fill='y')
         self.log.pack(fill='both', expand=True)
 
-    def version_warning(self, parent):
-        """A banner shown while the selected game is not version 1.09 (refresh_status)."""
-        label = self.ttk.Label(parent, style='Warning.TLabel', wraplength=self.px(640), justify='left', text=_(
-            'Your game is version {}: these options are patches for 1.09 and are not applied; the game runs '
-            'at 30 FPS. Update the dump to 1.09 to use them.',
-            'Ваша игра версии {}: эти настройки — патчи для 1.09 и не применяются; игра работает в 30 FPS. '
-            'Обновите дамп до 1.09, чтобы их использовать.'))
-        label.grid(row=self.next_row(parent), column=0, columnspan=2, sticky='we', pady=(6, 4))
-        label.template = label.cget('text')
-        self.warnings = getattr(self, 'warnings', []) + [label]
-
     # ---- state -------------------------------------------------------------------------------
     def game_changed(self):
         folder = self.var('game_dir', 'app').get()
@@ -1019,17 +919,6 @@ class Launcher:
         title = info[0] if info else APP_NAME
         self.root.title(f'{title} (PC)')
         self.side_title.configure(text=title.upper())
-        # Graphics (temporal upscalers), Display & FPS, Cheats and the effects hold Bloodborne only.
-        bloodborne = is_bloodborne(folder)
-        for name, before in (('graphics', 'display'), ('display', 'game'), ('cheats', 'mods')):
-            if bloodborne and not self.nav[name].winfo_ismapped():
-                self.nav[name].pack(fill='x', before=self.nav[before])
-            elif not bloodborne:
-                self.nav[name].pack_forget()
-        if bloodborne:
-            self.bloodborne_effects.grid()
-        else:
-            self.bloodborne_effects.grid_remove()
         if self.current_page == 'gamepatches':
             self.refresh_game_patches()
         self.banner_source = None
@@ -1043,55 +932,34 @@ class Launcher:
         _title_id, profile = game_profile_of(folder) if info else (None, None)
         if not info:
             game = _('✗ No eboot.bin in the game folder (Game & effects)', '✗ В папке игры нет eboot.bin («Игра и эффекты»)')
-        elif profile and not is_bloodborne(folder):
+        elif profile:
             game = (_('✓ Game version {}: the game patches apply', '✓ Версия игры {}: патчи игры применяются').format(info[1])
                     if info[1] == profile[2] else
                     _('⚠ Game version {}: the game patches need {}; none applied',
                       '⚠ Версия игры {}: патчам нужна {}; не применяются').format(info[1], profile[2]))
-        elif info[1] == PATCH_VERSION:
-            game = _('✓ Game version {}: every patch available', '✓ Версия игры {}: доступны все патчи').format(info[1])
         else:
-            game = _('⚠ Game version {}: runs at 30 FPS without the community patches (they are for 1.09)',
-                     '⚠ Версия игры {}: 30 FPS без патчей сообщества (они для 1.09)').format(info[1])
+            game = _('⚠ Game version {}: no built-in patches for this game',
+                     '⚠ Версия игры {}: для этой игры нет встроенных патчей').format(info[1])
         user = Path(self.var('user_dir', 'app').get() or DATA_DIR / 'user')
         saves = list((user / 'savedata').glob('*/*/*')) if (user / 'savedata').is_dir() else []
         save = (_('✓ Saves found in {}', '✓ Найдены сохранения в {}').format(user) if saves
                 else _('• No saves yet: the game creates them in {}', '• Сохранений пока нет: игра создаст их в {}').format(user))
-        missing = fsr4_missing()
-        fsr4 = (_('✓ FSR 4 assets installed', '✓ Ассеты FSR 4 установлены') if not missing else
-                _('• FSR 4 assets missing (Graphics); FSR 3.1 is used meanwhile',
-                  '• Нет ассетов FSR 4 («Графика»); пока используется FSR 3.1'))
-        for key, text in (('game', game), ('saves', save), ('gpu', self.gpu_text), ('fsr4', fsr4)):
+        for key, text in (('game', game), ('saves', save), ('gpu', self.gpu_text)):
             self.checks[key].configure(text=text, foreground=MUTED if text.startswith('•') else
                                        '#d9a441' if text.startswith('⚠') else '#d36b5c' if text.startswith('✗') else TEXT)
-        for label in getattr(self, 'warnings', []):
-            if info and info[1] != PATCH_VERSION and is_bloodborne(folder):
-                label.configure(text=label.template.format(info[1]))
-                label.grid()
-            else:
-                label.grid_remove()
         if not self.process:
             self.play_button.configure(state='normal' if info else 'disabled')
             self.status.configure(text=self.summary() if info else _('Choose the game folder first.',
                                                                      'Сначала выберите папку игры.'), fg=MUTED)
 
     def summary(self):
-        folder = self.var('game_dir', 'app').get()
-        if not is_bloodborne(folder):
-            self.store_game_patches()
-            title_id, _profile = game_profile_of(folder)
-            names = self.app.get('game_patches', {}).get(title_id) or []
-            resolution = next((n.split(' - ', 1)[-1] for n in names if n.startswith('Resolution Patch')),
-                              _('Native (1920 × 1080)', 'Нативное (1920 × 1080)'))
-            others = len([n for n in names if not n.startswith('Resolution Patch')])
-            return _('{} · {} more patches', '{} · ещё патчей: {}').format(resolution, others)
-        fps = dict(FPS_MODES).get(self.var('fps_mode', 'app').get(), ('?',))
-        info = game_info(self.var('game_dir', 'app').get())
-        if info and info[1] != PATCH_VERSION:
-            fps = ('30 FPS',)
-        upscaler = dict(UPSCALERS).get(self.var('upscaler', 'ini').get(), ('?',))[0].split(' (')[0]
-        output = self.var('output_res', 'ini').get().replace('x', ' × ')
-        return f'{_(*fps)}   ·   {upscaler}   ·   {output}'
+        self.store_game_patches()
+        title_id, _profile = game_profile_of(self.var('game_dir', 'app').get())
+        names = self.app.get('game_patches', {}).get(title_id) or []
+        resolution = next((n.split(' - ', 1)[-1] for n in names if n.startswith('Resolution Patch')),
+                          _('Native (1920 × 1080)', 'Нативное (1920 × 1080)'))
+        others = len([n for n in names if not n.startswith('Resolution Patch')])
+        return _('{} · {} more patches', '{} · ещё патчей: {}').format(resolution, others)
 
     def detect_gpu(self):
         exe = PORT_DIR / 'bin' / 'bb-gpu-capabilities.exe'
@@ -1185,11 +1053,13 @@ class Launcher:
                                               'Ниже в списке — загружается позже и перекрывает.'),
                       style='Muted.TLabel').pack(anchor='w', pady=(4, 0))
         chosen = load_json(DATA_DIR / 'patches.json', {})
-        found = external_patches(Path(self.var('patches_dir', 'app').get() or DATA_DIR / 'patches'), PATCH_VERSION)
+        _title_id, game = game_profile_of(self.var('game_dir', 'app').get())
+        found = external_patches(Path(self.var('patches_dir', 'app').get() or DATA_DIR / 'patches'),
+                                 game[2], game[1], game[0]) if game else []
         old = {n: v.get() for n, v in self.patch_vars.items()}
         self.patch_vars = {}
         if not found:
-            ttk.Label(self.patches_frame, text=_('No patch files for version 1.09 yet.', 'Пока нет патчей для версии 1.09.'),
+            ttk.Label(self.patches_frame, text=_('No patch files for this game version yet.', 'Пока нет патчей для этой версии игры.'),
                       style='Muted.TLabel').pack(anchor='w')
         for key, _path, meta in found:
             on = key in chosen.get('enabled', []) or (key not in chosen.get('disabled', []) and

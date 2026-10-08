@@ -2,15 +2,14 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Windows counterpart of run.sh: prepares the game image and starts bb-probe.exe.
 
-Same environment variables as run.sh (BB_GAME_DIR, BB_DATA_DIR, BB_FPS, BB_RENDER_RES,
-BB_LIVE_RES, BB_PATCHES, BB_MODS_*, BB_USER_DIR, ...). Extra arguments go to bb-probe.
+Same environment variables as run.sh (BB_GAME_DIR, BB_DATA_DIR, BB_PATCHES, BB_MODS_*,
+BB_USER_DIR, ...). Extra arguments go to bb-probe.
 The in-game "Apply and restart" runs this script again through BB_RESTART_COMMAND;
 `--after PID` waits for the previous game process to end first (its GPU device and memory).
 """
 import ctypes
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import sys
@@ -38,7 +37,7 @@ def no_console():
 
 
 def run_script(name, *args, capture=False):
-    # Inside the packaged Bloodborne.exe (PyInstaller) the executable runs scripts itself.
+    # Inside the packaged launcher executable (PyInstaller) the executable runs scripts itself.
     script = ['--script'] if getattr(sys, 'frozen', False) else []
     command = [sys.executable, *script, str(PORT / 'scripts' / name), *map(str, args)]
     if capture:
@@ -47,22 +46,11 @@ def run_script(name, *args, capture=False):
         if result.returncode:
             sys.exit(result.returncode)
         return result.stdout
-    # stdin given: the output handles are passed explicitly (a windowed Bloodborne.exe child would
+    # stdin given: the output handles are passed explicitly (a windowed launcher child would
     # get none otherwise).
     result = subprocess.run(command, stdin=subprocess.DEVNULL, creationflags=no_console())
     if result.returncode:
         sys.exit(result.returncode)
-    return None
-
-
-def ini_value(path, key):
-    try:
-        for line in Path(path).read_text(encoding='utf-8', errors='replace').splitlines():
-            match = re.fullmatch(rf'{re.escape(key)}=(.*)', line.strip())
-            if match:
-                return match.group(1)
-    except OSError:
-        pass
     return None
 
 
@@ -86,7 +74,6 @@ def main():
     out = data / 'out'
     out.mkdir(parents=True, exist_ok=True)
     env.setdefault('BB_CONFIG', str(data / 'bbport.ini'))
-    config = env['BB_CONFIG']
     if not env.get('BB_FSR411_DIR') and not (PORT / 'fsr4_411').is_dir() and (data / 'fsr4_411').is_dir():
         env['BB_FSR411_DIR'] = str(data / 'fsr4_411')
 
@@ -99,7 +86,7 @@ def main():
         if clang64.is_dir():
             env['PATH'] = f'{clang64}{os.pathsep}{env.get("PATH", "")}'
 
-    game = Path(env.get('BB_GAME_DIR', PORT.parent / 'CUSA03173'))
+    game = Path(env.get('BB_GAME_DIR', PORT.parent / 'CUSA01623'))
     if not (game / 'eboot.bin').is_file():
         fail(f'No eboot.bin in {game} (set BB_GAME_DIR).')
     original_game = game.resolve()
@@ -114,75 +101,36 @@ def main():
         run_script('link_modules.py', game, '--out', out)
         run_script('content_profile.py', game, '--out', out, '--sku', env.get('BB_CONTENT_SKU', 'full'))
 
-        # Patches exist for game version 01.09 only (patches.py applies none to others): other
-        # versions keep the game's 30 FPS timing and change resolutions live.
         sys.path.insert(0, str(PORT / 'scripts'))
-        from patches import (BLOODBORNE_IDS, eboot_matches, game_app_version, game_profile, game_title_id,
+        from patches import (eboot_matches, game_app_version, game_profile, game_title_id,
                              patch_requirements, selected_patches)
-        version = game_app_version(game)
         profile = game_profile(game_title_id(game))
-        needed = profile[2] if profile else '01.09'
-        patched = (version in (None, needed) and eboot_matches(game, profile)) or bool(env.get('BB_FORCE_PATCHES'))
-        if not patched:
-            print(f'Game version {version}: community patches need {needed}; 30 FPS, no effect patches')
-        bloodborne = not profile or profile[0] is BLOODBORNE_IDS
-        if not bloodborne:
-            # The window shows the game's icon (BMP: the format SDL loads without extra libraries).
-            try:
-                from PIL import Image
-                with Image.open(game / 'sce_sys' / 'icon0.png') as icon:
-                    icon.convert('RGBA').resize((64, 64), Image.LANCZOS).save(out / 'window_icon.bmp')
-                env.setdefault('BB_WINDOW_ICON', str(out / 'window_icon.bmp'))
-            except (ImportError, OSError):
-                pass
-            # The temporal upscalers and motion vectors read Bloodborne's scene constants; linear
-            # image readbacks fix God of War III's corrupted textures.
-            env.setdefault('BB_UPSCALER', 'none')
-            env.setdefault('BB_READBACK_LINEAR', '1')
-        if not bloodborne and patched:
-            # Other games: the patch notes give the direct memory and VBlank rate they need.
-            names = selected_patches(profile[1], needed, env.get('BB_PATCHES', ''), env.get('BB_PATCHES_ONLY') == '1')
-            dmem, vblank = patch_requirements(profile[1], names, needed)
+        patched = bool(profile) and ((game_app_version(game) == profile[2] and eboot_matches(game, profile))
+                                     or bool(env.get('BB_FORCE_PATCHES')))
+        # The window shows the game's icon (BMP: the format SDL loads without extra libraries).
+        try:
+            from PIL import Image
+            with Image.open(game / 'sce_sys' / 'icon0.png') as icon:
+                icon.convert('RGBA').resize((64, 64), Image.LANCZOS).save(out / 'window_icon.bmp')
+            env.setdefault('BB_WINDOW_ICON', str(out / 'window_icon.bmp'))
+        except (ImportError, OSError):
+            pass
+        # The temporal upscalers and motion vectors are not calibrated for this game yet; linear
+        # image readbacks fix its corrupted textures.
+        env.setdefault('BB_UPSCALER', 'none')
+        env.setdefault('BB_READBACK_LINEAR', '1')
+        if patched:
+            # The patch notes give the direct memory and VBlank rate the selected patches need.
+            names = selected_patches(profile[1], profile[2], env.get('BB_PATCHES', ''), env.get('BB_PATCHES_ONLY') == '1')
+            dmem, vblank = patch_requirements(profile[1], names, profile[2])
             if dmem:
                 env.setdefault('BB_DMEM_MB', str(dmem))
             if vblank:
                 env.setdefault('BB_VBLANK_HZ', str(vblank))
-        # Sizes chosen below for the previous launch are recomputed after an in-game restart.
-        if env.get('BB_AUTO_RENDER_RES') == '1':
-            for key in ('BB_RENDER_RES', 'BB_OUTPUT_RES', 'BB_AUTO_RENDER_RES'):
-                env.pop(key, None)
-        # BB_FPS presets are Bloodborne patches; other games keep their own timing (60 Hz VBlank).
-        fps = env.get('BB_FPS', 'uncap') if patched and bloodborne else '30'
-        scaled_render = scaled_output = None
-        # Output sizes and live resolution changes scale Bloodborne's own targets; other games set
-        # their resolution with their patches.
-        if bloodborne and not env.get('BB_RENDER_RES'):
-            printed = run_script('patches.py', '--print-scaled', '--settings', config, capture=True).split()
-            if len(printed) == 2:
-                scaled_render, scaled_output = printed
-        live = '0'
-        if scaled_output:
-            live = env.get('BB_LIVE_RES') or ini_value(config, 'live_resolution') or '0'
-            if live == 'auto':
-                caps = probe.parent / 'bb-gpu-capabilities.exe'
-                result = subprocess.run([str(caps), '--live-resolution'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                        text=True, creationflags=no_console())
-                live = result.stdout.strip() if result.returncode == 0 else '0'
-            live = '1' if live == '1' or not patched else '0'
-        if live == '1':
-            print(f'Output {scaled_output}: live resolution changes (live_resolution=0: startup patch)')
-        elif scaled_output:
-            env.update(BB_RENDER_RES=scaled_render, BB_OUTPUT_RES=scaled_output, BB_AUTO_RENDER_RES='1')
-            env.setdefault('BB_DMEM_MB', '9152')
-            print(f'Output {scaled_output}: scene {scaled_render}, direct memory {env["BB_DMEM_MB"]} MiB '
-                  '(live_resolution=1: live changes)')
-        run_script('patches.py', '--out', out, '--fps', fps, '--extra', env.get('BB_PATCHES', ''),
-                   '--settings', config, '--game-dir', game, '--render-res', env.get('BB_RENDER_RES', ''),
-                   '--output-res', env.get('BB_OUTPUT_RES', ''),
+        run_script('patches.py', '--out', out, '--extra', env.get('BB_PATCHES', ''), '--game-dir', game,
                    '--patches-dir', env.get('BB_PATCHES_DIR', data / 'patches'),
                    '--patches-config', env.get('BB_PATCHES_CONFIG', data / 'patches.json'))
-        if not env.get('BB_VBLANK_HZ'):
-            env['BB_VBLANK_HZ'] = {'uncap': '0', '90': '90'}.get(fps, '60')
+        env.setdefault('BB_VBLANK_HZ', '60')
 
         # The in-game restart starts this script again once this process is gone.
         # GPU caches (shaders, pipelines) beside the saves; read before main(), so set here.

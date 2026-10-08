@@ -56,20 +56,12 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.fsr4_auto_exposure = i != 0;
     } else if (key == "fsr4_invert_jitter") {
         v.fsr4_invert_jitter = i != 0;
-    } else if (key == "model_lod") {
-        v.model_lod = std::clamp(i, -2, 2);
     } else if (key == "live_resolution") {
         v.live_resolution = value == "auto" ? -1 : std::clamp(i, 0, 1);
     } else if (key == "output_res") {
         for (int r = 0; r < OutputCount; ++r) {
             if (value == std::to_string(OutputWidths[r]) + "x" + std::to_string(OutputHeights[r])) {
                 v.output_res = r;
-            }
-        }
-    } else {
-        for (int e = 0; e < EffectCount; ++e) {
-            if (key == Effects[e].key) {
-                v.effects[e] = i != 0;
             }
         }
     }
@@ -84,9 +76,6 @@ Values& Get() {
 
 void Load() {
     auto& v = Get();
-    for (int e = 0; e < EffectCount; ++e) {
-        v.effects[e] = Effects[e].default_on;
-    }
     if (FILE* file = std::fopen(Path(), "r")) {
         char line[256];
         while (std::fgets(line, sizeof(line), file)) {
@@ -122,10 +111,6 @@ void Load() {
     v.startup_preset = v.preset;
     v.startup_upscaler = v.upscaler;
     v.startup_object_motion = v.object_motion;
-    for (int e = 0; e < EffectCount; ++e) {
-        v.startup_effects[e] = v.effects[e];
-    }
-    v.startup_model_lod = v.model_lod;
     v.startup_output_res = v.output_res;
     v.startup_live_resolution = v.live_resolution;
 }
@@ -195,12 +180,7 @@ void Save() {
                  v.reactive_scale.load(), v.reactive_threshold.load(), v.reactive_max.load(),
                  v.debug_view.load(), int(v.show_fps.load()),
                  int(v.fsr4_auto_exposure.load()), int(v.fsr4_invert_jitter.load()));
-    // Read by patches.py at start.
-    for (int e = 0; e < EffectCount; ++e) {
-        std::fprintf(file, "%s=%d\n", Effects[e].key, int(v.effects[e].load()));
-    }
-    std::fprintf(file, "model_lod=%d\noutput_res=%dx%d\n", v.model_lod.load(),
-                 OutputWidths[v.output_res], OutputHeights[v.output_res]);
+    std::fprintf(file, "output_res=%dx%d\n", OutputWidths[v.output_res], OutputHeights[v.output_res]);
     // Read by run.sh at start.
     std::fprintf(file, "live_resolution=%s\n", v.live_resolution < 0 ? "auto"
                                                   : v.live_resolution ? "1" : "0");

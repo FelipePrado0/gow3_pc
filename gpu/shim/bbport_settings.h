@@ -18,36 +18,6 @@ inline bool IsFsr4(int upscaler) {
 enum Preset : int { NativeAA = 0, Quality, Balanced, Performance, UltraPerformance, PresetCount };
 enum DebugView : int { DebugNone = 0, DebugReactive = 1, DebugMotion = 2, DebugViewCount };
 
-/// Game effects switched by the community patches at start (patches.py EFFECTS): ini key,
-/// menu label, default (the game's own behaviour).
-struct Effect {
-    const char* key;
-    const char* label;
-    bool default_on;
-};
-inline constexpr Effect Effects[] = {
-    {"effect_chromatic_aberration", "Хроматическая аберрация", true},
-    {"effect_dof", "Глубина резкости (DoF)", true},
-    {"effect_motion_blur", "Размытие в движении", true},
-    {"effect_ssao", "Затенение SSAO", true},
-    {"effect_game_aa", "Собственное сглаживание игры", true},
-    {"effect_dynamic_shadows", "Тени от динамических источников", true},
-    {"effect_ssr", "Отражения SSR (не было в игре)", false},
-    {"skip_intro", "Пропуск заставок при запуске", false},
-    {"debug_camera", "Свободная камера (Cross + L3)", false},
-    {"debug_menu", "Debug menu (нужны файлы шрифтов)", false},
-    {"cheat_no_death", "Чит: бессмертие (не ниже 1 HP)", false},
-    {"cheat_stealth", "Чит: враги не замечают", false},
-    {"cheat_silent", "Чит: враги не слышат", false},
-    {"cheat_rally_no_decay", "Чит: Rally не угасает", false},
-    {"cheat_enemy_control", "Чит: управление врагом (R3 / L3)", false},
-    {"tweak_no_rally", "Без Rally (возврата HP)", false},
-    {"tweak_camera_distance", "Камера дальше", false},
-    {"tweak_no_camera_rotation", "Без автоповорота камеры", false},
-    {"tweak_easy_run", "Бег с меньшим наклоном стика", false},
-    {"tweak_ragdoll", "Физика тел как в Dark Souls", false},
-};
-inline constexpr int EffectCount = int(sizeof(Effects) / sizeof(Effects[0]));
 /// Live output resolutions: the upscaler's output and the UI host targets.
 inline constexpr int OutputWidths[] = {1280, 1920, 2560, 3840};
 inline constexpr int OutputHeights[] = {720, 1080, 1440, 2160};
@@ -71,9 +41,6 @@ struct Values {
     std::atomic<bool> fsr4_auto_exposure{true};
     std::atomic<bool> fsr4_invert_jitter{false};
     std::atomic<int> active_render_width{1920}, active_render_height{1080};
-    /// Applied at start (patches.py); the menu shows when a restart is needed.
-    std::atomic<bool> effects[EffectCount]{};
-    std::atomic<int> model_lod{0}; ///< -2 highest .. 2 lowest, 0 the game's
     std::atomic<int> output_res{OutputDefault}; ///< index into OutputWidths
     /// Live resolution and preset changes (run.sh): 0 off by default (startup patch, fastest
     /// on the Steam Deck and older GPUs), -1 auto (strong discrete GPUs), 1 on. On restart.
@@ -89,8 +56,6 @@ struct Values {
     int startup_preset = NativeAA;
     int startup_upscaler = UpscalerFsr3;
     bool startup_object_motion = true;
-    bool startup_effects[EffectCount]{};
-    int startup_model_lod = 0;
     int startup_output_res = OutputDefault;
     int startup_live_resolution = 0;
 };
