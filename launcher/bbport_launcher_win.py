@@ -881,7 +881,7 @@ class Launcher:
             self.note(f, _("This game's patches are on Game & effects, Display & FPS and Cheats.",
                            'Патчи этой игры — на страницах «Игра и эффекты», «Экран и FPS» и «Читы».'), top=0)
             return
-        _ids, xml, version = profile
+        _ids, xml, version = profile[:3]
         metas = [m for m in ET.parse(xml).getroot().iter('Metadata') if m.get('AppVer') == version]
         chosen = self.app.get('game_patches', {}).get(title_id)
         on = set(chosen) if chosen is not None else {m.get('Name') for m in metas
