@@ -66,7 +66,7 @@ class LoaderTests(unittest.TestCase):
         self.assertIn('first unsupported PS4 import: after-native',r.stdout)
 
     def test_host_contract_takes_priority_over_native_export(self):
-        r=self.run_image(native_package(name='bzQExy189ZI#q#q',native=b'\x0f\x0b'))
+        r=self.run_image(native_package(name='bzQExy189ZI#libc',native=b'\x0f\x0b'))
         self.assertEqual(r.returncode,20,r.stdout+r.stderr)
         self.assertIn('_init_env returned',r.stdout)
         self.assertIn('first unsupported PS4 import: after-native',r.stdout)
@@ -121,17 +121,28 @@ class LoaderTests(unittest.TestCase):
     def test_runtime_returns_from_verified_init_env(self):
         # Align stack, call _init_env through +32, then tail-jump to unknown +40.
         code = b'\x48\x83\xec\x08\xff\x15\x16\0\0\0\x48\x83\xc4\x08\xff\x25\x14\0\0\0'
-        data = package(code, [(32,1,0,0),(40,1,1,0)], ['bzQExy189ZI#q#q','after-init'], 1)
+        data = package(code, [(32,1,0,0),(40,1,1,0)], ['bzQExy189ZI#libc','after-init'], 1)
         r = self.run_image(data)
         self.assertEqual(r.returncode,20,r.stderr)
         self.assertIn('first unsupported PS4 import: after-init',r.stdout)
         self.assertIn('_init_env=1',r.stdout)
         strict = self.run_image(data,'--strict-imports')
         self.assertEqual(strict.returncode,20,strict.stderr)
-        self.assertIn('first unsupported PS4 import: bzQExy189ZI#q#q',strict.stdout)
+        self.assertIn('first unsupported PS4 import: bzQExy189ZI#libc',strict.stdout)
+
+    def test_check_imports_lists_missing_without_running(self):
+        code = b'\x0f\x0b'  # would fault if the game ran
+        data = package(code, [(32,1,0,0),(40,1,1,0)], ['bzQExy189ZI#libc','missing#libSceFixture'], 1)
+        r = self.run_image(data,'--check-imports')
+        self.assertEqual(r.returncode,1,r.stderr)
+        self.assertIn('MISSING: missing#libSceFixture',r.stdout)
+        self.assertNotIn('bzQExy189ZI',r.stdout)
+        ok = self.run_image(package(code,[(32,1,0,0)],['bzQExy189ZI#libc'],1),'--check-imports')
+        self.assertEqual(ok.returncode,0,ok.stderr)
+        self.assertIn('Imports: 0 missing',ok.stdout)
 
     def test_unverified_runtime_stays_disabled(self):
-        r = self.run_image(package(b'\xff\x25\x02\0\0\0\x90\x90',[(8,1,0,0)],['bzQExy189ZI#q#q'],0))
+        r = self.run_image(package(b'\xff\x25\x02\0\0\0\x90\x90',[(8,1,0,0)],['bzQExy189ZI#libc'],0))
         self.assertEqual(r.returncode,20,r.stderr)
         self.assertIn('_init_env=0',r.stdout)
 

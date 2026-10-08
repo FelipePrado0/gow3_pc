@@ -143,15 +143,15 @@ static ABI int32_t rw_destroy(Rwlock **handle) {
     pthread_mutex_unlock(&registry_lock); return error(e);
 }
 uintptr_t runtime_rwlock_resolve(const char *name) {
-    if (!strcmp(name,"6ULAa0fq4jA#p#J")) return (uintptr_t)rw_init;
-    if (!strcmp(name,"BB+kb08Tl9A#p#J")) return (uintptr_t)rw_destroy;
-    if (!strcmp(name,"Ox9i0c7L5w0#p#J")) return (uintptr_t)rw_read;
-    if (!strcmp(name,"mqdNorrB+gI#p#J")) return (uintptr_t)rw_write;
-    if (!strcmp(name,"XD3mDeybCnk#p#J")) return (uintptr_t)rw_tryread;
-    if (!strcmp(name,"bIHoZCTomsI#p#J")) return (uintptr_t)rw_trywrite;
-    if (!strcmp(name,"+L98PIbGttk#p#J")) return (uintptr_t)rw_unlock;
-    if (!strcmp(name,"iPtZRWICjrM#p#J")) return (uintptr_t)rw_timedread;
-    if (!strcmp(name,"adh--6nIqTk#p#J")) return (uintptr_t)rw_timedwrite;
+    if (!strcmp(name,"6ULAa0fq4jA#libkernel")) return (uintptr_t)rw_init;
+    if (!strcmp(name,"BB+kb08Tl9A#libkernel")) return (uintptr_t)rw_destroy;
+    if (!strcmp(name,"Ox9i0c7L5w0#libkernel")) return (uintptr_t)rw_read;
+    if (!strcmp(name,"mqdNorrB+gI#libkernel")) return (uintptr_t)rw_write;
+    if (!strcmp(name,"XD3mDeybCnk#libkernel")) return (uintptr_t)rw_tryread;
+    if (!strcmp(name,"bIHoZCTomsI#libkernel")) return (uintptr_t)rw_trywrite;
+    if (!strcmp(name,"+L98PIbGttk#libkernel")) return (uintptr_t)rw_unlock;
+    if (!strcmp(name,"iPtZRWICjrM#libkernel")) return (uintptr_t)rw_timedread;
+    if (!strcmp(name,"adh--6nIqTk#libkernel")) return (uintptr_t)rw_timedwrite;
     return 0;
 }
 void runtime_rwlock_report(void) {

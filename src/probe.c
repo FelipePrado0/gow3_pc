@@ -392,12 +392,13 @@ int main(int argc, char **argv) {
     runtime_memory_reserve();
     runtime_thread_tcb_offset();
 #endif
-    int cpu_only = 0, strict_imports = 0;
+    int cpu_only = 0, strict_imports = 0, check_imports = 0;
     unsigned timeout_seconds = 10;
     const char *content_profile=NULL, *app0=NULL, *user_dir=NULL, *patch_file=NULL;
     for (int i = 2; i < argc; ++i) {
         if (!strcmp(argv[i], "--cpu-only")) cpu_only = 1;
         else if (!strcmp(argv[i], "--strict-imports")) strict_imports = 1;
+        else if (!strcmp(argv[i], "--check-imports")) check_imports = 1;
         else if (!strcmp(argv[i], "--content-profile") && i+1<argc) content_profile=argv[++i];
         else if (!strcmp(argv[i], "--app0") && i+1<argc) app0=argv[++i];
         else if (!strcmp(argv[i], "--user") && i+1<argc) user_dir=argv[++i];
@@ -406,7 +407,7 @@ int main(int argc, char **argv) {
         else { fprintf(stderr, "Unknown option: %s\n", argv[i]); return 1; }
     }
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s boot.bin [--cpu-only] [--strict-imports] [--content-profile file] [--app0 dir] [--user dir] [--patches file] [--timeout seconds] | --vulkan-only\n", argv[0]);
+        fprintf(stderr, "Usage: %s boot.bin [--cpu-only] [--strict-imports] [--check-imports] [--content-profile file] [--app0 dir] [--user dir] [--patches file] [--timeout seconds] | --vulkan-only\n", argv[0]);
         return 1;
     }
     if (content_profile) {
@@ -597,6 +598,24 @@ int main(int argc, char **argv) {
             }
         }
         memcpy(image + relocs[i].target, &value, 8);
+    }
+    if (check_imports) {
+        /* Lists every import the game would stop at, without running it (needs the GPU
+         * library: without --cpu-only its symbols are registered above). */
+        unsigned char *checked=calloc(import_count ? import_count : 1,1);
+        if (!checked) fail("allocation failed");
+        uint64_t missing=0;
+        for (uint64_t i=0;i<nr;++i) {
+            uint64_t index=relocs[i].value;
+            if (!relocs[i].kind || checked[index]) continue;
+            checked[index]=1;
+            if (runtime_resolve(names[index],relocs[i].kind==2) || (native_libc && bindings[index])) continue;
+            printf("MISSING: %s (%s)\n",names[index],runtime_import_name(names[index]));
+            ++missing;
+        }
+        printf("Imports: %" PRIu64 " missing\n",missing);
+        fflush(NULL);
+        _exit(missing ? 1 : 0); /* no destructors: GPU threads are running */
     }
     if (patch_file) apply_patches(patch_file, segments, ns, relocs, nr);
 #ifdef _WIN32

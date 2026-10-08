@@ -24,15 +24,15 @@ static Delete delete_sem;
 static Cancel cancel_sem;
 static void setup(void) {
     runtime_start(1);
-    create=GET(Create,"188x57JYp0g#p#J");
-    poll_sem=GET(CountOp,"12wOHk8ywb0#p#J");
-    signal_sem=GET(CountOp,"4czppHBiriw#p#J");
-    wait_sem=GET(Wait,"Zxa0VhQVTsk#p#J");
-    delete_sem=GET(Delete,"R1Jvn8bSCW8#p#J");
-    cancel_sem=GET(Cancel,"4DM06U2BNEY#p#J");
+    create=GET(Create,"188x57JYp0g#libkernel");
+    poll_sem=GET(CountOp,"12wOHk8ywb0#libkernel");
+    signal_sem=GET(CountOp,"4czppHBiriw#libkernel");
+    wait_sem=GET(Wait,"Zxa0VhQVTsk#libkernel");
+    delete_sem=GET(Delete,"R1Jvn8bSCW8#libkernel");
+    cancel_sem=GET(Cancel,"4DM06U2BNEY#libkernel");
     assert(create && poll_sem && signal_sem && wait_sem && delete_sem && cancel_sem);
-    assert(!runtime_resolve("188x57JYp0g#I#J",0));
-    assert(!runtime_resolve("188x57JYp0g#p#J",1));
+    assert(!runtime_resolve("188x57JYp0g#libkernel",0));
+    assert(!runtime_resolve("188x57JYp0g#libkernel",1));
 }
 static void lifecycle(void) {
     struct { uint32_t handle,canary; } s={0,0xdeadbeef};

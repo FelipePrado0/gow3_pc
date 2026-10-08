@@ -208,36 +208,36 @@ static ABI int32_t posix_cond_timedwait(GuestCond **c, GuestMutex **m, const Gue
 static ABI int32_t posix_cond_signal(GuestCond **c) { return posix_result(cond_signal(c)); }
 static ABI int32_t posix_cond_broadcast(GuestCond **c) { return posix_result(cond_broadcast(c)); }
 uintptr_t runtime_mutex_resolve(const char *name) {
-    if (!strcmp(name,"0TyVk4MSLt0#I#J")) return (uintptr_t)posix_cond_init;
-    if (!strcmp(name,"RXXqi4CtF8w#I#J")) return (uintptr_t)posix_cond_destroy;
-    if (!strcmp(name,"Op8TBGY5KHg#I#J")) return (uintptr_t)posix_cond_wait;
-    if (!strcmp(name,"27bAgiJmOh0#I#J")) return (uintptr_t)posix_cond_timedwait;
-    if (!strcmp(name,"2MOy+rUfuhQ#I#J")) return (uintptr_t)posix_cond_signal;
-    if (!strcmp(name,"mkx2fVhNMsg#I#J")) return (uintptr_t)posix_cond_broadcast;
-    if (!strcmp(name,"2Tb92quprl0#p#J")) return (uintptr_t)cond_init;
-    if (!strcmp(name,"g+PZd2hiacg#p#J")) return (uintptr_t)cond_destroy;
-    if (!strcmp(name,"WKAXJ4XBPQ4#p#J")) return (uintptr_t)cond_wait;
-    if (!strcmp(name,"BmMjYxmew1w#p#J")) return (uintptr_t)cond_timedwait;
-    if (!strcmp(name,"kDh-NfxgMtE#p#J")) return (uintptr_t)cond_signal;
-    if (!strcmp(name,"JGgj7Uvrl+A#p#J")) return (uintptr_t)cond_broadcast;
-    if (!strcmp(name,"IafI2PxcPnQ#p#J")) return (uintptr_t)mutex_timedlock;
-    if (!strcmp(name,"dQHWEsJtoE4#I#J")) return (uintptr_t)posix_attr_init;
-    if (!strcmp(name,"mDmgMOGVUqg#I#J")) return (uintptr_t)posix_attr_type;
-    if (!strcmp(name,"HF7lK46xzjY#I#J")) return (uintptr_t)posix_attr_destroy;
-    if (!strcmp(name,"ttHNfU+qDBU#I#J")) return (uintptr_t)posix_mutex_init;
-    if (!strcmp(name,"ltCfaGr2JGE#I#J")) return (uintptr_t)posix_mutex_destroy;
-    if (!strcmp(name,"7H0iTOciTLo#I#J")) return (uintptr_t)posix_mutex_lock;
-    if (!strcmp(name,"K-jXhbt2gn4#I#J")) return (uintptr_t)posix_mutex_trylock;
-    if (!strcmp(name,"2Z+PpY6CaJg#I#J")) return (uintptr_t)posix_mutex_unlock;
-    if (!strcmp(name, "F8bUHwAG284#p#J")) return (uintptr_t)attr_init;
-    if (!strcmp(name, "iMp8QpE+XO4#p#J")) return (uintptr_t)attr_type;
-    if (!strcmp(name, "smWEktiyyG0#p#J")) return (uintptr_t)attr_destroy;
-    if (!strcmp(name, "1FGvU0i9saQ#p#J")) return (uintptr_t)attr_protocol;
-    if (!strcmp(name, "cmo1RIYva9o#p#J")) return (uintptr_t)mutex_init;
-    if (!strcmp(name, "9UK1vLZQft4#p#J")) return (uintptr_t)mutex_lock;
-    if (!strcmp(name, "upoVrzMHFeE#p#J")) return (uintptr_t)mutex_trylock;
-    if (!strcmp(name, "tn3VlD0hG60#p#J")) return (uintptr_t)mutex_unlock;
-    if (!strcmp(name, "2Of0f+3mhhE#p#J")) return (uintptr_t)mutex_destroy;
+    if (!strcmp(name,"0TyVk4MSLt0#libkernel")) return (uintptr_t)posix_cond_init;
+    if (!strcmp(name,"RXXqi4CtF8w#libkernel")) return (uintptr_t)posix_cond_destroy;
+    if (!strcmp(name,"Op8TBGY5KHg#libkernel")) return (uintptr_t)posix_cond_wait;
+    if (!strcmp(name,"27bAgiJmOh0#libkernel")) return (uintptr_t)posix_cond_timedwait;
+    if (!strcmp(name,"2MOy+rUfuhQ#libkernel")) return (uintptr_t)posix_cond_signal;
+    if (!strcmp(name,"mkx2fVhNMsg#libkernel")) return (uintptr_t)posix_cond_broadcast;
+    if (!strcmp(name,"2Tb92quprl0#libkernel")) return (uintptr_t)cond_init;
+    if (!strcmp(name,"g+PZd2hiacg#libkernel")) return (uintptr_t)cond_destroy;
+    if (!strcmp(name,"WKAXJ4XBPQ4#libkernel")) return (uintptr_t)cond_wait;
+    if (!strcmp(name,"BmMjYxmew1w#libkernel")) return (uintptr_t)cond_timedwait;
+    if (!strcmp(name,"kDh-NfxgMtE#libkernel")) return (uintptr_t)cond_signal;
+    if (!strcmp(name,"JGgj7Uvrl+A#libkernel")) return (uintptr_t)cond_broadcast;
+    if (!strcmp(name,"IafI2PxcPnQ#libkernel")) return (uintptr_t)mutex_timedlock;
+    if (!strcmp(name,"dQHWEsJtoE4#libkernel")) return (uintptr_t)posix_attr_init;
+    if (!strcmp(name,"mDmgMOGVUqg#libkernel")) return (uintptr_t)posix_attr_type;
+    if (!strcmp(name,"HF7lK46xzjY#libkernel")) return (uintptr_t)posix_attr_destroy;
+    if (!strcmp(name,"ttHNfU+qDBU#libkernel")) return (uintptr_t)posix_mutex_init;
+    if (!strcmp(name,"ltCfaGr2JGE#libkernel")) return (uintptr_t)posix_mutex_destroy;
+    if (!strcmp(name,"7H0iTOciTLo#libkernel")) return (uintptr_t)posix_mutex_lock;
+    if (!strcmp(name,"K-jXhbt2gn4#libkernel")) return (uintptr_t)posix_mutex_trylock;
+    if (!strcmp(name,"2Z+PpY6CaJg#libkernel")) return (uintptr_t)posix_mutex_unlock;
+    if (!strcmp(name, "F8bUHwAG284#libkernel")) return (uintptr_t)attr_init;
+    if (!strcmp(name, "iMp8QpE+XO4#libkernel")) return (uintptr_t)attr_type;
+    if (!strcmp(name, "smWEktiyyG0#libkernel")) return (uintptr_t)attr_destroy;
+    if (!strcmp(name, "1FGvU0i9saQ#libkernel")) return (uintptr_t)attr_protocol;
+    if (!strcmp(name, "cmo1RIYva9o#libkernel")) return (uintptr_t)mutex_init;
+    if (!strcmp(name, "9UK1vLZQft4#libkernel")) return (uintptr_t)mutex_lock;
+    if (!strcmp(name, "upoVrzMHFeE#libkernel")) return (uintptr_t)mutex_trylock;
+    if (!strcmp(name, "tn3VlD0hG60#libkernel")) return (uintptr_t)mutex_unlock;
+    if (!strcmp(name, "2Of0f+3mhhE#libkernel")) return (uintptr_t)mutex_destroy;
     return 0;
 }
 void runtime_mutex_report(void) {
