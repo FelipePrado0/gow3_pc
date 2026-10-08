@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds dist/gow3-windows/ (and dist/gow3-windows.zip): Bloodborne.exe (the launcher, frozen
+# Builds dist/gow3-windows/ (and dist/gow3-windows.zip): God of War III.exe (the launcher, frozen
 # with PyInstaller so players need no Python), gow3-probe.exe with the MSYS2 CLANG64 DLLs it needs,
 # the preparation scripts and run.py. Run from an MSYS2 CLANG64 shell after `bash build.sh`.
 # Freezing uses a Windows Python 3.10+ (python.org; WINPYTHON overrides) and a private venv in
@@ -23,14 +23,14 @@ if [[ ! -x out/pyenv/Scripts/python.exe ]]; then
     "$python" -m venv out/pyenv
 fi
 out/pyenv/Scripts/python.exe -m pip install -q --disable-pip-version-check pyinstaller
-# The scripts run inside Bloodborne.exe (--script): the standard modules they import come along.
+# The scripts run inside God of War III.exe (--script): the standard modules they import come along.
 hidden=()
 for module in argparse base64 collections hashlib json re shutil struct tempfile xml.etree.ElementTree \
               urllib.request ctypes.wintypes; do
     hidden+=(--hidden-import "$module")
 done
 out/pyenv/Scripts/python.exe -m PyInstaller --noconfirm --clean --log-level WARN --windowed \
-    --name Bloodborne --icon "$(cygpath -w "$PWD/launcher/bloodborne.ico")" --distpath out/pyi-dist \
+    --name "God of War III" --icon "$(cygpath -w "$PWD/launcher/gow3.ico")" --distpath out/pyi-dist \
     --workpath out/pyi-work --specpath out/pyi-work --paths "$(cygpath -w "$PWD/scripts")" "${hidden[@]}" \
     "$(cygpath -w "$PWD/launcher/gow3_launcher_win.py")"
 
@@ -39,9 +39,9 @@ out/pyenv/Scripts/python.exe -m PyInstaller --noconfirm --clean --log-level WARN
 dest=out/stage/gow3-windows
 rm -rf -- out/stage
 mkdir -p "$dest/bin" "$dest/launcher"
-cp -r out/pyi-dist/Bloodborne/. "$dest/"
-llvm-strip -o "$dest/Play Bloodborne.exe" out/gow3-play.exe
-cp launcher/bloodborne.ico launcher/bloodborne.png "$dest/launcher/"
+cp -r "out/pyi-dist/God of War III/." "$dest/"
+llvm-strip -o "$dest/Play God of War III.exe" out/gow3-play.exe
+cp launcher/gow3.ico launcher/gow3.png "$dest/launcher/"
 # The executables without debug information (out/ keeps the symbols for crash reports).
 for exe in gow3-probe.exe gow3-gpu-capabilities.exe; do
     llvm-strip --strip-debug -o "$dest/bin/$exe" "out/$exe"

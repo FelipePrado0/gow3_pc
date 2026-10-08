@@ -7,7 +7,7 @@ preset, output, effects), start-up options passed to run.py as environment varia
 (frame rate, presentation, HDR, ...), mods, third-party patches and the FSR 4 assets.
 Launcher options live in %APPDATA%/gow3-launcher/settings.json.
 
-Frozen with PyInstaller (packaging/windows/package.sh) the same Bloodborne.exe also runs the
+Frozen with PyInstaller (packaging/windows/package.sh) the same God of War III.exe also runs the
 game without the window (`--play`), run.py (`--run`) and the preparation scripts (`--script`),
 so a packaged port needs no Python installation.
 """
@@ -346,7 +346,7 @@ class Launcher:
             return
         except (ImportError, OSError, self.tk.TclError):
             pass
-        for icon in (game_icon, PORT_DIR / 'launcher' / 'bloodborne.png'):
+        for icon in (game_icon, PORT_DIR / 'launcher' / 'gow3.png'):
             try:
                 self.icon = self.tk.PhotoImage(file=str(icon))
                 if self.icon.width() > 128:
@@ -1273,11 +1273,11 @@ class Launcher:
                 with zipfile.ZipFile(archive) as package:
                     package.extractall(UPDATE_DIR / 'new')
                 archive.unlink()
-                new = next((p.parent for p in (UPDATE_DIR / 'new').rglob('Bloodborne.exe')), None)
+                new = next((p.parent for p in (UPDATE_DIR / 'new').rglob('God of War III.exe')), None)
                 if not new:
-                    raise OSError('Bloodborne.exe is missing from the download')
+                    raise OSError('God of War III.exe is missing from the download')
                 # The new launcher copies itself over this installation once this one has closed.
-                subprocess.Popen([str(new / 'Bloodborne.exe'), '--install-update', str(PORT_DIR), str(os.getpid())],
+                subprocess.Popen([str(new / 'God of War III.exe'), '--install-update', str(PORT_DIR), str(os.getpid())],
                                  cwd=str(new), stdin=subprocess.DEVNULL, creationflags=NO_WINDOW)
                 self.ui_calls.put(self.root.destroy)
             except (OSError, zipfile.BadZipFile) as failure:
@@ -1300,15 +1300,15 @@ class Launcher:
                                                  'минут будет подтормаживать, пока кэш собирается заново.'))
 
     def shortcut(self):
-        """Bloodborne.lnk on the desktop."""
+        """God of War III.lnk on the desktop."""
         if FROZEN:
             target, arguments, icon = sys.executable, '', f'{sys.executable},0'
         else:  # a source tree: the launcher script with the windowless Python
             pythonw = Path(sys.executable).with_name('pythonw.exe')
             target = str(pythonw if pythonw.exists() else sys.executable)
-            arguments, icon = Path(__file__).resolve(), PORT_DIR / 'launcher' / 'bloodborne.ico'
+            arguments, icon = Path(__file__).resolve(), PORT_DIR / 'launcher' / 'gow3.ico'
         script = ('$s=(New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath("Desktop")'
-                  '+"\\Bloodborne.lnk");'
+                  '+"\\God of War III.lnk");'
                   f'$s.TargetPath="{target}";$s.WorkingDirectory="{PORT_DIR}";$s.IconLocation="{icon}";'
                   + (f"$s.Arguments='\"{arguments}\"';" if arguments else '') + '$s.Save()')
         result = subprocess.run(['powershell', '-NoProfile', '-Command', script], capture_output=True,
@@ -1403,10 +1403,10 @@ def install_update(target, wait_pid):
     else:
         ctypes.windll.user32.MessageBoxW(None, _(
             'Could not install the update. Download it from the releases page.',
-            'Не удалось установить обновление. Скачайте его со страницы релизов.'), 'Bloodborne', 0x10)
+            'Не удалось установить обновление. Скачайте его со страницы релизов.'), APP_NAME, 0x10)
         webbrowser.open(RELEASES_PAGE)
         return 1
-    subprocess.Popen([str(target / 'Bloodborne.exe')], cwd=str(target))
+    subprocess.Popen([str(target / 'God of War III.exe')], cwd=str(target))
     return 0
 
 

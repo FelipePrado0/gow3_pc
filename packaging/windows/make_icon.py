@@ -1,18 +1,9 @@
-"""Draws the Bloodborne icon (a blood moon over gothic spires) as .ico and .png. Needs Pillow.
-usage: make_icon.py launcher/bloodborne.ico launcher/bloodborne.png"""
+"""Draws the port's icon (an omega on a dark red field) as .ico and .png. Needs Pillow.
+usage: make_icon.py launcher/gow3.ico launcher/gow3.png"""
 import sys
 from PIL import Image, ImageDraw, ImageFilter
 
 S = 1024  # drawn large, scaled down for every icon size
-
-
-def spire(d, x, base, width, height, color):
-    """A tower with a pointed roof and a small finial."""
-    roof = height * 0.45
-    d.rectangle((x - width / 2, base - height + roof, x + width / 2, base), fill=color)
-    d.polygon([(x - width / 2 - width * 0.08, base - height + roof), (x, base - height),
-               (x + width / 2 + width * 0.08, base - height + roof)], fill=color)
-    d.line((x, base - height, x, base - height - width * 0.6), fill=color, width=max(2, int(width * 0.12)))
 
 
 def draw():
@@ -20,44 +11,36 @@ def draw():
     mask = Image.new('L', (S, S), 0)
     ImageDraw.Draw(mask).rounded_rectangle((24, 24, S - 24, S - 24), radius=190, fill=255)
 
-    sky = Image.new('RGBA', (S, S))
-    sd = ImageDraw.Draw(sky)
+    field = Image.new('RGBA', (S, S))
+    fd = ImageDraw.Draw(field)
     for y in range(S):
         t = y / S
-        sd.line((0, y, S, y), fill=(int(40 - 22 * t), int(16 - 8 * t), int(18 - 9 * t), 255))
+        fd.line((0, y, S, y), fill=(int(96 - 66 * t), int(14 - 8 * t), int(12 - 6 * t), 255))
 
     glow = Image.new('RGBA', (S, S), (0, 0, 0, 0))
-    ImageDraw.Draw(glow).ellipse((170, 90, 854, 774), fill=(170, 30, 30, 150))
-    sky.alpha_composite(glow.filter(ImageFilter.GaussianBlur(70)))
+    ImageDraw.Draw(glow).ellipse((200, 160, 824, 784), fill=(210, 60, 30, 120))
+    field.alpha_composite(glow.filter(ImageFilter.GaussianBlur(90)))
 
-    moon = Image.new('RGBA', (S, S), (0, 0, 0, 0))
-    md = ImageDraw.Draw(moon)
-    cx, cy, r = 512, 410, 270
-    for i in range(r, 0, -2):
-        t = i / r
-        md.ellipse((cx - i, cy - i, cx + i, cy + i),
-                   fill=(int(150 + 70 * (1 - t)), int(28 + 40 * (1 - t) ** 2), int(26 + 20 * (1 - t) ** 2), 255))
-    sky.alpha_composite(moon)
+    # The omega: a thick ring open at the bottom, standing on two feet.
+    omega = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+    od = ImageDraw.Draw(omega)
+    ash = (236, 226, 208, 255)
+    cx, cy, r, w = 512, 450, 270, 92
+    od.ellipse((cx - r, cy - r, cx + r, cy + r), outline=ash, width=w)
+    od.polygon([(cx - 120, cy + 120), (cx + 120, cy + 120), (cx + 150, cy + r + 10), (cx - 150, cy + r + 10)],
+               fill=(0, 0, 0, 0))
+    for side in (-1, 1):
+        foot_x = cx + side * 150
+        od.rectangle((min(foot_x, foot_x + side * 170), 760, max(foot_x, foot_x + side * 170), 842), fill=ash)
+        od.rectangle((foot_x - 46, cy + 150, foot_x + 46, 842), fill=ash)
+    shadow = omega.copy()
+    shadow.putalpha(omega.getchannel('A').point(lambda a: a * 0.6))
+    shadow = Image.composite(Image.new('RGBA', (S, S), (0, 0, 0, 255)), Image.new('RGBA', (S, S), (0, 0, 0, 0)),
+                             shadow.getchannel('A')).filter(ImageFilter.GaussianBlur(18))
+    field.alpha_composite(shadow, (0, 14))
+    field.alpha_composite(omega)
 
-    city = Image.new('RGBA', (S, S), (0, 0, 0, 0))
-    cd = ImageDraw.Draw(city)
-    ink = (10, 8, 8, 255)
-    base = S - 24
-    cd.rectangle((24, 800, S - 24, base), fill=ink)
-    for x, w, h in ((90, 60, 330), (175, 44, 250), (250, 70, 400), (340, 52, 300),
-                    (684, 52, 300), (774, 70, 400), (849, 44, 250), (934, 60, 330)):
-        spire(cd, x, base, w, h, ink)
-    # the cathedral in the middle: a wide hall, two towers and the great spire
-    cd.rectangle((400, 640, 624, base), fill=ink)
-    spire(cd, 430, base, 64, 520, ink)
-    spire(cd, 594, base, 64, 520, ink)
-    spire(cd, 512, base, 110, 720, ink)
-    # pointed windows lit by the moon
-    for x in (465, 559):
-        cd.rounded_rectangle((x - 14, 760, x + 14, 850), radius=14, fill=(120, 26, 22, 255))
-    sky.alpha_composite(city)
-
-    image.paste(sky, (0, 0), mask)
+    image.paste(field, (0, 0), mask)
     border = ImageDraw.Draw(image)
     border.rounded_rectangle((24, 24, S - 24, S - 24), radius=190, outline=(200, 169, 106, 255), width=22)
     return image

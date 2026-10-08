@@ -20,7 +20,6 @@ perf.data
 /docs/savedata_route/
 /docs/route*.txt
 /docs/route_run.log
-/bloodborne_upscalers_*.md
 mods.json
 patches.json
-!launcher/bloodborne.png
+!launcher/gow3.png
