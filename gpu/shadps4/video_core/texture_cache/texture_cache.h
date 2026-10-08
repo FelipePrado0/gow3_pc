@@ -6,6 +6,8 @@
 #include <atomic>
 #include <chrono>
 #include "bbport_toggles.h"
+#include <optional>
+#include "video_core/renderer_vulkan/vk_staging_buffer_pool.h"
 
 #include <condition_variable>
 #include <mutex>
@@ -345,6 +347,15 @@ private:
 
     /// Copies image memory back to CPU.
     void DownloadImageMemory(ImageId image_id, bool sync = false);
+
+    /// bbport: a recorded image-to-staging copy, written to guest memory after a GPU wait.
+    struct PendingDownload {
+        VAddr guest_address;
+        u32 size;
+        Vulkan::StagingBufferRef staging;
+    };
+    /// Records the copy of a GPU-modified image into a deferred staging allocation.
+    std::optional<PendingDownload> RecordImageDownload(ImageId image_id);
 
     /// Thread function for copying downloaded images out to CPU memory.
     void DownloadedImagesThread(const std::stop_token& token);

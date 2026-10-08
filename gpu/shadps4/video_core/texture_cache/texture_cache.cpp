@@ -63,12 +63,56 @@ TextureCache::TextureCache(const Vulkan::Instance& instance_, Vulkan::Scheduler&
 
 TextureCache::~TextureCache() = default;
 
+// bbport: every copy is recorded first and the GPU is waited for once. A wait per image (as
+// before) left the GPU mostly idle in God of War III's gameplay, at about 2 FPS.
 void TextureCache::ProcessDownloadImages() {
     std::unique_lock lk{download_images_mutex};
+    boost::container::small_vector<PendingDownload, 16> pending;
     for (const ImageId image_id : download_images) {
-        DownloadImageMemory(image_id, true);
+        if (auto download = RecordImageDownload(image_id)) {
+            pending.push_back(*download);
+        }
     }
     download_images.clear();
+    if (pending.empty()) {
+        return;
+    }
+    scheduler.Finish();
+    for (const PendingDownload& download : pending) {
+        download.staging.Invalidate();
+        Core::Memory::Instance()->TryWriteBacking(std::bit_cast<u8*>(download.guest_address),
+                                                  download.staging.mapped, download.size);
+        runtime.GetStagingPool().FreeDeferred(download.staging);
+    }
+}
+
+std::optional<TextureCache::PendingDownload> TextureCache::RecordImageDownload(ImageId image_id) {
+    Image& image = slot_images[image_id];
+    if (False(image.flags & ImageFlagBits::GpuModified)) {
+        return std::nullopt;
+    }
+    const u32 download_size = image.info.pitch * image.info.size.height * image.info.size.depth *
+                              image.info.resources.layers * (image.info.num_bits / 8);
+    ASSERT(download_size <= image.info.guest_size);
+    const auto download =
+        runtime.GetStagingPool().Request(download_size, MemoryType::HostCached, 16, true);
+    const vk::BufferImageCopy image_download = {
+        .bufferOffset = download.offset,
+        .bufferRowLength = image.info.pitch,
+        .bufferImageHeight = image.info.size.height,
+        .imageSubresource =
+            {
+                .aspectMask = image.info.props.is_depth ? vk::ImageAspectFlagBits::eDepth
+                                                        : vk::ImageAspectFlagBits::eColor,
+                .mipLevel = 0,
+                .baseArrayLayer = 0,
+                .layerCount = image.info.resources.layers,
+            },
+        .imageOffset = {0, 0, 0},
+        .imageExtent = {image.info.size.width, image.info.size.height, image.info.size.depth},
+    };
+    runtime.DownloadImage(&image, download.buffer, std::span{&image_download, 1});
+    return PendingDownload{image.info.guest_address, download_size, download};
 }
 
 void TextureCache::DownloadImageMemory(ImageId image_id, bool sync) {
