@@ -74,6 +74,17 @@ void *runtime_low_map(size_t size, int prot);
 void runtime_memory_reserve(void);
 uintptr_t runtime_ajm_resolve(const char *name);
 void runtime_ajm_report(void);
+/* AjmDecMp3ParseFrame (guest layout). */
+typedef struct {
+    uint64_t frame_size;
+    uint32_t num_channels, samples_per_channel, bitrate, sample_rate, encoder_delay, num_frames, total_samples, ofl_type;
+} Mp3Frame;
+typedef struct Mp3Decoder Mp3Decoder;
+int runtime_mp3_parse(const unsigned char *data, uint32_t size, int parse_ofl, int layer3_only, Mp3Frame *frame);
+Mp3Decoder *runtime_mp3_open(void);
+void runtime_mp3_close(Mp3Decoder *decoder);
+void runtime_mp3_reset(Mp3Decoder *decoder);
+int runtime_mp3_decode(Mp3Decoder *decoder, const unsigned char *data, int size, float *pcm, int max_samples, int *channels);
 uintptr_t runtime_audio_resolve(const char *name);
 void runtime_audio_report(void);
 uintptr_t runtime_pad_resolve(const char *name);

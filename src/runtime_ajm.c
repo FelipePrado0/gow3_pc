@@ -2,7 +2,8 @@
  * builder functions are imports, but games may also build chunks inline), and
  * run synchronously at submission: decoding a batch takes well under a
  * millisecond, so waiting always finds it complete. ATRAC9 is decoded by
- * LibAtrac9 (MIT, third_party/LibAtrac9). MP3/AAC instances stop explicitly. */
+ * LibAtrac9 (MIT, third_party/LibAtrac9), MP3 by FFmpeg (runtime_mp3.c). AAC instances
+ * stop explicitly. */
 #define _GNU_SOURCE
 #include "runtime.h"
 #include <stdio.h>
@@ -65,6 +66,8 @@ typedef struct {
     uint32_t superframe_remain, frames;
     SidebandGapless gapless_init, gapless;
     uint64_t total_samples;
+    Mp3Decoder *mp3;
+    uint32_t mp3_header, mp3_bitrate;
 } Instance;
 typedef struct { int used, registered[24]; Instance instances[MAX_INSTANCES+1]; } Context;
 typedef struct { int used, context, canceled; } Batch;
@@ -248,6 +251,64 @@ static void parse_riff(Instance *in, const unsigned char **input, uint64_t *size
     *size-=(uint64_t)(p-*input); *input=p;
 }
 
+/* ---- MP3 decoding ---- */
+enum { CODEC_MP3=0, CODEC_AT9=1 };
+static void instance_release(Instance *in) {
+    if (in->handle) Atrac9ReleaseHandle(in->handle);
+    runtime_mp3_close(in->mp3);
+}
+/* The frame at the input: its header sets the frame layout (and the gapless metadata of a tag
+ * frame) before the room and input checks. */
+static uint32_t mp3_next(Instance *in, const unsigned char *input, uint64_t input_size) {
+    if (input_size<4) return RESULT_PARTIAL_INPUT;
+    Mp3Frame f;
+    int ignore_ofl=in->codec_flags & 1;
+    if (runtime_mp3_parse(input,input_size>UINT32_MAX ? UINT32_MAX : (uint32_t)input_size,!ignore_ofl,1,&f))
+        return RESULT_CODEC_ERROR|RESULT_FATAL;
+    in->info.channels=(int)f.num_channels; in->info.samplingRate=(int)f.sample_rate;
+    in->info.frameSamples=(int)f.samples_per_channel; in->info.framesInSuperframe=1;
+    in->info.superframeSize=(int)f.frame_size; in->superframe_remain=(uint32_t)f.frame_size;
+    in->mp3_header=(uint32_t)input[0]<<24|(uint32_t)input[1]<<16|(uint32_t)input[2]<<8|input[3];
+    in->mp3_bitrate=f.bitrate;
+    if (f.total_samples || f.encoder_delay) {
+        in->gapless_init.total_samples=f.total_samples; in->gapless_init.skip_samples=(uint16_t)f.encoder_delay;
+        gapless_reset(in);
+    }
+    return 0;
+}
+static uint32_t mp3_frame(Instance *in, const unsigned char **input, uint64_t *input_size, Output *out,
+                          uint32_t *samples_written, int32_t *internal) {
+    float pcm[1152*2];
+    int channels=in->info.channels;
+    uint32_t size=in->superframe_remain;
+    int frame=runtime_mp3_decode(in->mp3,*input,(int)size,pcm,1152,&channels);
+    *input+=size; *input_size-=size; in->superframe_remain=0;
+    if (frame<0 || channels!=in->info.channels) { *internal=-1; return RESULT_CODEC_ERROR|RESULT_FATAL; }
+    ++frames_decoded;
+    uint32_t skip=in->gapless.skip_samples<(uint32_t)frame ? in->gapless.skip_samples : (uint32_t)frame;
+    in->gapless.skip_samples-=(uint16_t)skip;
+    uint32_t samples=(uint32_t)frame-skip;
+    if (in->gapless_init.total_samples && samples>in->gapless.total_samples) samples=in->gapless.total_samples;
+    uint64_t room=output_room(out)/(uint64_t)(channels*pcm_size(in->format));
+    if (samples>room) samples=(uint32_t)room;
+    unsigned char converted[1152*2*4];
+    for (uint32_t i=0;i<samples*(uint32_t)channels;++i) {
+        float v=pcm[skip*(uint32_t)channels+i];
+        v=v>1.0f ? 1.0f : v<-1.0f ? -1.0f : v;
+        if (in->format==FORMAT_S16) { int16_t w=(int16_t)(v*32767.0f); memcpy(converted+i*2,&w,2); }
+        else if (in->format==FORMAT_S32) { int32_t w=(int32_t)(v*2147483647.0); memcpy(converted+i*4,&w,4); }
+        else memcpy(converted+i*4,&v,4);
+    }
+    output_write(out,converted,(uint64_t)samples*(uint64_t)channels*(uint64_t)pcm_size(in->format));
+    *samples_written=samples;
+    in->gapless.skipped_samples+=(uint16_t)((uint32_t)frame-samples);
+    if (in->gapless_init.total_samples) in->gapless.total_samples-=samples;
+    return 0;
+}
+static ABI int32_t ajm_mp3_parse_frame(const unsigned char *data, uint32_t size, int parse_ofl, Mp3Frame *frame) {
+    return runtime_mp3_parse(data,size,parse_ofl,1,frame) ? ERR_INVALID_PARAMETER : 0;
+}
+
 /* ---- job execution ---- */
 typedef struct {
     uint64_t flags; int have_flags;
@@ -287,7 +348,11 @@ static void run_job(Context *ctx, uint32_t id, Job *job) {
     uint32_t flags_result=0;
     const unsigned char *control=job->input_control.size ? job->input_control.address : NULL;
     const unsigned char *control_end=control ? control+job->input_control.size : NULL;
-    if (CONTROL_RESET(f)) { in->total_samples=0; gapless_reset(in); if (in->initialized) at9_reset(in); }
+    if (CONTROL_RESET(f)) {
+        in->total_samples=0; gapless_reset(in);
+        if (in->codec==CODEC_MP3) runtime_mp3_reset(in->mp3);
+        else if (in->initialized) at9_reset(in);
+    }
     if (control && SIDEBAND_FORMAT(f) && control+24<=control_end) control+=24; /* output format fixed per instance */
     if (control && SIDEBAND_GAPLESS(f) && control+8<=control_end) {
         SidebandGapless g; memcpy(&g,control,8); control+=8;
@@ -307,7 +372,7 @@ static void run_job(Context *ctx, uint32_t id, Job *job) {
         }
     }
     if (control && CONTROL_RESAMPLE(f) && control+8<=control_end) control+=8;
-    if (control && CONTROL_INITIALIZE(f) && control+8<=control_end) { memcpy(in->config,control,4); at9_reset(in); }
+    if (control && CONTROL_INITIALIZE(f) && control+8<=control_end && in->codec==CODEC_AT9) { memcpy(in->config,control,4); at9_reset(in); }
     uint64_t in_size=0;
     for (int i=0;i<job->input_count;++i) in_size+=job->inputs[i].size;
     unsigned char *joined=NULL;
@@ -325,13 +390,15 @@ static void run_job(Context *ctx, uint32_t id, Job *job) {
     int32_t internal=0;
     if (in_size) for (;;) {
         if (in->gapless_loop && gapless_end(in)) { gapless_reset(in); in->total_samples=0; }
-        if ((in->codec_flags & 1) && in_size>=4 && !memcmp(input,"RIFF",4)) { parse_riff(in,&input,&in_size); in->total_samples=0; }
+        if (in->codec==CODEC_AT9 && (in->codec_flags & 1) && in_size>=4 && !memcmp(input,"RIFF",4)) { parse_riff(in,&input,&in_size); in->total_samples=0; }
+        if (in->codec==CODEC_MP3 && (flags_result|=mp3_next(in,input,in_size))) break;
         if (!in->initialized) { flags_result|=RESULT_NOT_INITIALIZED; break; }
         if (!gapless_end(in) && output_room(&out)<next_frame_bytes(in)) flags_result|=RESULT_NOT_ENOUGH_ROOM;
         if (in_size<in->superframe_remain) flags_result|=RESULT_PARTIAL_INPUT;
         if (flags_result) break;
         uint32_t written=0;
-        uint32_t r=at9_frame(in,&input,&in_size,&out,&written,&internal);
+        uint32_t r=in->codec==CODEC_MP3 ? mp3_frame(in,&input,&in_size,&out,&written,&internal)
+                                        : at9_frame(in,&input,&in_size,&out,&written,&internal);
         in->total_samples+=written; ++frames;
         if (r) { flags_result|=r; break; }
         if (!RUN_MULTIPLE_FRAMES(f)) break;
@@ -350,14 +417,22 @@ static void run_job(Context *ctx, uint32_t id, Job *job) {
     if (side && SIDEBAND_FORMAT(f) && side+24<=side_end) {
         SidebandFormat s={(uint32_t)in->info.channels,channel_mask(in->info.channels),(uint32_t)in->info.samplingRate,
                           (uint32_t)in->format,0,0};
-        if (in->info.framesInSuperframe && in->info.frameSamples)
+        if (in->codec==CODEC_MP3) s.bitrate=in->mp3_bitrate;
+        else if (in->info.framesInSuperframe && in->info.frameSamples)
             s.bitrate=(uint32_t)((uint64_t)in->info.samplingRate*(uint64_t)in->info.superframeSize*8/
                                  ((uint64_t)in->info.framesInSuperframe*(uint64_t)in->info.frameSamples));
         memcpy(side,&s,24); side+=24;
     }
     if (side && SIDEBAND_GAPLESS(f) && side+8<=side_end) { memcpy(side,&in->gapless,8); side+=8; }
     if (side && RUN_MULTIPLE_FRAMES(f) && side+8<=side_end) { uint32_t m[2]={frames,0}; memcpy(side,m,8); side+=8; }
-    if (side && RUN_CODEC_INFO(f) && side+16<=side_end) {
+    if (side && RUN_CODEC_INFO(f) && side+16<=side_end && in->codec==CODEC_MP3) {
+        /* AjmSidebandDecMp3CodecInfo: header, has_crc, channel_mode, mode_extension, copyright, original, emphasis. */
+        uint32_t h=in->mp3_header;
+        unsigned char info[16]={0};
+        memcpy(info,&h,4);
+        info[4]=!((h>>16)&1); info[5]=(h>>6)&3; info[6]=(h>>4)&3; info[7]=(h>>3)&1; info[8]=(h>>2)&1; info[9]=h&3;
+        memcpy(side,info,16);
+    } else if (side && RUN_CODEC_INFO(f) && side+16<=side_end) {
         At9Info info={(uint32_t)in->info.superframeSize,(uint32_t)in->info.framesInSuperframe,in->superframe_remain,(uint32_t)in->info.frameSamples};
         memcpy(side,&info,16);
     }
@@ -372,7 +447,7 @@ static ABI int32_t ajm_initialize(int64_t reserved, uint32_t *out) {
         contexts[i]=calloc(1,sizeof(Context));
         pthread_mutex_unlock(&lock);
         if (!contexts[i]) return ERR_OUT_OF_RESOURCES;
-        *out=i; puts("Runtime: Ajm context initialized (ATRAC9 via LibAtrac9)");
+        *out=i; puts("Runtime: Ajm context initialized (ATRAC9 via LibAtrac9, MP3 via FFmpeg)");
         return 0;
     }
     pthread_mutex_unlock(&lock);
@@ -382,7 +457,7 @@ static ABI int32_t ajm_finalize(uint32_t id) {
     pthread_mutex_lock(&lock);
     Context *c=context(id);
     if (!c) { pthread_mutex_unlock(&lock); return ERR_INVALID_CONTEXT; }
-    for (int i=0;i<=MAX_INSTANCES;++i) if (c->instances[i].handle) Atrac9ReleaseHandle(c->instances[i].handle);
+    for (int i=0;i<=MAX_INSTANCES;++i) instance_release(&c->instances[i]);
     free(c); contexts[id]=NULL;
     pthread_mutex_unlock(&lock);
     return 0;
@@ -407,7 +482,7 @@ static ABI int32_t ajm_module_unregister(uint32_t id, uint32_t codec) {
 static ABI int32_t ajm_instance_create(uint32_t id, uint32_t codec, uint64_t flags, uint32_t *out) {
     if (!out || codec>=24) return ERR_INVALID_PARAMETER;
     if (!(flags & 7)) return ERR_WRONG_REVISION;
-    if (codec!=1) { fprintf(stderr,"STOP: Ajm codec %u (0=MP3, 2=AAC) is not implemented\n",codec); exit(21); }
+    if (codec!=CODEC_MP3 && codec!=CODEC_AT9) { fprintf(stderr,"STOP: Ajm codec %u (2=AAC) is not implemented\n",codec); exit(21); }
     if (ajm_trace()) printf("Audio trace: Ajm instance create codec %u flags %#llx\n",codec,(unsigned long long)flags);
     pthread_mutex_lock(&lock);
     Context *c=context(id);
@@ -418,6 +493,11 @@ static ABI int32_t ajm_instance_create(uint32_t id, uint32_t codec, uint64_t fla
         in->used=1; in->codec=(int)codec; in->channels_hint=(int)((flags>>3)&15); in->format=(int)((flags>>7)&7);
         in->gapless_loop=(int)((flags>>10)&1); in->codec_flags=(uint32_t)(flags>>32);
         if (in->format>FORMAT_FLOAT) { in->used=0; r=ERR_INVALID_PARAMETER; break; }
+        if (codec==CODEC_MP3) {
+            in->mp3=runtime_mp3_open();
+            if (!in->mp3) { in->used=0; r=ERR_OUT_OF_RESOURCES; break; }
+            in->initialized=1;
+        }
         *out=i|(codec<<14); r=0; break;
     }
     pthread_mutex_unlock(&lock);
@@ -428,7 +508,7 @@ static ABI int32_t ajm_instance_destroy(uint32_t id, uint32_t instance) {
     Context *c=context(id);
     Instance *in=c ? &c->instances[instance & MAX_INSTANCES] : NULL;
     int32_t r=!c ? ERR_INVALID_CONTEXT : !(instance & MAX_INSTANCES) || !in->used ? ERR_INVALID_INSTANCE : 0;
-    if (!r) { if (in->handle) Atrac9ReleaseHandle(in->handle); memset(in,0,sizeof(*in)); }
+    if (!r) { instance_release(in); memset(in,0,sizeof(*in)); }
     pthread_mutex_unlock(&lock);
     return r;
 }
@@ -488,7 +568,7 @@ static const RuntimeExport exports[]={
     {"sceAjmBatchJobRunSplitBufferRa",job_run_split}, {"sceAjmBatchJobInlineBuffer",job_inline},
     {"sceAjmBatchStartBuffer",ajm_batch_start}, {"sceAjmBatchWait",ajm_batch_wait},
     {"sceAjmBatchCancel",ajm_batch_cancel}, {"sceAjmBatchErrorDump",ajm_error_dump},
-    {"sceAjmMemoryRegister",ajm_memory_register},
+    {"sceAjmMemoryRegister",ajm_memory_register}, {"sceAjmDecMp3ParseFrame",ajm_mp3_parse_frame},
 };
 uintptr_t runtime_ajm_resolve(const char *name) { return RUNTIME_LOOKUP(exports,name); }
 void runtime_ajm_report(void) {
