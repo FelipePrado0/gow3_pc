@@ -236,6 +236,8 @@ uintptr_t runtime_resolve(const char *name, int is_data) {
     if (services) return services;
     uintptr_t ajm = runtime_ajm_resolve(name);
     if (ajm) return ajm;
+    uintptr_t videodec = runtime_videodec_resolve(name);
+    if (videodec) return videodec;
     uintptr_t audio = runtime_audio_resolve(name);
     if (audio) return audio;
     uintptr_t pad = runtime_pad_resolve(name);

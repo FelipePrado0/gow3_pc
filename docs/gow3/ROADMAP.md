@@ -86,12 +86,31 @@ God of War III Remastered abre pelo loader nativo, roda a cutscene de abertura e
 | 1 | Reconhecer APIs pelo nome | **Spec 1** | Não | 0 | ✅ Concluída |
 | 2 | Configuração por jogo + patches | **Spec 2** | Não | 1 | ✅ Concluída |
 | 3 | Inventário de APIs faltantes | Diagnóstico | **Sim** | 1, 2 | ✅ Concluída |
-| 4 | Áudio MP3 | **Spec 3** | Sim | 3 | ⬜ Pendente |
-| 5 | Vídeo das cutscenes | **Spec 4** | Sim | 3 | ⬜ Pendente |
+| 4 | Áudio MP3 | **Spec 3** | Sim | 3 | ✅ Concluída |
+| 5 | Vídeo das cutscenes | **Spec 4** | Sim | 3 | ✅ Concluída |
 | 6 | Serviços do sistema que faltam | **Spec 5** | Sim | 3 | ⬜ Pendente |
 | 7 | Gráficos corretos + pacote | **Spec 6** | Sim | 4, 5, 6 | ⬜ Pendente |
 
 **Total: 6 specs** (podem virar 7–8 dependendo do inventário da etapa 3).
+
+### O que já foi feito
+
+| # | Entregue | Commit |
+|---|---|---|
+| 0 | MSYS2 CLANG64 instalado; `bash build.sh` gera `out/bb-probe.exe` no Windows; branch `gow3` criada. Linha de base dos testes Python: 7 falhas que já existiam (testes só de Linux). | — |
+| 1 | Imports gravados como `NID#biblioteca` (iguais em qualquer jogo), com libScePosix tratada como libkernel. Nova opção `--check-imports` lista o que falta sem rodar o jogo. | `c4617d2` |
+| 2 | Perfil por jogo pelo `TITLE_ID`: GoW3 usa `patches/God_of_War_III_Remastered.xml` só na v01.02; DMEM e VBlank lidos das notas dos patches; patch de resolução substitui o Texture Fix; menu Insert com o nome do jogo. | `4589fb9` |
+| 3 | Dump CUSA01623 v01.02 conferido. `--check-imports`: 387 imports, 45 faltando (35 chamados pelo jogo, 10 só pela libc/Fios2). Lista na seção da etapa 3. | `ea89783` |
+| 4 (Spec 3) | MP3 no libSceAjm via FFmpeg (`src/runtime_mp3.c`): leitura do cabeçalho e dos metadados gapless (LAME/Xing, VBRI, FGH), `sceAjmDecMp3ParseFrame`, saída S16/S32/float. Teste `mp3-test`: a saída bate amostra por amostra com a decodificação do próprio FFmpeg. | — |
+| 5 (Spec 4) | `sceVideodec` (H.264 para NV12) via FFmpeg (`src/runtime_videodec.c`): QueryResourceInfo, CreateDecoder, Decode, Flush, Reset, DeleteDecoder. Imagem maior que o buffer do jogo devolve erro em vez de estourar memória. Teste `videodec-test` com 6 quadros, incluindo B-frames. | — |
+
+`--check-imports` depois das specs 3 e 4: **37 faltando** (eram 45). Todos os restantes são da spec 5.
+
+**Pendências conhecidas**
+
+- Uma API do jogo é desconhecida até no shadPS4: `QKd0qM58Qes#libkernel`. É preciso analisar o código do jogo no ponto em que ela é chamada.
+- Os testes em C (`test_runtime.c`, `test_content.c`, `test_sema.c`) não compilam no Windows pelo `build.sh`. As chaves foram convertidas, mas esses testes ainda não rodaram.
+- Zerar o `--check-imports` não garante que o jogo abre: travamentos de execução e defeitos gráficos entram na spec 6.
 
 Legenda de status: ⬜ Pendente · 🟨 Em andamento · ✅ Concluída · ⛔ Bloqueada
 
