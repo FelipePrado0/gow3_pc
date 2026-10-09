@@ -15,6 +15,7 @@
 #include "video_core/renderer_vulkan/vk_compute_pipeline.h"
 #include "video_core/renderer_vulkan/vk_graphics_pipeline.h"
 #include "video_core/renderer_vulkan/vk_resource_pool.h"
+#include "video_core/renderer_vulkan/vk_async_compiler.h"
 
 template <>
 struct std::hash<vk::ShaderModule> {
@@ -40,6 +41,8 @@ namespace Vulkan {
 class Instance;
 class Scheduler;
 class ShaderCache;
+struct AsyncShaderCompilation;
+struct AsyncGraphicsCompilation;
 
 struct Program {
     struct Module {
@@ -55,6 +58,9 @@ struct Program {
     /// gow3: `info` as translated, for draw-preparation workers (they must not read `info`,
     /// whose user data the GPU thread rewrites every draw). Guarded by programs_mutex.
     std::unique_ptr<Shader::Info> info_template;
+    std::shared_ptr<AsyncShaderCompilation> pending;
+    bool compilation_failed = false;
+    std::vector<Shader::StageSpecialization> failed_permutations;
 
     Program() = default;
     Program(Shader::HwStage stage, Shader::SwStage l_stage, Shader::ShaderParams params)
@@ -94,6 +100,7 @@ struct PipelineSelection {
     std::optional<Shader::Gcn::FetchShaderData> fetch_shader{};
     GraphicsPipelineKey graphics_key{};
     bool motion = false;
+    bool compilation_pending = false;
     DrawIndirectParams draw_indirect_params{};
     struct PrepWorker* worker{}; ///< set: read-only selection for a draw-preparation worker
 };
@@ -164,6 +171,13 @@ public:
     }
 
 private:
+    bool QueueShader(Program& program, Shader::HwStage stage, Shader::SwStage l_stage,
+                     const Shader::ShaderParams& params, Shader::RuntimeInfo runtime_info,
+                     Shader::Backend::Bindings binding, size_t permutation, bool initial,
+                     std::optional<Shader::StageSpecialization> specialization = {});
+    void PublishShaders(bool wait = false);
+    void PublishGraphics(bool wait = false);
+    void FinishCompilations();
     bool RefreshGraphicsKey(PipelineSelection& sel);
     bool RefreshGraphicsStages(PipelineSelection& sel);
     bool RefreshComputeKey();
@@ -191,7 +205,11 @@ private:
     vk::UniquePipelineLayout pipeline_layout;
     Shader::Profile profile{};
     Shader::Pools pools;
+    std::unique_ptr<AsyncCompiler> compiler;
+    std::mutex pipeline_build_mutex;
+    tsl::robin_map<GraphicsPipelineKey, std::shared_ptr<AsyncGraphicsCompilation>> pending_graphics;
     tsl::robin_map<size_t, std::unique_ptr<Program>> program_cache;
+    std::vector<Program*> pending_programs;
     /// gow3: exclusive for program/permutation insertions, shared for worker lookups.
     std::shared_mutex programs_mutex;
     u64 prepared_hits = 0, prepared_misses = 0;

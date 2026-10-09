@@ -239,6 +239,16 @@ target_compile_options(blend-rewrite-test PRIVATE -UNDEBUG)
 target_include_directories(blend-rewrite-test PRIVATE shim shadps4 third_party/gcn/include)
 target_link_libraries(blend-rewrite-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum)
 add_executable(depth-stencil-state-test EXCLUDE_FROM_ALL ../tests/test_depth_stencil_state.cpp)
+add_executable(async-compiler-test EXCLUDE_FROM_ALL ../tests/test_async_compiler.cpp)
+target_compile_options(async-compiler-test PRIVATE -UNDEBUG)
+target_include_directories(async-compiler-test PRIVATE shadps4)
+add_executable(async-fetch-snapshot-test EXCLUDE_FROM_ALL ../tests/test_async_fetch_snapshot.cpp
+    shadps4/shader_recompiler/frontend/fetch_shader.cpp
+    shadps4/shader_recompiler/frontend/decode.cpp
+    shadps4/shader_recompiler/frontend/format.cpp)
+target_compile_options(async-fetch-snapshot-test PRIVATE -UNDEBUG)
+target_include_directories(async-fetch-snapshot-test PRIVATE shim shadps4 third_party/gcn/include)
+target_link_libraries(async-fetch-snapshot-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum)
 target_compile_options(depth-stencil-state-test PRIVATE -UNDEBUG)
 target_include_directories(depth-stencil-state-test PRIVATE shim shadps4 third_party/gcn/include)
 target_link_libraries(depth-stencil-state-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum)
