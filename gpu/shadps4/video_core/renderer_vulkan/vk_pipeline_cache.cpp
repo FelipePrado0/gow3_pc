@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
 #include <mutex>
 #include <ranges>
@@ -12,6 +13,7 @@
 #include "gow3_threads.h"
 
 #include "common/hash.h"
+#include "common/thread.h"
 #include "common/io_file.h"
 #include "common/path_util.h"
 #include "core/debug_state.h"
@@ -43,6 +45,7 @@ struct AsyncShaderCompilation {
     Shader::RuntimeInfo runtime{};
     std::vector<u32> code, user_data, geometry_code, binary;
     std::unique_ptr<Shader::Pools> pools;
+    CompilerPool<Shader::Pools>* pool_cache{};
     std::optional<Shader::IR::Program> ir;
     Shader::StageSpecialization spec;
     Shader::Gcn::FetchShaderSnapshot fetch;
@@ -52,6 +55,10 @@ struct AsyncShaderCompilation {
     size_t permutation{};
     bool initial{};
     ~AsyncShaderCompilation() {
+        ir.reset();
+        if (pools) {
+            pool_cache->Recycle(std::move(pools));
+        }
         if (module) {
             device.destroyShaderModule(module);
         }
@@ -386,9 +393,23 @@ PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
                vk::to_string(cache_result));
     pipeline_cache = std::move(cache);
     if (const char* env = std::getenv("GOW3_ASYNC_SHADERS"); env && std::strcmp(env, "1") == 0) {
-        const auto count = std::clamp(Gow3Threads::Available() / 4, 1u, 4u);
-        compiler = std::make_unique<AsyncCompiler>(count);
-        LOG_INFO(Render_Vulkan, "gow3: async graphics compilation enabled ({} workers)", count);
+        const auto count = std::clamp(Gow3Threads::Available() / 2, 1u, 6u);
+        const auto capture_count = std::min(2u, std::max(1u, Gow3Threads::Available() / 4));
+        for (unsigned i = 0; i < count; ++i) {
+            auto [result, worker_cache] = instance.GetDevice().createPipelineCacheUnique({});
+            ASSERT_MSG(result == vk::Result::eSuccess, "Failed to create compiler pipeline cache");
+            worker_pipeline_caches.push_back(std::move(worker_cache));
+        }
+        capture_compiler = std::make_unique<AsyncCompiler>(capture_count, 8, [](unsigned index) {
+            Common::SetCurrentThreadName(("gow3:ShaderCapture" + std::to_string(index)).c_str());
+            Common::SetCurrentThreadPriority(Common::ThreadPriority::High);
+        });
+        compiler = std::make_unique<AsyncCompiler>(count, 64, [](unsigned index) {
+            Common::SetCurrentThreadName(("gow3:ShaderCompile" + std::to_string(index)).c_str());
+            Common::SetCurrentThreadPriority(Common::ThreadPriority::Low);
+        });
+        LOG_INFO(Render_Vulkan, "gow3: async graphics compilation enabled ({} capture, {} compile workers)",
+                 capture_count, count);
     }
 }
 
@@ -400,15 +421,23 @@ PipelineCache::~PipelineCache() {
 std::atomic<u64> g_gow3_compile_ns;
 std::atomic<u32> g_gow3_compiles;
 std::atomic<u64> g_gow3_capture_ns, g_gow3_async_ns, g_gow3_compile_wait_ns;
+std::atomic<u64> g_gow3_snapshot_ns, g_gow3_guest_wait_ns;
+std::atomic<u32> g_gow3_pool_reuses;
 std::atomic<u32> g_gow3_pending_draws;
 namespace {
 struct PhaseTimer {
     std::atomic<u64>& counter;
     std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    ~PhaseTimer() {
+    bool active = true;
+    void Stop() {
+        if (!active) {
+            return;
+        }
         counter += u64(std::chrono::duration_cast<std::chrono::nanoseconds>(
                            std::chrono::steady_clock::now() - start).count());
+        active = false;
     }
+    ~PhaseTimer() { Stop(); }
 };
 struct CompileTimer {
     std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
@@ -430,7 +459,7 @@ bool PipelineCache::QueueShader(Program& program, HwStage stage, SwStage l_stage
     if (!compiler->HasCapacity()) {
         return false;
     }
-    PhaseTimer capture{g_gow3_capture_ns};
+    PhaseTimer snapshot{g_gow3_snapshot_ns};
     auto build = std::make_shared<AsyncShaderCompilation>();
     build->device = instance.GetDevice();
     build->code.assign(params.code.begin(), params.code.end());
@@ -448,14 +477,30 @@ bool PipelineCache::QueueShader(Program& program, HwStage stage, SwStage l_stage
     if (specialization) {
         build->spec = *specialization;
     }
-    build->pools = std::make_unique<Shader::Pools>();
-    try {
-        // gow3: translation and specialization may read guest memory. Finish them before returning.
+    build->pool_cache = &compiler_pools;
+    snapshot.Stop();
+    AsyncJob<bool> capture_job;
+    if (!capture_job.Start(*capture_compiler, [this, build, binding] {
+        PhaseTimer capture{g_gow3_capture_ns};
+        auto [pools, reused] = compiler_pools.Acquire();
+        build->pools = std::move(pools);
+        if (reused) {
+            ++g_gow3_pool_reuses;
+        }
+        // gow3: the GPU thread waits until all guest reads and specialization are captured.
         build->ir.emplace(Shader::TranslateProgram(build->code, *build->pools, build->info,
                                                    build->runtime, profile));
         build->spec = Shader::StageSpecialization(build->info, build->runtime, profile, binding);
         build->fetch.Capture(build->info);
-    } catch (const std::exception& error) {
+        return true;
+    })) {
+        return false;
+    }
+    {
+        PhaseTimer waiting{g_gow3_guest_wait_ns};
+        capture_job.Wait();
+    }
+    if (!capture_job.Poll()) {
         if (initial) {
             program.compilation_failed = true;
         } else {
@@ -463,7 +508,7 @@ bool PipelineCache::QueueShader(Program& program, HwStage stage, SwStage l_stage
             program.failed_permutations.push_back(std::move(*specialization));
         }
         LOG_ERROR(Render_Vulkan, "gow3: shader {:#x}/{} capture failed: {}", params.hash,
-                  permutation, error.what());
+                  permutation, capture_job.Error());
         return false;
     }
     const bool queued = build->job.Start(*compiler, [this, build] {
@@ -479,9 +524,9 @@ bool PipelineCache::QueueShader(Program& program, HwStage stage, SwStage l_stage
                                     instance.GetDevice());
         build->binary = std::move(spv);
         build->ir.reset();
-        build->pools.reset();
+        compiler_pools.Recycle(std::move(build->pools));
         return build;
-    });
+    }, true);
     if (queued) {
         program.pending = std::move(build);
         pending_programs.push_back(&program);
@@ -569,9 +614,39 @@ void PipelineCache::PublishGraphics(bool wait) {
 
 void PipelineCache::FinishCompilations() {
     if (compiler) {
+        capture_compiler->Stop();
         compiler->Stop();
         PublishShaders(true);
         PublishGraphics(true);
+        std::vector<vk::PipelineCache> sources;
+        for (const auto& cache : worker_pipeline_caches) {
+            sources.push_back(*cache);
+        }
+        const auto result = instance.GetDevice().mergePipelineCaches(*pipeline_cache, sources);
+        if (result != vk::Result::eSuccess) {
+            LOG_ERROR(Render_Vulkan, "gow3: compiler cache merge failed: {}", vk::to_string(result));
+        }
+    }
+}
+
+void PipelineCache::SeedWorkerCaches() {
+    if (!compiler || worker_caches_seeded) {
+        return;
+    }
+    for (const auto& cache : worker_pipeline_caches) {
+        const auto result = instance.GetDevice().mergePipelineCaches(*cache, *pipeline_cache);
+        ASSERT_MSG(result == vk::Result::eSuccess, "Failed to seed compiler pipeline cache");
+    }
+    worker_caches_seeded = true;
+}
+
+void PipelineCache::ReportCompilerStats() {
+    if (compiler) {
+        std::printf("Compiler stats: capture queue %zu, compile queue %zu; queue waits: capture "
+                    "%.1f ms, compile %.1f ms; pools retained %zu, reused %u\n",
+                    capture_compiler->Depth(), compiler->Depth(),
+                    capture_compiler->QueueWaitNs() / 1e6, compiler->QueueWaitNs() / 1e6,
+                    compiler_pools.Retained(), g_gow3_pool_reuses.exchange(0));
     }
 }
 
@@ -618,6 +693,7 @@ const GraphicsPipeline* PipelineCache::TryPreparedPipeline(const PreparedDraw& p
 
 const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectParams params,
                                                            const PreparedDraw* prepared) {
+    SeedWorkerCaches();
     PublishShaders();
     PublishGraphics();
     used_prepared = nullptr;
@@ -640,7 +716,7 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
             return found->second.get();
         }
         if (!pending_graphics.contains(sel.graphics_key) && compiler->HasCapacity()) {
-            PhaseTimer capture{g_gow3_capture_ns};
+            PhaseTimer capture{g_gow3_snapshot_ns};
             auto build = std::make_shared<AsyncGraphicsCompilation>();
             build->selection = sel;
             build->selection.regs = nullptr;
@@ -657,15 +733,11 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
             const bool queued = build->job.Start(*compiler, [this, build] {
                 // Only the vertex stage uses fetch-shader guest pointers during pipeline construction.
                 Shader::Gcn::ScopedFetchShaderSnapshot snapshot{build->fetch[u32(SwStage::Vertex)]};
-                std::unique_lock lock{pipeline_build_mutex, std::defer_lock};
-                {
-                    PhaseTimer waiting{g_gow3_compile_wait_ns};
-                    lock.lock();
-                }
                 PhaseTimer compile{g_gow3_async_ns};
                 auto& s = build->selection;
                 build->pipeline = std::make_unique<GraphicsPipeline>(
-                    instance, scheduler, desc_heap, profile, s.graphics_key, *pipeline_cache,
+                    instance, scheduler, desc_heap, profile, s.graphics_key,
+                    *worker_pipeline_caches[AsyncCompiler::WorkerIndex()],
                     s.infos, s.runtime_infos, s.fetch_shader, s.modules, build->data, false);
                 return build;
             });
@@ -681,7 +753,6 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
         const auto pipeline_hash = std::hash<GraphicsPipelineKey>{}(sel.graphics_key);
         LOG_INFO(Render_Vulkan, "Compiling graphics pipeline {:#x}", pipeline_hash);
         CompileTimer timer;
-        std::scoped_lock build_lock{pipeline_build_mutex};
 
         GraphicsPipeline::SerializationSupport sdata{};
         it.value() = std::make_unique<GraphicsPipeline>(
@@ -715,7 +786,6 @@ const ComputePipeline* PipelineCache::GetComputePipeline() {
         const auto pipeline_hash = std::hash<ComputePipelineKey>{}(compute_key);
         LOG_INFO(Render_Vulkan, "Compiling compute pipeline {:#x}", pipeline_hash);
         CompileTimer timer;
-        std::scoped_lock build_lock{pipeline_build_mutex};
 
         ComputePipeline::SerializationSupport sdata{};
         it.value() = std::make_unique<ComputePipeline>(instance, scheduler, desc_heap, profile,

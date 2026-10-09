@@ -23,6 +23,7 @@
 #include "imgui/renderer/imgui_core.h"
 #include "video_core/amdgpu/liverpool.h"
 #include "video_core/renderer_vulkan/vk_presenter.h"
+#include "video_core/renderer_vulkan/vk_rasterizer.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 
 extern std::unique_ptr<Vulkan::Presenter> presenter;
@@ -32,6 +33,7 @@ namespace Vulkan {
 extern std::atomic<u64> g_gow3_compile_ns;
 extern std::atomic<u32> g_gow3_compiles;
 extern std::atomic<u64> g_gow3_capture_ns, g_gow3_async_ns, g_gow3_compile_wait_ns;
+extern std::atomic<u64> g_gow3_snapshot_ns, g_gow3_guest_wait_ns;
 extern std::atomic<u32> g_gow3_pending_draws;
 } // namespace Vulkan
 
@@ -428,6 +430,8 @@ void VideoOutDriver::Flip(const Request& req) {
             const double capture_ms = Vulkan::g_gow3_capture_ns.exchange(0) / 1e6;
             const double async_ms = Vulkan::g_gow3_async_ns.exchange(0) / 1e6;
             const double wait_ms = Vulkan::g_gow3_compile_wait_ns.exchange(0) / 1e6;
+            const double snapshot_ms = Vulkan::g_gow3_snapshot_ns.exchange(0) / 1e6;
+            const double guest_wait_ms = Vulkan::g_gow3_guest_wait_ns.exchange(0) / 1e6;
             const u32 pending_draws = Vulkan::g_gow3_pending_draws.exchange(0);
             const u64 direct = Vulkan::Scheduler::direct_recordings.exchange(0);
             const u64 faults = Gow3Stats::tracker_faults.exchange(0);
@@ -444,13 +448,15 @@ void VideoOutDriver::Flip(const Request& req) {
             window_gpu_us = gpu_us;
             std::printf("Frame stats: %.1f FPS, worst frame %.1f ms (vblank %u Hz); "
                         "%u shader/pipeline compiles, %.1f ms; async: capture %.1f ms, workers "
-                        "%.1f ms, wait %.1f ms, %u pending draws; %llu recorder syncs; "
+                        "%.1f ms, sync wait %.1f ms, snapshots %.1f ms, GPU capture wait %.1f ms, "
+                        "%u pending draws; %llu recorder syncs; "
                         "%.0f write faults/s, %lld hot pages; GPU thread %.2f us/draw, "
                         "%.0f draws/frame, idle %.1f%%; blocked: recorder %.1f%%, host copies "
                         "%.1f%% (%.0f/frame), copy threads %.1f%%, GPU ticks %.1f%%; "
                         "reduced-size draws %.0f/frame of %.0f in the scene\n",
                         frames / window, worst_ms, EmulatorSettings.GetVblankFrequency(), compiles,
-                        compile_ns / 1e6, capture_ms, async_ms, wait_ms, pending_draws,
+                        compile_ns / 1e6, capture_ms, async_ms, wait_ms, snapshot_ms, guest_wait_ms,
+                        pending_draws,
                         static_cast<unsigned long long>(direct),
                         faults / window, static_cast<long long>(Gow3Stats::hot_pages.load()),
                         us_per_draw, draws_per_frame,
@@ -462,6 +468,7 @@ void VideoOutDriver::Flip(const Request& req) {
                         Gow3Stats::tick_wait_ns.exchange(0) / (window * 1e7),
                         frames ? double(Gow3Stats::reduced_draws.exchange(0)) / frames : 0.0,
                         frames ? double(Gow3Stats::scene_draws.exchange(0)) / frames : 0.0);
+            presenter->GetRasterizer().GetPipelineCache().ReportCompilerStats();
             // Frame pacing: spread of the guest flip intervals (judder that the mean hides).
             if (intervals.size() > 2) {
                 std::vector<double> sorted = intervals;

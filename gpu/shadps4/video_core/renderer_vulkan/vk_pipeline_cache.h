@@ -132,6 +132,7 @@ public:
     /// can show a loading screen; `progress(done, total)` follows the pipelines read.
     void WarmUp(const std::function<void(u32 done, u32 total)>& progress = {});
     void Sync();
+    void ReportCompilerStats();
 
     bool LoadComputePipeline(Serialization::Archive& ar);
     bool LoadGraphicsPipeline(Serialization::Archive& ar);
@@ -178,6 +179,7 @@ private:
     void PublishShaders(bool wait = false);
     void PublishGraphics(bool wait = false);
     void FinishCompilations();
+    void SeedWorkerCaches();
     bool RefreshGraphicsKey(PipelineSelection& sel);
     bool RefreshGraphicsStages(PipelineSelection& sel);
     bool RefreshComputeKey();
@@ -205,8 +207,10 @@ private:
     vk::UniquePipelineLayout pipeline_layout;
     Shader::Profile profile{};
     Shader::Pools pools;
-    std::unique_ptr<AsyncCompiler> compiler;
-    std::mutex pipeline_build_mutex;
+    CompilerPool<Shader::Pools> compiler_pools{8};
+    std::unique_ptr<AsyncCompiler> compiler, capture_compiler;
+    std::vector<vk::UniquePipelineCache> worker_pipeline_caches;
+    bool worker_caches_seeded = false;
     tsl::robin_map<GraphicsPipelineKey, std::shared_ptr<AsyncGraphicsCompilation>> pending_graphics;
     tsl::robin_map<size_t, std::unique_ptr<Program>> program_cache;
     std::vector<Program*> pending_programs;
