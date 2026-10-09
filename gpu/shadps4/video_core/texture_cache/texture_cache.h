@@ -150,7 +150,8 @@ public:
                               .load(std::memory_order_acquire);
         constexpr u32 Dirty = static_cast<u32>(ImageFlagBits::Dirty);
         constexpr u32 Registered = static_cast<u32>(ImageFlagBits::Registered);
-        return (flags & (Dirty | Registered)) == Registered &&
+        constexpr u32 Aliased = static_cast<u32>(ImageFlagBits::Aliased);
+        return (flags & (Dirty | Registered | Aliased)) == Registered &&
                image.track_addr == image.guest_begin && image.track_addr_end == image.guest_end &&
                image.lru_touched_tick == gc_tick;
     }
@@ -167,7 +168,9 @@ public:
                                   .load(std::memory_order_acquire);
             constexpr u32 Dirty = static_cast<u32>(ImageFlagBits::Dirty);
             constexpr u32 Registered = static_cast<u32>(ImageFlagBits::Registered);
-            if ((flags & (Dirty | Registered)) == Registered &&
+            // Images sharing memory with another take the locked path: SynchronizeAlias.
+            constexpr u32 Aliased = static_cast<u32>(ImageFlagBits::Aliased);
+            if ((flags & (Dirty | Registered | Aliased)) == Registered &&
                 image.track_addr == image.guest_begin && image.track_addr_end == image.guest_end &&
                 image.lru_touched_tick == gc_tick) {
                 return;
@@ -178,7 +181,13 @@ public:
         TrackImage(image_id);
         TouchImage(image);
         RefreshImage(image);
+        SynchronizeAlias(image_id);
     }
+
+    /// gow3: a GPU write to the image (render target, storage): images sharing its memory
+    /// copy from it before their next read. From cuesta4/shadPS4 (eltutz), which fixed God of
+    /// War III's exposure: it is measured into a small image and read through an alias.
+    void PublishAliasWrite(ImageId image_id);
 
     /// Resolves overlap between existing cache image and pending merged image
     [[nodiscard]] std::tuple<ImageId, int, int> ResolveOverlap(const ImageInfo& info,
@@ -425,6 +434,32 @@ private:
     const bool readback_linear_images;
     PageTable page_table;
     std::mutex mutex;
+    /// gow3: images with the same guest address (guarded by `mutex`). `backing` holds the
+    /// complete contents; `writer` is a newer write not yet copied into it.
+    struct AliasState {
+        u64 backing_uid{};
+        u64 writer_uid{};
+        ImageId backing{};
+        ImageId writer{};
+        u32 members{};
+        void ResetAuthority() {
+            const u32 count = members;
+            *this = {};
+            members = count;
+        }
+    };
+    tsl::robin_map<VAddr, AliasState> alias_states;
+    std::atomic<u64> alias_generation{};
+    [[nodiscard]] bool IsLiveImage(ImageId image_id, u64 image_uid) const {
+        return image_id && slot_images.is_allocated(image_id) &&
+               slot_images[image_id].image_uid == image_uid;
+    }
+    template <typename Func>
+    void ForEachAlias(const Image& image, Func&& func);
+    void SynchronizeAlias(ImageId image_id);
+    [[nodiscard]] bool CommitAliasWriter(AliasState& state);
+    void CopyAlias(ImageId src_id, ImageId dst_id, const Extent3D& extent);
+    void InvalidateAlias(Image& image);
     // gow3: FindImage results for unchanged image registrations (guarded by `mutex`).
     struct FindImageCacheEntry {
         VAddr address = 0;

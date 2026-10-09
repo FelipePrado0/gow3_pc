@@ -34,6 +34,7 @@ enum ImageFlagBits : u32 {
     GpuModified = 1 << 3, ///< Contents have been modified from the GPU
     Registered = 1 << 6,  ///< True when the image is registered
     Picked = 1 << 7,      ///< Temporary flag to mark the image as picked
+    Aliased = 1 << 8,     ///< gow3: another image has the same guest address (alias_states)
 };
 DECLARE_ENUM_FLAG_OPERATORS(ImageFlagBits)
 
@@ -163,6 +164,8 @@ public:
     ImageId depth_id{};
     u64 depth_uid{};
     u64 image_uid{};
+    /// gow3: order of the last GPU write, to sync images sharing memory (texture_cache.h).
+    u64 alias_generation{};
 
     ImageInfo info;
     Vulkan::Runtime* runtime;

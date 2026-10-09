@@ -258,6 +258,33 @@ void Runtime::UploadImage(VideoCore::Image* dst, const VideoCore::Buffer* src,
     dst->flags &= ~VideoCore::ImageFlagBits::Dirty;
 }
 
+void Runtime::CopyAliasImage(VideoCore::Image* src, VideoCore::Image* dst,
+                             const vk::Extent3D& extent) {
+    SetBackingSamples(src, src->info.num_samples);
+    SetBackingSamples(dst, dst->info.num_samples);
+    scheduler.EndRendering();
+    const TransferMark mark{*this, "image alias copy", *dst};
+    const u32 layers = std::min(src->info.resources.layers, dst->info.resources.layers);
+    const vk::ImageCopy region{
+        .srcSubresource{.aspectMask = vk::ImageAspectFlagBits::eColor, .layerCount = layers},
+        .dstSubresource{.aspectMask = vk::ImageAspectFlagBits::eColor, .layerCount = layers},
+        .extent = extent,
+    };
+    bool needs_flush =
+        Transit(src, vk::ImageLayout::eTransferSrcOptimal, vk::PipelineStageFlagBits2::eCopy,
+                vk::AccessFlagBits2::eTransferRead);
+    needs_flush |= Transit(dst, vk::ImageLayout::eTransferDstOptimal,
+                           vk::PipelineStageFlagBits2::eCopy, vk::AccessFlagBits2::eTransferWrite);
+    if (needs_flush) {
+        FlushBarriers();
+    }
+    scheduler.Record([src_image = src->GetImage(), dst_image = dst->GetImage(),
+                      region](vk::CommandBuffer cmdbuf) {
+        cmdbuf.copyImage(src_image, vk::ImageLayout::eTransferSrcOptimal, dst_image,
+                         vk::ImageLayout::eTransferDstOptimal, region);
+    });
+}
+
 void Runtime::DownloadImage(VideoCore::Image* src, const VideoCore::Buffer* dst,
                             std::span<const vk::BufferImageCopy> download_copies) {
     SetBackingSamples(src, src->info.num_samples);
