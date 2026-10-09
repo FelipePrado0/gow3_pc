@@ -6,6 +6,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include "runtime.h"
+#include "orb_hook.h"
 #include "gpu/gow3gpu.h"
 #if !defined(__x86_64__) || !defined(__GNUC__)
 #error This prototype requires x86-64 GCC or Clang (including MinGW).
@@ -309,6 +310,44 @@ static int mapped(Segment *segments, uint64_t count, uint64_t address, uint64_t 
         if (address >= segments[i].address && bytes <= segments[i].size &&
             address - segments[i].address <= segments[i].size - bytes) return 1;
     return 0;
+}
+extern ABI float gow3_orbs_gain(void *player, float requested);
+extern void gow3_orbs_status(int supported);
+static void install_orb_multiplier(const char *app0, Segment *segments, uint64_t count,
+                                   uint64_t size) {
+    char path[4096], serial[32] = "", version[32] = "";
+    snprintf(path, sizeof(path), "%s/sce_sys/param.sfo", app0 ? app0 : ".");
+    sfo_value(path, "TITLE_ID", serial, sizeof(serial), NULL);
+    sfo_value(path, "APP_VER", version, sizeof(version), NULL);
+    if (strcmp(serial, "CUSA01623") || strcmp(version, "01.02") ||
+        !gow3_orb_signatures_match(image, size)) {
+        printf("Red orbs: multiplier unavailable (game version or gain signatures mismatch)\n");
+        return;
+    }
+    for (unsigned i = 0; i < 3; ++i) {
+        if (!mapped(segments, count, gow3_orb_calls[i], 5)) return;
+    }
+    /* SysV call sites: preserve the receiver across the helper, then tail-call the original
+     * setter. Its cap and upgrade notifications remain in the game's own code. */
+    unsigned char *stub = allocate(page_size);
+    uintptr_t helper = (uintptr_t)gow3_orbs_gain, setter = (uintptr_t)(image + 0x6a9f0);
+    unsigned char code[26];
+    gow3_orb_build_stub(code, helper, setter);
+    int32_t displacements[3];
+    for (unsigned i = 0; i < 3; ++i) {
+        int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + gow3_orb_calls[i] + 5);
+        if (delta < INT32_MIN || delta > INT32_MAX) {
+            printf("Red orbs: multiplier unavailable (hook outside relative-call range)\n");
+            return;
+        }
+        displacements[i] = (int32_t)delta;
+    }
+    memcpy(stub, code, sizeof(code));
+    protect(stub, page_size, 5);
+    for (unsigned i = 0; i < 3; ++i)
+        memcpy(image + gow3_orb_calls[i] + 1, &displacements[i], 4);
+    gow3_orbs_status(1);
+    printf("Red orbs: live multiplier ready (3 validated gain paths, 0.1x to 100x)\n");
 }
 /* G3PATCH2 (patches.py): the patches' image base, then byte writes at image offsets, applied
  * after relocation. A write may replace a whole base-relative pointer slot (60/90 FPS++ swap
@@ -618,6 +657,7 @@ int main(int argc, char **argv) {
         _exit(missing ? 1 : 0); /* no destructors: GPU threads are running */
     }
     if (patch_file) apply_patches(patch_file, segments, ns, relocs, nr);
+    if (gpu_enabled) install_orb_multiplier(app0, segments, ns, size);
 #ifdef _WIN32
     printf("Guest TCB loads redirected to the TEB TLS slot: %" PRIu64 "\n", patch_tcb_loads(segments, ns));
 #endif

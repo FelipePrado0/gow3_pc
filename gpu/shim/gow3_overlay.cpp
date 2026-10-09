@@ -12,6 +12,7 @@
 
 #include <SDL3/SDL.h>
 #include "gow3_settings.h"
+#include "gow3_orbs.h"
 #include "common/elf_info.h"
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
@@ -166,6 +167,27 @@ void Menu() {
                 frame_ms_avg);
     ImGui::Separator();
     Checkbox("Show FPS counter", s.show_fps);
+    ImGui::SeparatorText("Cheats");
+    ImGui::BeginDisabled(!s.red_orbs_supported.load());
+    float multiplier = s.red_orb_multiplier.load();
+    if (ImGui::SliderFloat("Red orb multiplier", &multiplier, 0.1f, 100.0f, "%.2fx",
+                           ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp)) {
+        s.red_orb_multiplier = Gow3Orbs::ClampMultiplier(multiplier);
+        dirty = true;
+    }
+    if (ImGui::InputFloat("Multiplier value", &multiplier, 0.1f, 1.0f, "%.3f")) {
+        s.red_orb_multiplier = Gow3Orbs::ClampMultiplier(multiplier);
+        dirty = true;
+    }
+    if (ImGui::Button("Reset to 1x")) {
+        s.red_orb_multiplier = 1.0f;
+        dirty = true;
+    }
+    ImGui::EndDisabled();
+    ImGui::TextDisabled("Applies to future gains. Existing orbs and prices stay unchanged.");
+    if (!s.red_orbs_supported.load()) {
+        ImGui::TextWrapped("Unavailable: executable does not match the validated CUSA01623 v01.02 gain routines.");
+    }
     ImGui::Spacing();
     if (ImGui::Button("Close")) {
         keep_open = false;
