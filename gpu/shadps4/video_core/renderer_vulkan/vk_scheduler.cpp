@@ -14,6 +14,7 @@
 #include "gow3_copy.h"
 #include "video_core/renderer_vulkan/vk_gpu_profiler.h"
 #include "gow3_toggles.h"
+#include "video_core/renderer_vulkan/vk_wait_diagnostics.h"
 #include "common/assert.h"
 #include "common/debug.h"
 #include "common/thread.h"
@@ -324,29 +325,42 @@ void Scheduler::Flush() {
     Flush(info);
 }
 
-void Scheduler::Finish() {
+void Scheduler::Finish(std::source_location caller) {
     // When finishing, we need to wait for the submission to have executed on the device.
     const u64 presubmit_tick = CurrentTick();
+    const bool diagnose = WaitDiagnostics::Enabled();
+    const auto start = diagnose ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     SubmitInfo info{};
     SubmitExecution(info);
-    Wait(presubmit_tick);
+    const u64 submit_ns = diagnose ? std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - start).count() : 0;
+    Wait(presubmit_tick, caller, submit_ns);
 }
 
-void Scheduler::WaitSubmitted() {
+void Scheduler::WaitSubmitted(std::source_location caller) {
     const u64 tick = CurrentTick();
     if (tick > 1) {
-        Wait(tick - 1);
+        Wait(tick - 1, caller);
     }
 }
 
-void Scheduler::Wait(u64 tick) {
+void Scheduler::Wait(u64 tick, std::source_location caller, u64 submit_ns) {
+    const bool diagnose = WaitDiagnostics::Enabled();
+    auto start = diagnose ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     if (tick >= work_semaphore.CurrentTick()) {
         // Make sure we are not waiting for the current tick without signalling
         SubmitInfo info{};
         Flush(info);
     }
     Gow3Stats::WaitTimer timer{Gow3Stats::tick_wait_ns};
+    const auto submitted = diagnose ? std::chrono::steady_clock::now() : start;
     work_semaphore.Wait(tick);
+    if (diagnose) {
+        const auto completed = std::chrono::steady_clock::now();
+        WaitDiagnostics::Get().Add(caller.file_name(), caller.line(),
+            submit_ns + std::chrono::duration_cast<std::chrono::nanoseconds>(submitted - start).count(),
+            std::chrono::duration_cast<std::chrono::nanoseconds>(completed - submitted).count());
+    }
 }
 
 void Scheduler::PopPendingOperations() {
