@@ -202,6 +202,8 @@ private:
     void UpdateDynamicState(const GraphicsPipeline* pipeline, bool is_indexed) const;
     void UpdateViewportScissorState() const;
     void UpdateDepthStencilState() const;
+    /// gow3: the squaring pipeline of a scaled MIN/MAX blend when this draw can use it.
+    vk::Pipeline SquarePass(const GraphicsPipeline& pipeline) const;
     void UpdatePrimitiveState(bool is_indexed) const;
     void UpdateRasterizationState() const;
     void UpdateColorBlendingState(const GraphicsPipeline* pipeline) const;

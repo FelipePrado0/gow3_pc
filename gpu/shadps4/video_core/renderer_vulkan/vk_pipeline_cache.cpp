@@ -536,13 +536,6 @@ bool PipelineCache::RefreshGraphicsKey(PipelineSelection& sel) {
         color_buffer.export_format = regs.color_export_format.GetFormat(cb);
         color_buffer.swizzle = col_buf.Swizzle();
 
-        const auto& bc = regs.blend_control[cb];
-        color_buffer.blend_self_scale =
-            bc.enable && !col_buf.info.blend_bypass &&
-            (bc.color_func == AmdGpu::BlendControl::BlendFunc::Min ||
-             bc.color_func == AmdGpu::BlendControl::BlendFunc::Max) &&
-            bc.color_src_factor == AmdGpu::BlendControl::BlendFactor::SrcColor &&
-            bc.color_dst_factor == AmdGpu::BlendControl::BlendFactor::DstColor;
     }
 
     // Compile and bind shader stages

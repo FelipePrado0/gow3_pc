@@ -102,6 +102,11 @@ public:
         return key;
     }
 
+    /// gow3: second draw squaring a self-scaled MIN/MAX blend, or null (vk_blend_rewrite.h).
+    vk::Pipeline SquarePassHandle() const noexcept {
+        return *square_pipeline;
+    }
+
     /// Gets the attributes and bindings for vertex inputs.
     template <typename Attribute, typename Binding>
     void GetVertexInputs(VertexInputs<Attribute>& attributes, VertexInputs<Binding>& bindings,
@@ -115,6 +120,7 @@ private:
 private:
     GraphicsPipelineKey key;
     std::optional<const Shader::Gcn::FetchShaderData> fetch_shader{};
+    vk::UniquePipeline square_pipeline;
 };
 
 struct ClipDistanceShaderKey {

@@ -1114,16 +1114,25 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
     const auto [vertex_offset, instance_offset] = GetDrawOffsets(regs, vs_info, fetch_shader);
 
     const vk::Pipeline handle = pipeline->Handle();
+    const vk::Pipeline square = SquarePass(*pipeline);
     const u32 num_indices = regs.num_indices;
     const u32 num_instances = regs.num_instances.NumInstances();
     const u32 first_vertex = vertex_offset;
     const u32 first_instance = instance_offset;
     scheduler.Record([=](vk::CommandBuffer cmdbuf) {
+        const auto draw = [&] {
+            if (is_indexed) {
+                cmdbuf.drawIndexed(num_indices, num_instances, 0, s32(first_vertex),
+                                   first_instance);
+            } else {
+                cmdbuf.draw(num_indices, num_instances, first_vertex, first_instance);
+            }
+        };
         cmdbuf.bindPipeline(vk::PipelineBindPoint::eGraphics, handle);
-        if (is_indexed) {
-            cmdbuf.drawIndexed(num_indices, num_instances, 0, s32(first_vertex), first_instance);
-        } else {
-            cmdbuf.draw(num_indices, num_instances, first_vertex, first_instance);
+        draw();
+        if (square) [[unlikely]] {
+            cmdbuf.bindPipeline(vk::PipelineBindPoint::eGraphics, square);
+            draw();
         }
     });
     if (FrameCapture::Active()) {
@@ -1239,23 +1248,29 @@ void Rasterizer::DrawIndirectRecord(const GraphicsPipeline* pipeline, bool is_in
     ASSERT(stride == (is_indexed ? sizeof(VkDrawIndexedIndirectCommand)
                                  : sizeof(VkDrawIndirectCommand)));
     const vk::Pipeline handle = pipeline->Handle();
+    const vk::Pipeline square = SquarePass(*pipeline);
     const vk::Buffer args = buffer->Handle();
     const u64 args_offset = base;
     const vk::Buffer counts = count_address != 0 ? count_buffer->Handle() : vk::Buffer{};
     const u64 counts_offset = count_address != 0 ? count_offset : 0;
     scheduler.Record([=](vk::CommandBuffer cmdbuf) {
-        cmdbuf.bindPipeline(vk::PipelineBindPoint::eGraphics, handle);
-        if (is_indexed) {
-            if (counts) {
-                cmdbuf.drawIndexedIndirectCount(args, args_offset, counts, counts_offset, max_count,
-                                                stride);
-            } else {
-                cmdbuf.drawIndexedIndirect(args, args_offset, max_count, stride);
+        for (const vk::Pipeline bound : {handle, square}) {
+            if (!bound) {
+                break;
             }
-        } else if (counts) {
-            cmdbuf.drawIndirectCount(args, args_offset, counts, counts_offset, max_count, stride);
-        } else {
-            cmdbuf.drawIndirect(args, args_offset, max_count, stride);
+            cmdbuf.bindPipeline(vk::PipelineBindPoint::eGraphics, bound);
+            if (is_indexed) {
+                if (counts) {
+                    cmdbuf.drawIndexedIndirectCount(args, args_offset, counts, counts_offset, max_count,
+                                                    stride);
+                } else {
+                    cmdbuf.drawIndexedIndirect(args, args_offset, max_count, stride);
+                }
+            } else if (counts) {
+                cmdbuf.drawIndirectCount(args, args_offset, counts, counts_offset, max_count, stride);
+            } else {
+                cmdbuf.drawIndirect(args, args_offset, max_count, stride);
+            }
         }
     });
     DebugState.IncDrawCall();
@@ -3318,6 +3333,31 @@ void Rasterizer::UpdateViewportScissorState() const {
     auto& dynamic_state = scheduler.GetDynamicState();
     dynamic_state.SetViewports(viewports);
     dynamic_state.SetScissors(scissors);
+}
+
+vk::Pipeline Rasterizer::SquarePass(const GraphicsPipeline& pipeline) const {
+    const vk::Pipeline square = pipeline.SquarePassHandle();
+    static const bool enabled = [] {
+        const char* env = std::getenv("GOW3_SQUARE_PASS");
+        return !env || env[0] != '0';
+    }();
+    if (!square || !enabled) [[likely]] {
+        return {};
+    }
+    // MIN(s * s, d * d) = MIN(s, d)^2: the second draw needs the first one's coverage, which a
+    // depth or stencil write would change.
+    const auto& regs = Regs();
+    const bool depth_write = regs.depth_control.depth_enable &&
+                             regs.depth_control.depth_write_enable && regs.depth_buffer.DepthValid();
+    if (depth_write || regs.depth_control.stencil_enable) {
+        static bool warned = false;
+        if (!std::exchange(warned, true)) {
+            LOG_WARNING(Render_Vulkan, "Scaled MIN/MAX blend not squared: the draw writes depth "
+                                       "or stencil");
+        }
+        return {};
+    }
+    return square;
 }
 
 void Rasterizer::UpdateDepthStencilState() const {
