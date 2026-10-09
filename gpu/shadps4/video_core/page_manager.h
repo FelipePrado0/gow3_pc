@@ -39,7 +39,7 @@ public:
     void OnGpuUnmap(VAddr address, size_t size);
 
     /// Updates watches in the pages touching the specified region.
-    template <bool track>
+    template <bool track, bool is_read = false>
     void UpdatePageWatchers(VAddr addr, u64 size) const;
 
     /// Updates watches in the pages touching the specified region using a mask.

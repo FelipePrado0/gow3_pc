@@ -3111,6 +3111,7 @@ bool Rasterizer::InvalidateMemory(VAddr addr, u64 size, bool assume_locks) {
         // Not GPU mapped memory, can skip invalidation logic entirely.
         return false;
     }
+    texture_cache.ResolveReadbacks(addr, size, assume_locks);
     buffer_cache.InvalidateMemory(addr, size, assume_locks);
     texture_cache.InvalidateMemory(addr, size);
     return true;
@@ -3131,7 +3132,10 @@ bool Rasterizer::ReadMemory(VAddr addr, u64 size, bool assume_locks) {
         // Not GPU mapped memory, can skip invalidation logic entirely.
         return false;
     }
-    buffer_cache.ReadMemory(addr, size, false, assume_locks);
+    const bool image_readback = texture_cache.ResolveReadbacks(addr, size, assume_locks);
+    if (!image_readback || buffer_cache.IsRegionGpuModified(addr, size)) {
+        buffer_cache.ReadMemory(addr, size, false, assume_locks);
+    }
     return true;
 }
 

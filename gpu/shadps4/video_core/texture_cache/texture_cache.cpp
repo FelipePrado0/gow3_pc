@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <xxhash.h>
+#include "video_core/amdgpu/liverpool.h"
 
 #include "gow3_toggles.h"
 #include "common/assert.h"
@@ -16,6 +17,7 @@
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_runtime.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
+#include "video_core/renderer_vulkan/vk_wait_diagnostics.h"
 #include "video_core/texture_cache/aliasing.h"
 #include "video_core/texture_cache/host_compatibility.h"
 #include "video_core/texture_cache/texture_cache.h"
@@ -33,6 +35,9 @@ TextureCache::TextureCache(const Vulkan::Instance& instance_, Vulkan::Scheduler&
       buffer_cache{buffer_cache_}, tracker{tracker_}, blit_helper{instance, scheduler},
       tile_manager{instance, scheduler, runtime, buffer_cache.GetStreamBuffer()},
       readback_linear_images{EmulatorSettings.IsReadbackLinearImagesEnabled()} {
+
+    std::printf("GPU: deferred image readback %s (64 copies, 64 MiB pending limit)\n",
+                deferred_readbacks ? "enabled" : "disabled");
 
     u32 max_samplers = instance.GetMaxSamplerAllocationCount();
     trigger_gc_samplers = max_samplers * 3 / 4;
@@ -62,11 +67,110 @@ TextureCache::TextureCache(const Vulkan::Instance& instance_, Vulkan::Scheduler&
     trigger_gc_memory = static_cast<u64>((device_local_memory - mem_threshold) / 2);
 }
 
-TextureCache::~TextureCache() = default;
+TextureCache::~TextureCache() {
+    if (deferred_readbacks) {
+        scheduler.Finish();
+        std::scoped_lock lock{readback_mutex};
+        RetireReadbacks();
+    }
+}
+
+void TextureCache::RetireReadbacks() {
+    pending_readbacks.Retire([this](u64 tick) { return scheduler.IsFree(tick); },
+        [this](auto& entry) {
+            if (entry.valid) {
+                entry.payload.Invalidate();
+                Core::Memory::Instance()->TryWriteBacking(std::bit_cast<u8*>(entry.address),
+                    entry.payload.mapped, entry.size);
+                tracker.UpdatePageWatchers<false, true>(entry.address, entry.size);
+                ++readbacks_completed;
+            }
+            runtime.GetStagingPool().FreeDeferred(entry.payload);
+        });
+    has_pending_readbacks.store(pending_readbacks.Bytes() != 0, std::memory_order_release);
+}
+
+bool TextureCache::ResolveReadbacks(VAddr address, u64 size, bool assume_locks) {
+    if (!deferred_readbacks || !has_pending_readbacks.load(std::memory_order_acquire)) return false;
+    {
+        std::scoped_lock lock{readback_mutex};
+        if (!pending_readbacks.RequiredTick(address, size)) return false;
+    }
+    const auto resolve = [this, address, size] {
+        std::scoped_lock lock{readback_mutex};
+        if (const u64 tick = pending_readbacks.RequiredTick(address, size)) {
+            ++readbacks_waited;
+            scheduler.Wait(tick);
+            RetireReadbacks();
+        }
+    };
+    if (assume_locks) resolve();
+    else liverpool->SendCommand<true>(resolve);
+    return true;
+}
+
+void TextureCache::CancelReadbacks(VAddr address, u64 size) {
+    if (!deferred_readbacks) return;
+    std::scoped_lock lock{readback_mutex};
+    pending_readbacks.Cancel(address, size, [this](auto& entry) {
+        tracker.UpdatePageWatchers<false, true>(entry.address, entry.size);
+        ++readbacks_canceled;
+    });
+}
 
 // gow3: every copy is recorded first and the GPU is waited for once. A wait per image (as
 // before) left the GPU mostly idle in God of War III's gameplay, at about 2 FPS.
 void TextureCache::ProcessDownloadImages() {
+    if (deferred_readbacks) {
+        // Upload workers must finish reading RAM before these pages become inaccessible.
+        scheduler.WaitHostCopies();
+        std::scoped_lock readback_lock{readback_mutex};
+        RetireReadbacks();
+        std::unique_lock lock{download_images_mutex};
+        for (const ImageId image_id : download_images) {
+            const auto& image = slot_images[image_id];
+            if (False(image.flags & ImageFlagBits::GpuModified)) continue;
+            const u64 size = u64{image.info.pitch} * image.info.size.height *
+                image.info.size.depth * image.info.resources.layers * (image.info.num_bits / 8);
+            if (!pending_readbacks.CanFit(size)) {
+                ++readbacks_waited;
+                scheduler.Finish();
+                RetireReadbacks();
+            }
+            if (auto copy = RecordImageDownload(image_id)) {
+                if (!pending_readbacks.CanFit(copy->size)) {
+                    scheduler.Finish();
+                    copy->staging.Invalidate();
+                    Core::Memory::Instance()->TryWriteBacking(
+                        std::bit_cast<u8*>(copy->guest_address), copy->staging.mapped, copy->size);
+                    runtime.GetStagingPool().FreeDeferred(copy->staging);
+                } else {
+                    tracker.UpdatePageWatchers<true, true>(copy->guest_address, copy->size);
+                    pending_readbacks.Push(copy->guest_address, copy->size,
+                        scheduler.CurrentTick(), copy->staging);
+                    has_pending_readbacks.store(true, std::memory_order_release);
+                    ++readbacks_queued;
+                    readbacks_peak_bytes = std::max(readbacks_peak_bytes, pending_readbacks.Bytes());
+                }
+            }
+        }
+        download_images.clear();
+        if (Vulkan::WaitDiagnostics::Enabled()) {
+            const auto now = std::chrono::steady_clock::now();
+            if (now - readback_report >= std::chrono::seconds(5)) {
+                std::printf("Readback profile: queued %llu, completed %llu, demand/budget waits %llu, canceled %llu, pending %.2f MiB, peak %.2f MiB\n",
+                    static_cast<unsigned long long>(readbacks_queued),
+                    static_cast<unsigned long long>(readbacks_completed),
+                    static_cast<unsigned long long>(readbacks_waited),
+                    static_cast<unsigned long long>(readbacks_canceled),
+                    pending_readbacks.Bytes() / 1048576.0, readbacks_peak_bytes / 1048576.0);
+                readbacks_queued = readbacks_completed = readbacks_waited = readbacks_canceled = 0;
+                readbacks_peak_bytes = pending_readbacks.Bytes();
+                readback_report = now;
+            }
+        }
+        return;
+    }
     std::unique_lock lk{download_images_mutex};
     boost::container::small_vector<PendingDownload, 16> pending;
     for (const ImageId image_id : download_images) {
@@ -118,6 +222,7 @@ std::optional<TextureCache::PendingDownload> TextureCache::RecordImageDownload(I
 
 void TextureCache::DownloadImageMemory(ImageId image_id, bool sync) {
     Image& image = slot_images[image_id];
+    ResolveReadbacks(image.info.guest_address, image.info.guest_size);
     if (False(image.flags & ImageFlagBits::GpuModified)) {
         return;
     }
@@ -333,6 +438,8 @@ void TextureCache::InvalidateMemory(VAddr addr, size_t size) {
 }
 
 void TextureCache::InvalidateMemoryFromGPU(VAddr address, size_t max_size) {
+    // Partial buffer writes still need the image's untouched bytes in guest memory.
+    ResolveReadbacks(address, max_size);
     std::scoped_lock lock{mutex};
     ForEachImageInRegion(address, max_size, [&](ImageId image_id, Image& image) {
         // Only consider images that match base address.
@@ -347,6 +454,7 @@ void TextureCache::InvalidateMemoryFromGPU(VAddr address, size_t max_size) {
 }
 
 void TextureCache::UnmapMemory(VAddr cpu_addr, size_t size) {
+    CancelReadbacks(cpu_addr, size);
     std::scoped_lock lk{mutex};
 
     ImageIds deleted_images;
@@ -947,6 +1055,7 @@ void TextureCache::RefreshImage(Image& image) {
     if (False(image.flags & ImageFlagBits::Dirty) || image.info.num_samples > 1) {
         return;
     }
+    ResolveReadbacks(image.info.guest_address, image.info.guest_size);
     Gow3Stats::Timer timer{Gow3Stats::t_refresh};
 
     RENDERER_TRACE;
@@ -1261,6 +1370,7 @@ void TextureCache::GarbageCollectImages() {
         }
         --num_deletions;
         auto& image = slot_images[image_id];
+        ResolveReadbacks(image.info.guest_address, image.info.guest_size);
         const bool download = image.SafeToDownload();
         const bool tiled = image.info.IsTiled();
         if (tiled && download) {
@@ -1377,6 +1487,7 @@ void TextureCache::TouchImage(const Image& image) {
 
 void TextureCache::DeleteImage(ImageId image_id) {
     Image& image = slot_images[image_id];
+    CancelReadbacks(image.info.guest_address, image.info.guest_size);
     ASSERT_MSG(!image.IsTracked(), "Image was not untracked");
     ASSERT_MSG(False(image.flags & ImageFlagBits::Registered), "Image was not unregistered");
 

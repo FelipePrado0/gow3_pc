@@ -4,9 +4,11 @@
 #pragma once
 
 #include <atomic>
+#include "video_core/texture_cache/readback_queue.h"
 #include <chrono>
 #include "gow3_toggles.h"
 #include <optional>
+#include <cstdlib>
 #include "video_core/renderer_vulkan/vk_staging_buffer_pool.h"
 
 #include <condition_variable>
@@ -117,6 +119,8 @@ public:
 
     /// Schedules a copy of pending images for download back to CPU memory.
     void ProcessDownloadImages();
+    bool ResolveReadbacks(VAddr address, u64 size, bool assume_locks = true);
+    void CancelReadbacks(VAddr address, u64 size);
 
     /// Retrieves the image handle of the image with the provided attributes.
     [[nodiscard]] ImageId FindImage(ImageDesc& desc, bool exact_fmt = false);
@@ -397,6 +401,8 @@ private:
     void TouchImage(const Image& image);
 
     void FreeImage(ImageId image_id) {
+        const auto& image = slot_images[image_id];
+        ResolveReadbacks(image.info.guest_address, image.info.guest_size);
         UntrackImage(image_id);
         UnregisterImage(image_id);
         DeleteImage(image_id);
@@ -432,6 +438,17 @@ private:
     Common::LeastRecentlyUsedCache<ImageId, u64> lru_cache;
     Common::LeastRecentlyUsedCache<u64, u64> sampler_lru_cache;
     const bool readback_linear_images;
+    const bool deferred_readbacks = [] {
+        const char* value = std::getenv("GOW3_DEFERRED_READBACK");
+        return value && value[0] == '1';
+    }();
+    ReadbackQueue<Vulkan::StagingBufferRef> pending_readbacks;
+    std::mutex readback_mutex;
+    std::atomic<bool> has_pending_readbacks{false};
+    u64 readbacks_queued = 0, readbacks_completed = 0, readbacks_waited = 0;
+    u64 readbacks_canceled = 0, readbacks_peak_bytes = 0;
+    std::chrono::steady_clock::time_point readback_report = std::chrono::steady_clock::now();
+    void RetireReadbacks();
     PageTable page_table;
     std::mutex mutex;
     /// gow3: images with the same guest address (guarded by `mutex`). `backing` holds the

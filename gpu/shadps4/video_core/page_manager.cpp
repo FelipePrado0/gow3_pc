@@ -46,10 +46,8 @@ constexpr size_t PM_PAGE_BITS = 12;
 
 struct PageManager::Impl {
     struct PageState {
-        u8 num_write_watchers : 7;
-        // At the moment only buffer cache can request read watchers.
-        // And buffers cannot overlap, thus only 1 can exist per page.
-        u8 num_read_watchers : 1;
+        u8 num_write_watchers;
+        u8 num_read_watchers;
 
         Core::MemoryPermission WritePerm() const noexcept {
             return num_write_watchers == 0 ? Core::MemoryPermission::Write
@@ -62,7 +60,9 @@ struct PageManager::Impl {
         }
 
         Core::MemoryPermission Perms() const noexcept {
-            return ReadPerm() | WritePerm();
+            // A pending readback must block writes too, until its GPU version reaches RAM.
+            return num_read_watchers != 0 ? Core::MemoryPermission::None
+                                         : ReadPerm() | WritePerm();
         }
 
         template <s32 delta, bool is_read>
@@ -457,9 +457,9 @@ void PageManager::OnGpuUnmap(VAddr address, size_t size) {
     impl->OnUnmap(address, size);
 }
 
-template <bool track>
+template <bool track, bool is_read>
 void PageManager::UpdatePageWatchers(VAddr addr, u64 size) const {
-    impl->UpdatePageWatchers<track, false>(addr, size);
+    impl->UpdatePageWatchers<track, is_read>(addr, size);
 }
 
 template <bool track, bool is_read>
@@ -469,6 +469,8 @@ void PageManager::UpdatePageWatchersForRegion(VAddr base_addr, RegionBits& mask)
 
 template void PageManager::UpdatePageWatchers<true>(VAddr addr, u64 size) const;
 template void PageManager::UpdatePageWatchers<false>(VAddr addr, u64 size) const;
+template void PageManager::UpdatePageWatchers<true, true>(VAddr addr, u64 size) const;
+template void PageManager::UpdatePageWatchers<false, true>(VAddr addr, u64 size) const;
 template void PageManager::UpdatePageWatchersForRegion<true, true>(VAddr base_addr,
                                                                    RegionBits& mask) const;
 template void PageManager::UpdatePageWatchersForRegion<true, false>(VAddr base_addr,
