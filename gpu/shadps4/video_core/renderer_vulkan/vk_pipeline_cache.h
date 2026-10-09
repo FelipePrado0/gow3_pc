@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <functional>
 #include <unordered_map>
 #include <shared_mutex>
 #include <variant>
@@ -120,7 +121,9 @@ public:
                            AmdGpu::Liverpool* liverpool, u32 sparse_page_shift);
     ~PipelineCache();
 
-    void WarmUp();
+    /// Loads the pipelines of earlier sessions. gow3: called by the presenter once the window
+    /// can show a loading screen; `progress(done, total)` follows the pipelines read.
+    void WarmUp(const std::function<void(u32 done, u32 total)>& progress = {});
     void Sync();
 
     bool LoadComputePipeline(Serialization::Archive& ar);

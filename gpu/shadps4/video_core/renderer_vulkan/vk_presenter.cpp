@@ -157,6 +157,22 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
     pp_pass.Create(device, swapchain.GetSurfaceFormat().format);
     Gow3Overlay::Init(instance, swapchain.GetSurfaceFormat().format, num_images);
 
+    // gow3: rebuilding the cached pipelines takes up to minutes before the first game frame;
+    // show what is happening instead of a black window.
+    Gow3Overlay::SetLoading(true, 0, 0);
+    PresentLoadingFrame();
+    auto last = std::chrono::steady_clock::now();
+    rasterizer->GetPipelineCache().WarmUp([&](u32 done, u32 total) {
+        const auto now = std::chrono::steady_clock::now();
+        if (now - last < std::chrono::milliseconds(250)) {
+            return;
+        }
+        last = now;
+        Gow3Overlay::SetLoading(true, done, total);
+        PresentLoadingFrame();
+    });
+    Gow3Overlay::SetLoading(false, 0, 0);
+
 }
 
 Presenter::~Presenter() {
@@ -565,6 +581,61 @@ Frame* Presenter::PrepareBlankFrame(bool present_thread) {
     SubmitInfo info{};
     scheduler.Flush(info);
     return frame;
+}
+
+void Presenter::PresentLoadingFrame() {
+    if (window.GetWidth() == 0 || window.GetHeight() == 0) {
+        return;
+    }
+    if (window.GetWidth() != swapchain.GetWidth() || window.GetHeight() != swapchain.GetHeight()) {
+        swapchain.Recreate(window.GetWidth(), window.GetHeight());
+    }
+    if (!swapchain.AcquireNextImage()) {
+        return;
+    }
+    const vk::Image image = swapchain.Image();
+    const vk::Extent2D extent = swapchain.GetExtent();
+    const auto cmdbuf = present_scheduler.CommandBuffer();
+    const vk::ImageSubresourceRange range{
+        .aspectMask = vk::ImageAspectFlagBits::eColor,
+        .levelCount = 1,
+        .layerCount = VK_REMAINING_ARRAY_LAYERS,
+    };
+    const auto barrier = [&](vk::ImageLayout from, vk::ImageLayout to, vk::AccessFlags src,
+                             vk::AccessFlags dst) {
+        cmdbuf.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands,
+                               vk::PipelineStageFlagBits::eAllCommands, {}, {}, {},
+                               vk::ImageMemoryBarrier{
+                                   .srcAccessMask = src,
+                                   .dstAccessMask = dst,
+                                   .oldLayout = from,
+                                   .newLayout = to,
+                                   .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                   .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                   .image = image,
+                                   .subresourceRange = range,
+                               });
+    };
+    barrier(vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, {},
+            vk::AccessFlagBits::eTransferWrite);
+    cmdbuf.clearColorImage(image, vk::ImageLayout::eTransferDstOptimal,
+                           vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}},
+                           range);
+    barrier(vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eColorAttachmentOptimal,
+            vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eColorAttachmentWrite);
+    Gow3Overlay::Render(cmdbuf, swapchain.ImageView(), extent);
+    barrier(vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
+            vk::AccessFlagBits::eColorAttachmentWrite, {});
+    SubmitInfo info{};
+    info.AddWait(swapchain.GetImageAcquiredSemaphore());
+    info.AddSignal(swapchain.GetPresentReadySemaphore());
+    present_scheduler.Flush(info);
+    {
+        std::scoped_lock submit_lock{Scheduler::submit_mutex};
+        swapchain.Present();
+    }
+    // A few frames a second during start-up: waiting keeps semaphores and the swapchain simple.
+    present_scheduler.Finish();
 }
 
 void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame) {

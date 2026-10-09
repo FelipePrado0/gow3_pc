@@ -42,6 +42,8 @@ public:
     void Load(BlobType type, const std::string& name, std::vector<u32>& data);
 
     void ForEachBlob(BlobType type, const std::function<void(std::vector<u8>&& data)>& func);
+    /// gow3: number of blobs ForEachBlob visits (the loading screen's total).
+    size_t CountBlobs(BlobType type);
 
 private:
     std::jthread io_worker{};

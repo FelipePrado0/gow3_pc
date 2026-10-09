@@ -307,7 +307,7 @@ bool PipelineCache::LoadPipelineStage(Serialization::Archive& ar, size_t stage) 
     return true;
 }
 
-void PipelineCache::WarmUp() {
+void PipelineCache::WarmUp(const std::function<void(u32, u32)>& progress) {
     if (!EmulatorSettings.IsPipelineCacheEnabled()) {
         return;
     }
@@ -350,10 +350,15 @@ void PipelineCache::WarmUp() {
 
     u32 num_pipelines{};
     u32 num_total_pipelines{};
+    const u32 expected =
+        u32(Storage::DataBase::Instance().CountBlobs(Storage::BlobType::PipelineKey));
 
     Storage::DataBase::Instance().ForEachBlob(
         Storage::BlobType::PipelineKey, [&](std::vector<u8>&& data) {
             ++num_total_pipelines;
+            if (progress) {
+                progress(num_total_pipelines, std::max(expected, num_total_pipelines));
+            }
 
             Serialization::Archive ar{std::move(data)};
             Serialization::Reader pldata{ar};

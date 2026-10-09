@@ -27,6 +27,9 @@ bool HandleEvent(const SDL_Event& event);
 /// Turns SDL text input on while the menu edits a value (window thread, once per poll).
 void UpdateTextInput(SDL_Window* window);
 
+/// Start-up loading screen (pipeline cache warm-up): `total` 0 shows no count.
+void SetLoading(bool active, u32 done, u32 total);
+
 /// Whether anything is drawn this frame (menu open or FPS counter on).
 bool Visible();
 

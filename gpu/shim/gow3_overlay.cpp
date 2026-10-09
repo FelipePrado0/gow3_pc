@@ -51,6 +51,8 @@ std::mutex imgui_mutex; // the ImGui context: window thread (input) and present 
 bool initialized = false;
 std::atomic<bool> menu_open{false};
 bool r3_down = false, l2_down = false;
+std::atomic<bool> loading{false};
+std::atomic<u32> loading_done{0}, loading_total{0};
 bool dirty = false; // settings changed while open: saved on close
 // The game's text dialog (SetTextEntry), guarded by imgui_mutex.
 bool text_entry_active = false;
@@ -224,6 +226,30 @@ void ChoiceBox() {
     }
     ImGui::Separator();
     ImGui::TextDisabled("Up/Down or D-pad: choose   Enter or Cross (A): OK   Esc or Circle (B): cancel");
+    ImGui::End();
+}
+
+void LoadingScreen() {
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
+                                   viewport->WorkPos.y + viewport->WorkSize.y * 0.5f),
+                            ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x * 0.4f, 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.0f);
+    ImGui::Begin("##loading", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
+                     ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoFocusOnAppearing);
+    const u32 done = loading_done, total = loading_total;
+    ImGui::SetWindowFontScale(1.6f);
+    ImGui::TextUnformatted(total ? "Loading shader cache..." : "Preparing graphics...");
+    ImGui::SetWindowFontScale(1.0f);
+    if (total) {
+        char count[64];
+        std::snprintf(count, sizeof(count), "%u / %u (%u%%)", done, total,
+                      u32(u64(done) * 100 / total));
+        ImGui::ProgressBar(float(done) / float(total), ImVec2(-1.0f, 0.0f), count);
+    }
+    ImGui::TextDisabled("The first start after an update takes longer.");
     ImGui::End();
 }
 
@@ -459,8 +485,14 @@ bool HandleEvent(const SDL_Event& event) {
     }
 }
 
+void SetLoading(bool active, u32 done, u32 total) {
+    loading_done = done;
+    loading_total = total;
+    loading = active;
+}
+
 bool Visible() {
-    return initialized && (menu_open || text_entry_active || choice_active || Gow3Settings::Get().show_fps);
+    return initialized && (loading || menu_open || text_entry_active || choice_active || Gow3Settings::Get().show_fps);
 }
 
 bool CapturesInput() {
@@ -513,6 +545,9 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
 
     ImGui_ImplVulkan_NewFrame();
     ImGui::NewFrame();
+    if (loading) {
+        LoadingScreen();
+    }
     if (menu_open) {
         Menu();
     }
