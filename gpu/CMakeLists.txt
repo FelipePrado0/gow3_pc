@@ -291,6 +291,8 @@ add_executable(orb-multiplier-test EXCLUDE_FROM_ALL ../tests/test_orb_multiplier
     shim/gow3_orbs.cpp shim/gow3_settings.cpp)
 target_include_directories(orb-multiplier-test PRIVATE shim)
 target_compile_options(orb-multiplier-test PRIVATE -UNDEBUG)
+add_executable(cheat-hooks-test EXCLUDE_FROM_ALL ../tests/test_cheat_hooks.cpp)
+target_compile_options(cheat-hooks-test PRIVATE -UNDEBUG)
 
 add_executable(fsr4-bench EXCLUDE_FROM_ALL tools/fsr4_bench.cpp
     shadps4/video_core/renderer_vulkan/fsr411/fsr411.cpp)

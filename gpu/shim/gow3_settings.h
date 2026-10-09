@@ -6,6 +6,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstdint>
 
 namespace Gow3Settings {
 
@@ -39,6 +40,8 @@ struct Values {
     std::atomic<bool> show_fps{false};
     std::atomic<float> red_orb_multiplier{1.0f};
     std::atomic<bool> red_orbs_supported{false};
+    std::atomic<bool> cheats[5]{};
+    std::atomic<uint32_t> cheats_supported{0};
     // FSR 4 checks (menu): the provider's auto exposure, the jitter sign it is given.
     std::atomic<bool> fsr4_auto_exposure{true};
     std::atomic<bool> fsr4_invert_jitter{false};

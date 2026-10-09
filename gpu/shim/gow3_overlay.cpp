@@ -143,7 +143,8 @@ void Store(std::atomic<T>& target, T value, bool changed) {
 
 void Checkbox(const char* label, std::atomic<bool>& value) {
     bool v = value;
-    Store(value, v, ImGui::Checkbox(label, &v));
+    const bool changed = ImGui::Checkbox(label, &v);
+    Store(value, v, changed);
 }
 
 void Menu() {
@@ -168,7 +169,19 @@ void Menu() {
     ImGui::Separator();
     Checkbox("Show FPS counter", s.show_fps);
     ImGui::SeparatorText("Cheats");
-    ImGui::BeginDisabled(!s.red_orbs_supported.load());
+    const char* cheat_names[] = {"Max / infinite health", "Infinite magic", "Infinite item meter",
+                                 "Infinite Rage of Sparta", "Max / infinite red orbs"};
+    for (unsigned cheat = 0; cheat < 5; ++cheat) {
+        const bool available = (s.cheats_supported.load() & (1u << cheat)) != 0;
+        ImGui::BeginDisabled(!available);
+        Checkbox(cheat_names[cheat], s.cheats[cheat]);
+        ImGui::EndDisabled();
+        if (!available) {
+            ImGui::TextDisabled("Unavailable: game version or code signature mismatch.");
+        }
+    }
+    const bool max_orbs = (s.cheats_supported.load() & (1u << 4)) && s.cheats[4].load();
+    ImGui::BeginDisabled(!s.red_orbs_supported.load() || max_orbs);
     float multiplier = s.red_orb_multiplier.load();
     if (ImGui::SliderFloat("Red orb multiplier", &multiplier, 0.1f, 100.0f, "%.2fx",
                            ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp)) {
@@ -184,6 +197,10 @@ void Menu() {
         dirty = true;
     }
     ImGui::EndDisabled();
+    if (max_orbs) {
+        ImGui::TextWrapped("Turn off max / infinite red orbs to adjust the multiplier.");
+    }
+    ImGui::TextWrapped("Turning cheats off restores normal behavior, not previously granted resources.");
     ImGui::TextDisabled("Applies to future gains. Existing orbs and prices stay unchanged.");
     if (!s.red_orbs_supported.load()) {
         ImGui::TextWrapped("Unavailable: executable does not match the validated CUSA01623 v01.02 gain routines.");

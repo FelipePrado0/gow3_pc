@@ -17,6 +17,7 @@
 
 extern "C" float __attribute__((sysv_abi)) gow3_orbs_gain(void*, float);
 extern "C" void gow3_orbs_status(int);
+extern "C" void gow3_cheat_status(unsigned);
 static void __attribute__((sysv_abi)) Setter(void* player, float balance) {
     balance = std::min(balance, 999999.0f);
     std::memcpy(static_cast<unsigned char*>(player) + 0x1e8, &balance, 4);
@@ -73,6 +74,12 @@ int main(int argc, char** argv) {
     hook(player.data(), 110);
     std::memcpy(&balance, player.data() + 0x1e8, 4);
     assert(balance == 120);
+    settings.cheats[4] = true;
+    assert(gow3_orbs_gain(player.data(), 130) == 140);
+    gow3_cheat_status(4);
+    assert(gow3_orbs_gain(player.data(), 130) == 130);
+    settings.cheats[4] = false;
+    assert(gow3_orbs_gain(player.data(), 130) == 140);
     settings.red_orb_multiplier = 100;
     hook(player.data(), 90);
     std::memcpy(&balance, player.data() + 0x1e8, 4);
@@ -92,10 +99,15 @@ int main(int argc, char** argv) {
     setenv("GOW3_CONFIG", config.string().c_str(), 1);
 #endif
     settings.red_orb_multiplier = 0.125f;
+    settings.cheats[0] = true;
+    settings.cheats[2] = true;
     Gow3Settings::Save();
     settings.red_orb_multiplier = 1;
+    settings.cheats[0] = false;
+    settings.cheats[2] = false;
     Gow3Settings::Load();
     assert(settings.red_orb_multiplier == 0.125f);
+    assert(settings.cheats[0] && settings.cheats[2] && !settings.cheats[1] && !settings.cheats[4]);
     assert(std::filesystem::remove(config));
 #ifdef _WIN32
     VirtualFree(stub, 0, MEM_RELEASE);

@@ -7,6 +7,7 @@
 #include <inttypes.h>
 #include "runtime.h"
 #include "orb_hook.h"
+#include "cheat_hook.h"
 #include "gpu/gow3gpu.h"
 #if !defined(__x86_64__) || !defined(__GNUC__)
 #error This prototype requires x86-64 GCC or Clang (including MinGW).
@@ -313,6 +314,58 @@ static int mapped(Segment *segments, uint64_t count, uint64_t address, uint64_t 
 }
 extern ABI float gow3_orbs_gain(void *player, float requested);
 extern void gow3_orbs_status(int supported);
+extern uintptr_t gow3_cheat_flag(unsigned id);
+extern void gow3_cheat_status(unsigned id);
+
+static void install_cheats(const char *app0, Segment *segments, uint64_t count, uint64_t size) {
+    char path[4096], serial[32] = "", version[32] = "";
+    snprintf(path, sizeof(path), "%s/sce_sys/param.sfo", app0 ? app0 : ".");
+    sfo_value(path, "TITLE_ID", serial, sizeof(serial), NULL);
+    sfo_value(path, "APP_VER", version, sizeof(version), NULL);
+    if (strcmp(serial, "CUSA01623") || strcmp(version, "01.02")) return;
+    const char *names[] = {"health", "magic", "item meter", "Rage of Sparta", "red orbs"};
+    for (unsigned id = 0; id < GOW3_CHEAT_COUNT; ++id) {
+        int valid = 1;
+        for (unsigned i = 0; i < GOW3_CHEAT_HOOK_COUNT; ++i) {
+            const Gow3CheatHook *hook = &gow3_cheat_hooks[i];
+            if (hook->id != id) continue;
+            if (hook->offset > size || hook->length > size - hook->offset ||
+                !mapped(segments, count, hook->offset, hook->length) ||
+                !gow3_cheat_signature_match(hook, image + hook->offset, size - hook->offset)) valid = 0;
+        }
+        if (!valid) {
+            printf("Cheats: %s unavailable (code signature mismatch)\n", names[id]);
+            continue;
+        }
+        unsigned char *stubs = allocate(page_size);
+        int32_t relative[GOW3_CHEAT_HOOK_COUNT] = {0};
+        for (unsigned i = 0; i < GOW3_CHEAT_HOOK_COUNT; ++i) {
+            const Gow3CheatHook *hook = &gow3_cheat_hooks[i];
+            if (hook->id != id) continue;
+            unsigned char *stub = stubs + i * 256;
+            int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + hook->offset + 5);
+            if (delta < INT32_MIN || delta > INT32_MAX) { valid = 0; break; }
+            relative[i] = (int32_t)delta;
+            gow3_cheat_build_stub(stub, hook, gow3_cheat_flag(id),
+                                 (uintptr_t)(image + hook->offset + hook->length));
+        }
+        if (!valid) {
+            printf("Cheats: %s unavailable (hook outside relative-jump range)\n", names[id]);
+            continue;
+        }
+        protect(stubs, page_size, 5);
+        for (unsigned i = 0; i < GOW3_CHEAT_HOOK_COUNT; ++i) {
+            const Gow3CheatHook *hook = &gow3_cheat_hooks[i];
+            if (hook->id != id) continue;
+            image[hook->offset] = 0xe9;
+            memcpy(image + hook->offset + 1, &relative[i], 4);
+            memset(image + hook->offset + 5, 0x90, hook->length - 5);
+        }
+        gow3_cheat_status(id);
+        printf("Cheats: %s ready (live toggle, initially disabled unless saved)\n", names[id]);
+    }
+}
+
 static void install_orb_multiplier(const char *app0, Segment *segments, uint64_t count,
                                    uint64_t size) {
     char path[4096], serial[32] = "", version[32] = "";
@@ -658,6 +711,7 @@ int main(int argc, char **argv) {
     }
     if (patch_file) apply_patches(patch_file, segments, ns, relocs, nr);
     if (gpu_enabled) install_orb_multiplier(app0, segments, ns, size);
+    if (gpu_enabled) install_cheats(app0, segments, ns, size);
 #ifdef _WIN32
     printf("Guest TCB loads redirected to the TEB TLS slot: %" PRIu64 "\n", patch_tcb_loads(segments, ns));
 #endif
