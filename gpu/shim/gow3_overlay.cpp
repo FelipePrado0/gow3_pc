@@ -43,8 +43,6 @@ asm(".section .rodata\n"
 extern "C" const unsigned char gow3_font_ttf[];
 extern "C" const unsigned char gow3_font_ttf_end[];
 
-extern "C" void runtime_restart(void); // gow3-probe (probe.c)
-
 namespace Gow3Overlay {
 
 namespace {
@@ -52,7 +50,7 @@ namespace {
 std::mutex imgui_mutex; // the ImGui context: window thread (input) and present thread
 bool initialized = false;
 std::atomic<bool> menu_open{false};
-bool l3_down = false, r3_down = false;
+bool r3_down = false, l2_down = false;
 bool dirty = false; // settings changed while open: saved on close
 // The game's text dialog (SetTextEntry), guarded by imgui_mutex.
 bool text_entry_active = false;
@@ -145,237 +143,33 @@ void Checkbox(const char* label, std::atomic<bool>& value) {
     Store(value, v, ImGui::Checkbox(label, &v));
 }
 
-void Slider(const char* label, std::atomic<float>& value, float lo, float hi) {
-    float v = value;
-    Store(value, v, ImGui::SliderFloat(label, &v, lo, hi, "%.2f"));
-}
-
-void Hint(const char* text) {
-    ImGui::SameLine();
-    ImGui::TextDisabled("(?)");
-    if (ImGui::BeginItemTooltip()) {
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 30.0f);
-        ImGui::TextUnformatted(text);
-        ImGui::PopTextWrapPos();
-        ImGui::EndTooltip();
-    }
-}
-
 void Menu() {
     auto& s = Gow3Settings::Get();
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + 40.0f * base_scale,
                                    viewport->WorkPos.y + 40.0f * base_scale),
                             ImGuiCond_Appearing);
-    ImGui::SetNextWindowSize(ImVec2(620.0f * base_scale, 0.0f), ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(ImVec2(420.0f * base_scale, 0.0f), ImGuiCond_Appearing);
     bool keep_open = true;
     // gow3: the game's own title (param.sfo), not a fixed one.
     static const std::string heading = [] {
         const std::string_view title = Common::ElfInfo::Instance().Title();
-        return std::string(title.empty() ? "God of War III" : title) + " — настройки  (Insert / L3+R3)";
+        return std::string(title.empty() ? "God of War III" : title) + " (Insert / R3+L2)";
     }();
-    if (!ImGui::Begin(heading.c_str(), &keep_open,
-                      ImGuiWindowFlags_NoCollapse)) {
+    if (!ImGui::Begin(heading.c_str(), &keep_open, ImGuiWindowFlags_NoCollapse)) {
         ImGui::End();
         return;
     }
-    ImGui::Text("%.0f FPS  (%.1f мс)", frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f,
+    ImGui::Text("%.0f FPS  (%.1f ms)", frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f,
                 frame_ms_avg);
-
-    ImGui::SeparatorText("Временной апскейлер");
-    static const char* upscalers[] = {"Выкл", "FSR 3.1", "FSR 4 (INT8)", "FSR 4.1.1 (INT8)",
-                                     "TAA (нативное сглаживание)", "DLSS (NVIDIA RTX)"};
-    static const char* later[] = {"XeSS"};
-    int upscaler = s.upscaler;
-    if (ImGui::BeginCombo("Апскейлер", upscalers[upscaler])) {
-        for (int i = 0; i < Gow3Settings::UpscalerCount; ++i) {
-            const bool supported = i == Gow3Settings::UpscalerFsr4 ? s.fsr4_supported.load()
-                : i == Gow3Settings::UpscalerFsr411 ? s.fsr411_supported.load()
-                : i == Gow3Settings::UpscalerDlss   ? s.dlss_supported.load() : true;
-            ImGui::BeginDisabled(!supported);
-            if (ImGui::Selectable(upscalers[i], i == upscaler)) {
-                Store(s.upscaler, i, true);
-            }
-            ImGui::EndDisabled();
-            if (!supported) {
-                ImGui::SameLine();
-                ImGui::TextDisabled("— не поддерживается видеокартой");
-            }
-        }
-        for (const char* name : later) {
-            ImGui::BeginDisabled();
-            ImGui::Selectable(name, false);
-            ImGui::EndDisabled();
-            ImGui::SameLine();
-            ImGui::TextDisabled("— в работе");
-        }
-        ImGui::EndCombo();
-    }
-    if (const char* problem = s.dlss_problem.load(); problem && upscaler == Gow3Settings::UpscalerDlss) {
-        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f), "DLSS: %s", problem);
-    }
-    if (const char* problem = s.fsr4_problem.load()) {
-        ImGui::PushTextWrapPos();
-        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f), "FSR 4 недоступен: %s", problem);
-        if (!Gow3Settings::IsFsr4(s.upscaler))
-            ImGui::TextUnformatted("Активен режим, выбранный выше. FSR 4 можно выбрать снова.");
-        ImGui::PopTextWrapPos();
-    }
-    if (Gow3Settings::IsFsr4(s.upscaler)) {
-        if (s.upscaler == Gow3Settings::UpscalerFsr411) {
-            Hint("FSR 4.1.1 в режиме INT8: модель из DLL AMD 4.1.1, воспроизведённая в Vulkan "
-                 "(результат совпадает с DLL). Одна модель для Native..Performance и отдельная "
-                 "для Ultra Performance. Ассеты: tools/fsr4cap/build_assets.sh (нужны DLL и Proton).");
-        } else {
-            Hint("FSR 4 в режиме INT8 (модель v07 из исходников AMD FidelityFX SDK). Качество выше, "
-                 "чем у FSR 3.1, но проход тяжелее. Смена пресета пересобирает модель (короткая "
-                 "пауза). Ассеты: tools/fetch_fsr4_assets.sh.");
-        }
-        Checkbox("FSR 4: авто-экспозиция", s.fsr4_auto_exposure);
-        Checkbox("FSR 4: обратный знак jitter", s.fsr4_invert_jitter);
-        Hint("Проверка при гостинге: сеть FSR 4 нормирует цвет по экспозиции и по ней решает, "
-             "когда отбросить прошлые кадры. Меняются сразу, без перезапуска.");
-    }
-    const bool upscaler_on = s.upscaler != Gow3Settings::UpscalerOff;
-    const bool taa = s.upscaler == Gow3Settings::UpscalerTaa;
-    ImGui::BeginDisabled(!upscaler_on);
-    ImGui::BeginDisabled(taa);
-    int preset = taa ? Gow3Settings::NativeAA : s.preset.load();
-    char preset_label[64];
-    std::snprintf(preset_label, sizeof(preset_label), "%s (x%.1f)", Gow3Settings::PresetName(preset),
-                  Gow3Settings::PresetScale(preset));
-    if (ImGui::BeginCombo("Пресет", preset_label)) {
-        for (int i = 0; i < Gow3Settings::PresetCount; ++i) {
-            char label[64];
-            const float scale = Gow3Settings::PresetScale(i);
-            const int output = s.output_res;
-            std::snprintf(label, sizeof(label), "%s (x%.1f, рендер %dx%d)",
-                          Gow3Settings::PresetName(i), scale,
-                          int(std::lround(Gow3Settings::OutputWidths[output] / scale / 2) * 2),
-                          int(std::lround(Gow3Settings::OutputHeights[output] / scale / 2) * 2));
-            if (ImGui::Selectable(label, i == preset)) {
-                Store(s.preset, i, true);
-            }
-        }
-        ImGui::EndCombo();
-    }
-    ImGui::EndDisabled();
-    if (taa) {
-        ImGui::TextWrapped("TAA сглаживает сцену в разрешении вывода, без модели FSR и апскейлинга. "
-                           "Сохранённый пресет FSR восстановится при выборе FSR.");
-    }
-    ImGui::Text("Активный рендер сцены: %d x %d", s.active_render_width.load(),
-                s.active_render_height.load());
-    if (Gow3Settings::FixedRenderSession()) {
-        ImGui::Text("Пресет при запуске: %s", Gow3Settings::PresetName(s.startup_preset));
-        if (const char* automatic = std::getenv("GOW3_AUTO_RENDER_RES");
-            automatic && automatic[0] == '1') {
-            Hint("При выводе не 1080p вся игра рисуется в разрешении пресета (патч при запуске): "
-                 "это быстрее всего на Steam Deck и слабых GPU. Смена пресета или разрешения "
-                 "вывода — после перезапуска. Пункт «Смена разрешения на лету» ниже включает "
-                 "смену без перезапуска (постобработка тогда остаётся в 1080p, медленнее).");
-        } else {
-            Hint("GOW3_RENDER_RES фиксирует размер сцены при запуске. Уберите эту явную переменную "
-                 "для смены разрешения и пресетов без перезапуска игры.");
-        }
-    } else {
-        Hint("Native AA: FSR работает как сглаживание. Остальные пресеты уменьшают разрешение "
-             "отрисовки сцены относительно вывода. Интерфейс рисуется в разрешении вывода. "
-             "Пресет применяется со следующего кадра без перезапуска игры.");
-    }
-    Checkbox("Резкость (RCAS)", s.sharpen);
-    ImGui::BeginDisabled(!s.sharpen);
-    Slider("Сила резкости", s.sharpness, 0.0f, 2.0f);
-    Hint("До 1 — резкость самого апскейлера (RCAS). Выше 1 добавляется ещё один проход RCAS. "
-         "Ctrl+клик по ползунку — ввести точное значение.");
-    ImGui::EndDisabled();
-    Checkbox("Субпиксельный сдвиг (jitter)", s.jitter);
-    Hint("Каждый кадр сцена сдвигается на долю пикселя, и апскейлер собирает из нескольких "
-         "кадров больше деталей. Без него получается только сглаживание по истории.");
-
-    ImGui::SeparatorText("Маска реактивности");
-    ImGui::BeginDisabled(taa);
-    Checkbox("Включить маску", s.reactive);
-    Hint("Помечает прозрачные эффекты (частицы, дымку), чтобы апскейлер меньше опирался на "
-         "прошлые кадры. Меньше шлейфов за эффектами, но под ними возвращается дрожание.");
-    ImGui::BeginDisabled(!s.reactive);
-    Slider("Масштаб", s.reactive_scale, 0.0f, 4.0f);
-    Slider("Порог", s.reactive_threshold, 0.0f, 1.0f);
-    Slider("Максимум", s.reactive_max, 0.0f, 1.0f);
-    bool show_mask = s.debug_view == Gow3Settings::DebugReactive;
-    if (ImGui::Checkbox("Показать маску (отладка)", &show_mask)) {
-        s.debug_view = show_mask ? Gow3Settings::DebugReactive : Gow3Settings::DebugNone;
-    }
-    ImGui::EndDisabled();
-    ImGui::EndDisabled();
-    Checkbox("Векторы движения персонажей", s.object_motion);
-    Hint("Точные векторы для анимированных объектов: одежда и оружие меньше рассыпаются "
-         "при движении. Статичная сцена не получает дополнительный проход. "
-         "Изменение применяется после перезапуска игры.");
-    bool show_motion = s.debug_view == Gow3Settings::DebugMotion;
-    if (ImGui::Checkbox("Показать векторы движения (отладка)", &show_motion)) {
-        s.debug_view = show_motion ? Gow3Settings::DebugMotion : Gow3Settings::DebugNone;
-    }
-    Hint("Красный/зелёный: движение по горизонтали/вертикали (8 пикселей = полная яркость). "
-         "Синий: пиксель получил точный вектор объекта, а не только движение камеры. "
-         "Движущийся предмет без синего и без красного/зелёного апскейлер считает "
-         "неподвижным, отсюда шлейф.");
-    ImGui::EndDisabled(); // upscaler off
-
-    ImGui::SeparatorText("Разрешение вывода");
-    static const char* outputs[] = {"1280 x 720", "1920 x 1080", "2560 x 1440", "3840 x 2160"};
-    int output = s.output_res;
-    if (ImGui::BeginCombo("Разрешение вывода", outputs[output])) {
-        for (int i = 0; i < Gow3Settings::OutputCount; ++i) {
-            if (ImGui::Selectable(outputs[i], i == output)) {
-                Store(s.output_res, i, true);
-            }
-        }
-        ImGui::EndCombo();
-    }
-    if (Gow3Settings::FixedRenderSession()) {
-        Hint("Размер готового кадра и интерфейса. Пресет задаёт размер сцены относительно "
-             "вывода: 4K Performance = 1920x1080. Применяется после перезапуска игры.");
-    } else {
-        Hint("Размер готового кадра и интерфейса меняется на границе следующего кадра. "
-             "Пресет задаёт размер сцены относительно вывода: 4K Performance = 1920x1080. "
-             "Смена размера сбрасывает историю FSR и может вызвать короткую паузу.");
-    }
-    static const char* live_modes[] = {"Авто (по видеокарте)", "Выключена (быстрее)", "Включена"};
-    int live = s.live_resolution + 1;
-    if (ImGui::BeginCombo("Смена разрешения на лету", live_modes[live])) {
-        for (int i = 0; i < 3; ++i) {
-            if (ImGui::Selectable(live_modes[i], i == live)) {
-                Store(s.live_resolution, i - 1, true);
-            }
-        }
-        ImGui::EndCombo();
-    }
-    Hint("Включена: разрешение вывода и пресет меняются без перезапуска, но постобработка игры "
-         "остаётся в 1080p — на Steam Deck и старых видеокартах это заметно медленнее. "
-         "Выключена: всё рисуется в разрешении пресета, смена — через перезапуск. Авто включает "
-         "её на мощных дискретных видеокартах. Применяется после перезапуска игры.");
-    bool restart = s.object_motion != s.startup_object_motion ||
-                   s.live_resolution != s.startup_live_resolution ||
-                   Gow3Settings::ResolutionNeedsRestart();
-    if (restart) {
-        ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f),
-                           "Изменения применятся после перезапуска игры");
-        if (ImGui::Button("Применить и перезапустить игру")) {
-            Gow3Settings::Save();
-            runtime_restart();
-        }
-    }
-
-    ImGui::SeparatorText("Прочее");
-    Checkbox("Счётчик FPS в углу", s.show_fps);
-
+    ImGui::Separator();
+    Checkbox("Show FPS counter", s.show_fps);
     ImGui::Spacing();
-    if (ImGui::Button("Закрыть")) {
+    if (ImGui::Button("Close")) {
         keep_open = false;
     }
     ImGui::SameLine();
-    ImGui::TextDisabled("Настройки сохраняются в gow3.ini");
+    ImGui::TextDisabled("Saved in gow3.ini");
     ImGui::End();
     if (!keep_open) {
         SetOpen(false);
@@ -445,7 +239,7 @@ void FpsCounter() {
                      ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
                      ImGuiWindowFlags_NoFocusOnAppearing);
     const auto& s = Gow3Settings::Get();
-    ImGui::Text("%.0f FPS  %.1f мс  %s", frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f,
+    ImGui::Text("%.0f FPS  %.1f ms  %s", frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f,
                 frame_ms_avg,
                 s.upscaler == Gow3Settings::UpscalerFsr3   ? "FSR 3.1"
                 : s.upscaler == Gow3Settings::UpscalerFsr4 ? "FSR 4"
@@ -515,7 +309,7 @@ void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) 
         return;
     }
     initialized = true;
-    std::printf("Overlay: menu ready (Insert or L3+R3)\n");
+    std::printf("Overlay: menu ready (Insert or R3+L2)\n");
 }
 
 void UpdateTextInput(SDL_Window* window) {
@@ -595,14 +389,13 @@ bool HandleEvent(const SDL_Event& event) {
     case SDL_EVENT_GAMEPAD_BUTTON_UP: {
         const bool down = event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN;
         const u8 button = event.gbutton.button;
-        if (button == SDL_GAMEPAD_BUTTON_LEFT_STICK) {
-            l3_down = down;
-        } else if (button == SDL_GAMEPAD_BUTTON_RIGHT_STICK) {
+        // R3+L2 opens the menu: L3+R3 is a game action in God of War III.
+        if (button == SDL_GAMEPAD_BUTTON_RIGHT_STICK) {
             r3_down = down;
-        }
-        if (down && l3_down && r3_down) {
-            SetOpen(!is_open);
-            return true;
+            if (down && l2_down) {
+                SetOpen(!is_open);
+                return true;
+            }
         }
         if (!is_open) {
             return false;
@@ -611,6 +404,18 @@ bool HandleEvent(const SDL_Event& event) {
             io.AddKeyEvent(key, down);
         }
         return true;
+    }
+    case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
+        if (event.gaxis.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER) {
+            const bool down = event.gaxis.value > 16000;
+            if (down && !l2_down && r3_down) {
+                l2_down = true;
+                SetOpen(!is_open);
+                return true;
+            }
+            l2_down = down;
+        }
+        return false;
     }
     case SDL_EVENT_TEXT_INPUT: {
         // Typed characters (Ctrl+click on a slider, a text field): key events alone erase but

@@ -30,7 +30,7 @@ download yet: for now the project is built from source. Progress is tracked (in 
   - skip videos with the X button.
 - A launcher with the God of War III identity (the game's own banner and icon), in 13 languages
   (the game patches page is in English, Portuguese and Russian).
-- An in-game settings menu (Insert or L3+R3).
+- An in-game settings menu (Insert or R3+L2).
 
 ## Known issues
 

@@ -30,7 +30,7 @@ para baixar: por enquanto o projeto é compilado a partir do código. O andament
   - pular vídeos com o botão X.
 - Launcher com a identidade do God of War III (banner e ícone do próprio jogo), em 13 idiomas
   (a página de patches do jogo está em português, inglês e russo).
-- Menu de configurações dentro do jogo (Insert ou L3+R3).
+- Menu de configurações dentro do jogo (Insert ou R3+L2).
 
 ## Problemas conhecidos
 

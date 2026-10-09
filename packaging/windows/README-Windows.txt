@@ -23,7 +23,7 @@ Starting
 - Advanced -> "Desktop shortcut" puts the game on the desktop.
 - Advanced -> "Launcher language": English, Russian, Arabic, Spanish, Portuguese, French,
   German, Italian, Polish, Turkish, Chinese, Japanese, Korean (default: the Windows language).
-- In the game, Insert (or L3+R3 on a gamepad) opens the port's menu. Keyboard: WASD move,
+- In the game, Insert (or R3+L2 on a gamepad) opens the port's menu. Keyboard: WASD move,
   arrows camera, Space Cross, Left Shift Circle, E Square, Q Triangle, 1/3 L1/R1, R/F L2/R2,
   Z/C L3/R3, I/K/J/L d-pad, Enter Options, Tab touchpad.
 

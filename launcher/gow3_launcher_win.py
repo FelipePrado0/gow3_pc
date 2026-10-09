@@ -223,7 +223,7 @@ def save_ini(values, lines):
                 continue
         out.append(line)
     if not lines:
-        out.append('# gow3 settings (in-game menu: Insert / L3+R3)')
+        out.append('# gow3 settings (in-game menu: Insert / R3+L2)')
     out += [f'{key}={value}' for key, value in values.items() if key not in written]
     ini_path().write_text('\n'.join(out) + '\n', encoding='utf-8')
 
@@ -558,8 +558,8 @@ class Launcher:
         self.nav['graphics'].pack_forget()
         tk.Frame(side, bg=BG).pack(fill='both', expand=True)
         self.update_box = None
-        self.side_note = tk.Label(side, text=_('In the game: Insert or L3+R3\nopens the port\'s menu.',
-                                               'В игре: Insert или L3+R3\nоткрывает меню порта.'),
+        self.side_note = tk.Label(side, text=_('In the game: Insert or R3+L2\nopens the port\'s menu.',
+                                               'В игре: Insert или R3+L2\nоткрывает меню порта.'),
                                   bg=BG, fg=MUTED, font=('Segoe UI', 9), justify='left', wraplength=self.px(210))
         self.side_note.pack(anchor='w', padx=22, pady=(0, 18))
 
@@ -683,8 +683,8 @@ class Launcher:
     def build_graphics(self):
         ttk = self.ttk
         f = self.scrolled_page('graphics', _('Graphics', 'Графика'),
-                               _('Stored in gow3.ini; the in-game menu (Insert or L3+R3) changes the same values.',
-                                 'Хранится в gow3.ini; в игре меняется через меню (Insert или L3+R3).'))
+                               _('Stored in gow3.ini; the in-game menu (Insert or R3+L2) changes the same values.',
+                                 'Хранится в gow3.ini; в игре меняется через меню (Insert или R3+L2).'))
         self.section(f, _('Upscaling', 'Апскейлинг'), top=4)
         self.row(f, _('Upscaler', 'Апскейлер'), self.choice(f, 'upscaler', 'ini', UPSCALERS),
                  _("Temporal upscaling with the game's own motion vectors. FSR 4 needs its assets (below) and "
