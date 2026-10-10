@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include "video_core/texture_cache/readback_queue.h"
 #include "video_core/texture_cache/readback_sources.h"
@@ -445,6 +447,23 @@ private:
         const char* value = std::getenv("GOW3_DEFERRED_READBACK");
         return value && value[0] == '1';
     }();
+    /// gow3: GOW3_STALE_READBACK=1 (needs deferred readbacks). A pending copy only blocks CPU
+    /// writes: CPU reads see the version the GPU published last (one frame late) instead of
+    /// waiting for the GPU. Writes still wait, so no byte is lost.
+    const bool stale_readbacks = deferred_readbacks && [] {
+        const char* value = std::getenv("GOW3_STALE_READBACK");
+        return value && value[0] == '1';
+    }();
+    template <bool track>
+    void WatchReadback(VAddr address, u64 size);
+    struct ReadbackImageStat {
+        VAddr address;
+        u32 width, height, bits, copies;
+        vk::Format format;
+    };
+    std::array<ReadbackImageStat, 16> readback_images{};
+    VAddr last_cpu_wait_address = 0;
+    u64 readbacks_released = 0;
     ReadbackQueue<Vulkan::StagingBufferRef> pending_readbacks;
     std::mutex readback_mutex;
     std::atomic<bool> has_pending_readbacks{false};

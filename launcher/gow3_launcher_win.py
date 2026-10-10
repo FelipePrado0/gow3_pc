@@ -134,7 +134,7 @@ APP_DEFAULTS = {'ui_language': '', 'game_dir': os.environ.get('GOW3_GAME_DIR', s
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
                 'player_name': '', 'fullscreen': False, 'hdr': False, 'present_mode': 'Mailbox',
                 'frame_cap': '', 'draw_pipe': '', 'readbacks': '',
-                'frames_ahead': '', 'parallel_warmup': True, 'async_shaders': True, 'deferred_readback': True, 'perf_diag': False, 'frame_stats': False, 'gpu_profile': False,
+                'frames_ahead': '', 'parallel_warmup': True, 'async_shaders': True, 'deferred_readback': True, 'stale_readback': True, 'perf_diag': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation'}
 
@@ -321,6 +321,7 @@ def game_environment(s):
     env['GOW3_PARALLEL_WARMUP'] = '1' if s.get('parallel_warmup', True) else '0'
     env['GOW3_ASYNC_SHADERS'] = '1' if s.get('async_shaders', True) else '0'
     env['GOW3_DEFERRED_READBACK'] = '1' if s.get('deferred_readback', True) else '0'
+    env['GOW3_STALE_READBACK'] = '1' if s.get('stale_readback', True) else '0'
     env['GOW3_PERF_DIAG'] = '1' if s.get('perf_diag', False) else '0'
     for key, name in (('frame_stats', 'GOW3_FRAME_STATS'), ('gpu_profile', 'GOW3_GPU_PROFILE'),
                       ('vk_validation', 'GOW3_VK_VALIDATION')):
@@ -1041,6 +1042,10 @@ class Launcher:
         self.check(f, 'deferred_readback', 'app', _('Deferred GPU readbacks'),
                    _('The GPU copies data back for the game without stopping each time: fewer waits, a few '
                      'more FPS. Switch it off if textures or shadows look wrong.'))
+        self.check(f, 'stale_readback', 'app', _('Game reads GPU data without waiting (big FPS gain)'),
+                   _('The game reads data the GPU wrote, such as the scene exposure, from the previous frame '
+                     'instead of waiting for the current one: about 40 to 66 FPS in a heavy scene. Needs '
+                     'deferred GPU readbacks. Switch it off if lighting or objects look wrong.'))
         self.check(f, 'parallel_warmup', 'app', _('Fast shader cache loading (parallel)'),
                    _('Builds the cached pipelines on several CPU threads at start: about 70 s instead of 300 s '
                      'with a full cache. Switch it off if the image looks wrong after loading.'))

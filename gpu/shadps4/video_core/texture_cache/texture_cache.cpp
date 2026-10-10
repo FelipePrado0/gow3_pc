@@ -36,8 +36,9 @@ TextureCache::TextureCache(const Vulkan::Instance& instance_, Vulkan::Scheduler&
       tile_manager{instance, scheduler, runtime, buffer_cache.GetStreamBuffer()},
       readback_linear_images{EmulatorSettings.IsReadbackLinearImagesEnabled()} {
 
-    std::printf("GPU: deferred image readback %s (64 copies, 64 MiB pending limit)\n",
-                deferred_readbacks ? "enabled" : "disabled");
+    std::printf("GPU: deferred image readback %s (64 copies, 64 MiB pending limit)%s\n",
+                deferred_readbacks ? "enabled" : "disabled",
+                stale_readbacks ? "; CPU reads use the previous frame's copy" : "");
 
     u32 max_samplers = instance.GetMaxSamplerAllocationCount();
     trigger_gc_samplers = max_samplers * 3 / 4;
@@ -75,6 +76,15 @@ TextureCache::~TextureCache() {
     }
 }
 
+template <bool track>
+void TextureCache::WatchReadback(VAddr address, u64 size) {
+    if (stale_readbacks) {
+        tracker.UpdatePageWatchers<track, false>(address, size);
+    } else {
+        tracker.UpdatePageWatchers<track, true>(address, size);
+    }
+}
+
 void TextureCache::RetireReadbacks() {
     pending_readbacks.Retire([this](u64 tick) { return scheduler.IsFree(tick); },
         [this](auto& entry) {
@@ -82,7 +92,7 @@ void TextureCache::RetireReadbacks() {
                 entry.payload.Invalidate();
                 Core::Memory::Instance()->TryWriteBacking(std::bit_cast<u8*>(entry.address),
                     entry.payload.mapped, entry.size);
-                tracker.UpdatePageWatchers<false, true>(entry.address, entry.size);
+                if (entry.watched) WatchReadback<false>(entry.address, entry.size);
                 ++readbacks_completed;
             }
             runtime.GetStagingPool().FreeDeferred(entry.payload);
@@ -95,6 +105,13 @@ bool TextureCache::ResolveReadbacks(VAddr address, u64 size, bool assume_locks,
     if (!deferred_readbacks || !has_pending_readbacks.load(std::memory_order_acquire)) return false;
     {
         std::scoped_lock lock{readback_mutex};
+        // Stale mode, byte rule: God of War III writes every frame to the page that holds a
+        // 1x1 exposure copy, but not to its bytes. That write need not wait for the GPU: the
+        // copy only stops protecting its page and is still published when the GPU is done.
+        if (stale_readbacks && source == ReadbackSource::CpuWrite) {
+            readbacks_released += pending_readbacks.ReleaseOutside(address, size, 64_KB,
+                [this](auto& entry) { WatchReadback<false>(entry.address, entry.size); });
+        }
         if (!pending_readbacks.RequiredTick(address, size)) return false;
     }
     const auto resolve = [this, address, size, source] {
@@ -114,7 +131,12 @@ bool TextureCache::ResolveReadbacks(VAddr address, u64 size, bool assume_locks,
             }
             RetireReadbacks();
         }
-        if (diag) readback_sources.Record(source, waited, wait_ns, size);
+        if (diag) {
+            readback_sources.Record(source, waited, wait_ns, size);
+            if (waited && (source == ReadbackSource::CpuRead || source == ReadbackSource::CpuWrite)) {
+                last_cpu_wait_address = address;
+            }
+        }
     };
     if (assume_locks) resolve();
     else liverpool->SendCommand<true>(resolve);
@@ -125,7 +147,7 @@ void TextureCache::CancelReadbacks(VAddr address, u64 size) {
     if (!deferred_readbacks) return;
     std::scoped_lock lock{readback_mutex};
     pending_readbacks.Cancel(address, size, [this](auto& entry) {
-        tracker.UpdatePageWatchers<false, true>(entry.address, entry.size);
+        if (entry.watched) WatchReadback<false>(entry.address, entry.size);
         ++readbacks_canceled;
     });
 }
@@ -157,7 +179,20 @@ void TextureCache::ProcessDownloadImages() {
                         std::bit_cast<u8*>(copy->guest_address), copy->staging.mapped, copy->size);
                     runtime.GetStagingPool().FreeDeferred(copy->staging);
                 } else {
-                    tracker.UpdatePageWatchers<true, true>(copy->guest_address, copy->size);
+                    WatchReadback<true>(copy->guest_address, copy->size);
+                    if (Vulkan::WaitDiagnostics::Enabled()) {
+                        // Which images go back to RAM each frame (the report lists the busiest).
+                        auto* slot = std::ranges::find(readback_images, image.info.guest_address,
+                                                       &ReadbackImageStat::address);
+                        if (slot == readback_images.end()) {
+                            slot = std::ranges::find(readback_images, VAddr{0}, &ReadbackImageStat::address);
+                        }
+                        if (slot != readback_images.end()) {
+                            *slot = {image.info.guest_address, image.info.size.width,
+                                     image.info.size.height, image.info.num_bits, slot->copies + 1,
+                                     image.info.pixel_format};
+                        }
+                    }
                     pending_readbacks.Push(copy->guest_address, copy->size,
                         scheduler.CurrentTick(), copy->staging);
                     has_pending_readbacks.store(true, std::memory_order_release);
@@ -179,6 +214,23 @@ void TextureCache::ProcessDownloadImages() {
                 readbacks_queued = readbacks_completed = readbacks_waited = readbacks_canceled = 0;
                 readbacks_peak_bytes = pending_readbacks.Bytes();
                 readback_sources.Report(stdout);
+                if (stale_readbacks) {
+                    std::printf("Readback byte rule: %llu CPU writes went on without waiting\n",
+                                static_cast<unsigned long long>(readbacks_released));
+                    readbacks_released = 0;
+                }
+                std::ranges::sort(readback_images, std::greater{}, &ReadbackImageStat::copies);
+                for (u32 i = 0; i < 4 && readback_images[i].copies; ++i) {
+                    const auto& r = readback_images[i];
+                    std::printf("Readback image %#llx: %ux%u, %u bits, %s, %u copies%s\n",
+                                static_cast<unsigned long long>(r.address), r.width, r.height, r.bits,
+                                vk::to_string(r.format).c_str(), r.copies,
+                                last_cpu_wait_address >= r.address &&
+                                        last_cpu_wait_address < r.address + u64{r.width} * r.height * r.bits / 8
+                                    ? " (CPU waited here)" : "");
+                }
+                readback_images = {};
+                last_cpu_wait_address = 0;
                 readback_report = now;
             }
         }

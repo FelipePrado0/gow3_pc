@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <cassert>
 #include <vector>
 #include "video_core/texture_cache/readback_queue.h"
@@ -35,4 +36,26 @@ int main() {
     assert(queue.RequiredTick(0x1000, 0) == 0);
     queue.Retire([](auto) { return true; }, [](auto&) {});
     assert(queue.CanFit(64ull << 20));
+
+    // Byte rule: a CPU write next to a small pending copy, on the same page but outside its
+    // bytes, releases that copy's page protection instead of waiting for the GPU.
+    std::vector<std::uint64_t> released;
+    auto release = [&](auto& entry) { released.push_back(entry.address); };
+    queue.Push(0x10000c00, 4, 8, 5);            // 1x1 image
+    queue.Push(0x10001000, 4096, 9, 6);         // a page fully covered by a copy
+    queue.Push(0x20000000, 1u << 20, 10, 7);    // large copy
+    assert(queue.ReleaseOutside(0x10000100, 8, 64 << 10, release) == 1);
+    assert((released == std::vector<std::uint64_t>{0x10000c00}));
+    assert(queue.RequiredTick(0x10000100, 8) == 0);   // nothing left to wait for there
+    assert(queue.RequiredTick(0x10000c00, 4) == 0);   // released copies never block again
+    assert(queue.ReleaseOutside(0x10001010, 8, 64 << 10, release) == 0);  // inside the bytes
+    assert(queue.RequiredTick(0x10001010, 8) == 9);
+    assert(queue.ReleaseOutside(0x20000008, 8, 64 << 10, release) == 0);  // too large
+    assert(queue.RequiredTick(0x20000008, 8) == 10);
+    unsigned watched = 0, published_released = 0;
+    queue.Retire([](auto) { return true; }, [&](auto& entry) {
+        watched += entry.watched;
+        published_released += entry.valid && !entry.watched;  // still published, no watcher left
+    });
+    assert(watched == 2 && published_released == 1);
 }

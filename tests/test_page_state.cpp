@@ -15,6 +15,7 @@ int main() {
     state.AddDelta<-1, true>();
     assert(state.Perms() == MemoryPermission::ReadWrite);
 
+    // GOW3_STALE_READBACK: a pending copy is a write watcher, so CPU reads stay allowed.
     state.AddDelta<1, false>();
     assert(state.Perms() == MemoryPermission::Read);
     for (int i = 1; i <= 65; ++i) {
