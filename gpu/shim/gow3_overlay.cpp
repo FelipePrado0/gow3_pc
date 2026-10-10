@@ -312,6 +312,7 @@ void Menu() {
         ImGui::TextWrapped("Unavailable: executable does not match the validated CUSA01623 v01.02 gain routines.");
     }
     ImGui::TableNextColumn();
+    ImGui::PushTextWrapPos(0.0f); // notes wrap inside the column instead of being cut off
     GraphicsSection();
     ImGui::SeparatorText("Diagnostics");
     if (ImGui::Button("Capture frame")) {
@@ -322,6 +323,7 @@ void Menu() {
     if (const std::string capture = Vulkan::FrameCapture::LastResult(); !capture.empty()) {
         ImGui::TextWrapped("%s", capture.c_str());
     }
+    ImGui::PopTextWrapPos();
     ImGui::EndTable();
     ImGui::Spacing();
     if (ImGui::Button("Close")) {
