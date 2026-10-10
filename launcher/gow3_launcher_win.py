@@ -140,7 +140,7 @@ FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('120', ('120',)), ('240', ('240
 APP_DEFAULTS = {'ui_language': '', 'game_dir': os.environ.get('GOW3_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623')), 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
                 'player_name': '', 'hdr': False, 'draw_pipe': '', 'readbacks': '',
-                'parallel_warmup': True, 'perf_diag': False, 'frame_stats': False, 'gpu_profile': False,
+                'background_warmup': True, 'parallel_warmup': True, 'perf_diag': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation'}
 
@@ -312,6 +312,7 @@ def game_environment(s):
     for key, name in (('draw_pipe', 'GOW3_DRAW_PIPE'), ('readbacks', 'GOW3_READBACKS')):
         if s[key]:
             env[name] = s[key]
+    env['GOW3_BACKGROUND_WARMUP'] = '1' if s.get('background_warmup', True) else '0'
     env['GOW3_PARALLEL_WARMUP'] = '1' if s.get('parallel_warmup', True) else '0'
     env['GOW3_PERF_DIAG'] = '1' if s.get('perf_diag', False) else '0'
     for key, name in (('frame_stats', 'GOW3_FRAME_STATS'), ('gpu_profile', 'GOW3_GPU_PROFILE'),
@@ -1053,9 +1054,12 @@ class Launcher:
                    _('The game reads data the GPU wrote, such as the scene exposure, from the previous frame '
                      'instead of waiting for the current one: about 40 to 66 FPS in a heavy scene. Needs '
                      'deferred GPU readbacks. Switch it off if lighting or objects look wrong.'))
+        self.check(f, 'background_warmup', 'app', _('Load shader cache in the background'),
+                   _('The game opens at once and the saved shaders load while you play; a small note in the '
+                     'corner shows the progress. Switch it off to wait on the loading screen instead.'))
         self.check(f, 'parallel_warmup', 'app', _('Fast shader cache loading (parallel)'),
-                   _('Builds the cached pipelines on several CPU threads at start: about 70 s instead of 300 s '
-                     'with a full cache. Switch it off if the image looks wrong after loading.'))
+                   _('Loading screen only: builds the cached pipelines on several CPU threads, about 70 s '
+                     'instead of 300 s with a full cache. Switch it off if the image looks wrong after loading.'))
         self.section(f, _('Diagnostics', 'Для разработчика'))
         self.check(f, 'frame_stats', 'app', _('Frame statistics in the log (every 5 s)', 'Статистика кадров в журнале (раз в 5 с)'))
         self.check(f, 'gpu_profile', 'app', _('GPU time per pass in the log', 'Профиль GPU в журнале'))

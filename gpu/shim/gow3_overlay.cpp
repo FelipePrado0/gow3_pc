@@ -62,6 +62,7 @@ std::atomic<bool> menu_open{false};
 bool r3_down = false, l2_down = false;
 std::atomic<bool> loading{false};
 std::atomic<u32> loading_done{0}, loading_total{0};
+std::atomic<u32> background_done{0}, background_total{0};
 bool dirty = false; // settings changed while open: saved on close
 // The game's text dialog (SetTextEntry), guarded by imgui_mutex.
 bool text_entry_active = false;
@@ -484,6 +485,22 @@ void FpsCounter() {
     ImGui::End();
 }
 
+void BackgroundLoading() {
+    const u32 done = background_done, total = std::max(background_total.load(), 1u);
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const float pad = 12.0f * base_scale;
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + pad,
+                                   viewport->WorkPos.y + viewport->WorkSize.y - pad),
+                            ImGuiCond_Always, ImVec2(0.0f, 1.0f));
+    ImGui::SetNextWindowBgAlpha(0.35f);
+    ImGui::Begin("##background_loading", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+                     ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
+                     ImGuiWindowFlags_NoFocusOnAppearing);
+    ImGui::TextDisabled("Loading shader cache %u%%", u32(u64(done) * 100 / total));
+    ImGui::End();
+}
+
 } // namespace
 
 void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) {
@@ -706,6 +723,11 @@ void ConfirmRestart() {
     std::puts("Settings: graphics options confirmed after restart");
 }
 
+void SetBackgroundLoading(u32 done, u32 total) {
+    background_done = done;
+    background_total = total;
+}
+
 void SetLoading(bool active, u32 done, u32 total) {
     loading_done = done;
     loading_total = total;
@@ -714,7 +736,7 @@ void SetLoading(bool active, u32 done, u32 total) {
 
 bool Visible() {
     const auto& s = Gow3Settings::Get();
-    return initialized && (loading || menu_open || text_entry_active || choice_active || s.show_fps ||
+    return initialized && (loading || background_total || menu_open || text_entry_active || choice_active || s.show_fps ||
                            (s.actor_watch_supported && s.enemy_health_bar));
 }
 
@@ -780,6 +802,9 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
     }
     if (!loading && !menu_open) {
         HealthDisplay();
+    }
+    if (background_total && !loading && !menu_open) {
+        BackgroundLoading();
     }
     if (text_entry_active) {
         TextEntryBox();

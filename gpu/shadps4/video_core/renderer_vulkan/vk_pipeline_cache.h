@@ -131,6 +131,9 @@ public:
     /// Loads the pipelines of earlier sessions. gow3: called by the presenter once the window
     /// can show a loading screen; `progress(done, total)` follows the pipelines read.
     void WarmUp(const std::function<void(u32 done, u32 total)>& progress = {});
+    /// gow3: the same load on low-priority threads while the game runs; the GPU thread takes
+    /// the results a few at a time (PumpWarmUp). False when it cannot (zip archive store).
+    bool StartBackgroundWarmUp();
     void Sync();
     void ReportCompilerStats();
 
@@ -180,6 +183,13 @@ private:
     void PublishGraphics(bool wait = false);
     void FinishCompilations();
     void SeedWorkerCaches();
+    bool CheckCacheProfile();
+    struct BackgroundWarmup;
+    struct WarmStage;
+    void ReadWarmEntry(BackgroundWarmup& warm, std::vector<u8>&& data);
+    bool MergeWarmStage(WarmStage& stage);
+    void PumpWarmUp();
+    void StopWarmUp();
     bool AsyncCompilation() const;
     bool RefreshGraphicsKey(PipelineSelection& sel);
     bool RefreshGraphicsStages(PipelineSelection& sel);
@@ -218,6 +228,8 @@ private:
     std::mutex warmup_results_mutex;
     std::vector<std::pair<GraphicsPipelineKey, std::unique_ptr<GraphicsPipeline>>> warmup_graphics;
     std::vector<std::pair<ComputePipelineKey, std::unique_ptr<ComputePipeline>>> warmup_compute;
+    /// gow3: StartBackgroundWarmUp state; owned here, deleted by StopWarmUp.
+    BackgroundWarmup* background = nullptr;
     tsl::robin_map<GraphicsPipelineKey, std::shared_ptr<AsyncGraphicsCompilation>> pending_graphics;
     tsl::robin_map<size_t, std::unique_ptr<Program>> program_cache;
     std::vector<Program*> pending_programs;

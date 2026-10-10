@@ -154,8 +154,14 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
     pp_pass.Create(device, swapchain.GetSurfaceFormat().format);
     Gow3Overlay::Init(instance, swapchain.GetSurfaceFormat().format, num_images);
 
-    // gow3: rebuilding the cached pipelines takes up to minutes before the first game frame;
+    // gow3: by default the cached pipelines load while the game runs (a corner note shows the
+    // progress). Otherwise rebuilding them takes up to minutes before the first game frame:
     // show what is happening instead of a black window.
+    const char* background_warmup = std::getenv("GOW3_BACKGROUND_WARMUP");
+    if ((!background_warmup || *background_warmup != '0') &&
+        rasterizer->GetPipelineCache().StartBackgroundWarmUp()) {
+        return;
+    }
     Gow3Overlay::SetLoading(true, 0, 0);
     PresentLoadingFrame();
     auto last = std::chrono::steady_clock::now();

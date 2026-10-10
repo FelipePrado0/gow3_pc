@@ -258,7 +258,12 @@ size_t DataBase::CountBlobs(BlobType type) {
     return count;
 }
 
-void DataBase::ForEachBlob(BlobType type, const std::function<void(std::vector<u8>&& data)>& func) {
+bool DataBase::ConcurrentReads() const {
+    return !EmulatorSettings.IsPipelineCacheArchived();
+}
+
+void DataBase::ForEachBlob(BlobType type, const std::function<void(std::vector<u8>&& data)>& func,
+                           const std::function<bool()>& stop) {
     const auto& ext = GetBlobFileExtension(type);
     if (EmulatorSettings.IsPipelineCacheArchived()) {
         const auto num_files = mz_zip_reader_get_num_files(&zip_ar);
@@ -276,6 +281,9 @@ void DataBase::ForEachBlob(BlobType type, const std::function<void(std::vector<u
         }
     } else {
         for (const auto& file_name : std::filesystem::directory_iterator{cache_path}) {
+            if (stop && stop()) {
+                return;
+            }
             if (file_name.path().extension().string().ends_with(ext)) {
                 using namespace Common::FS;
                 const auto& file = IOFile{file_name, FileAccessMode::Read};

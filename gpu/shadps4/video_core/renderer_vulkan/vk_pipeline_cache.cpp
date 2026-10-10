@@ -417,6 +417,7 @@ PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
 }
 
 PipelineCache::~PipelineCache() {
+    StopWarmUp();
     FinishCompilations();
 }
 
@@ -703,6 +704,7 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
     SeedWorkerCaches();
     PublishShaders();
     PublishGraphics();
+    PumpWarmUp();
     used_prepared = nullptr;
     if (prepared) {
         if (const auto* pipeline = TryPreparedPipeline(*prepared)) {
@@ -785,6 +787,7 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
 const ComputePipeline* PipelineCache::GetComputePipeline() {
     PublishShaders();
     PublishGraphics();
+    PumpWarmUp();
     if (!RefreshComputeKey()) {
         return nullptr;
     }

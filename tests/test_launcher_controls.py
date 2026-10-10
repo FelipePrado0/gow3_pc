@@ -37,6 +37,7 @@ class ControlMapTest(unittest.TestCase):
         self.assertEqual(env['GOW3_KEY_MAP'], 'cross=Q')
         self.assertNotIn('GOW3_PAD_MAP', env)
         self.assertEqual(env['GOW3_PARALLEL_WARMUP'], '1')
+        self.assertEqual(env['GOW3_BACKGROUND_WARMUP'], '1')
         self.assertEqual(env['GOW3_PERF_DIAG'], '0')
         # Graphics options live in gow3.ini (run.py and the in-game menu), not in the environment.
         for name in ('GOW3_FULLSCREEN', 'GOW3_PRESENT_MODE', 'GOW3_FPS_LIMIT', 'GOW3_ASYNC_SHADERS',
@@ -45,6 +46,7 @@ class ControlMapTest(unittest.TestCase):
         old = launcher.game_environment({**settings, 'extra_env': 'GOW3_DRAW_PIPE=0'})
         self.assertNotIn('GOW3_DRAW_PIPE', old)  # the old free-text field is ignored
         self.assertEqual(launcher.game_environment({**settings, 'parallel_warmup': False})['GOW3_PARALLEL_WARMUP'], '0')
+        self.assertEqual(launcher.game_environment({**settings, 'background_warmup': False})['GOW3_BACKGROUND_WARMUP'], '0')
 
     def test_graphics_defaults_match_the_game(self):
         d = launcher.INI_DEFAULTS

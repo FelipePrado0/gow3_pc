@@ -8,8 +8,12 @@
 #include <cstdlib>
 #include <deque>
 #include <mutex>
+#include <shared_mutex>
 #include <thread>
+#include <unordered_map>
 #include "common/serdes.h"
+#include "common/thread.h"
+#include "gow3_overlay.h"
 #include "core/emulator_settings.h"
 #include "shader_recompiler/frontend/fetch_shader.h"
 #include "shader_recompiler/info.h"
@@ -17,6 +21,7 @@
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
 #include "video_core/renderer_vulkan/vk_shader_util.h"
+#include "video_core/renderer_vulkan/vk_warmup_inbox.h"
 
 namespace Serialization {
 /* You should increment versions below once corresponding serialization scheme is changed. */
@@ -32,14 +37,21 @@ namespace Vulkan {
 // only the pipeline objects, the slow part, are built here. The runtime compiler builds
 // pipelines on worker threads the same way (vk_pipeline_cache.cpp).
 struct PipelineCache::WarmupPool {
-    explicit WarmupPool(u32 count) {
+    explicit WarmupPool(u32 count, bool low_priority = false) {
         for (u32 i = 0; i < count; ++i) {
-            threads.emplace_back([this] { Run(); });
+            threads.emplace_back([this, low_priority] {
+                if (low_priority) {
+                    Common::SetCurrentThreadName("GoW3:ShaderWarmup");
+                    Common::SetCurrentThreadPriority(Common::ThreadPriority::Low);
+                }
+                Run();
+            });
         }
     }
     ~WarmupPool() {
         {
             std::scoped_lock lock{mutex};
+            jobs.clear(); // only the running ones finish
             closing = true;
         }
         cv.notify_all();
@@ -63,6 +75,16 @@ struct PipelineCache::WarmupPool {
             tick();
             lock.lock();
         }
+    }
+    /// Drops the queued jobs and waits for the running ones; the threads stay parked.
+    void Drain() {
+        std::unique_lock lock{mutex};
+        jobs.clear();
+        idle.wait(lock, [this] { return running == 0; });
+    }
+    bool Idle() {
+        std::scoped_lock lock{mutex};
+        return jobs.empty() && !running;
     }
     static u32 Threads() {
         const char* env = std::getenv("GOW3_PARALLEL_WARMUP");
@@ -425,9 +447,9 @@ bool PipelineCache::LoadPipelineStage(Serialization::Archive& ar, size_t stage) 
     return true;
 }
 
-void PipelineCache::WarmUp(const std::function<void(u32, u32)>& progress) {
+bool PipelineCache::CheckCacheProfile() {
     if (!EmulatorSettings.IsPipelineCacheEnabled()) {
-        return;
+        return false;
     }
 
     Storage::DataBase::Instance().Open();
@@ -442,7 +464,7 @@ void PipelineCache::WarmUp(const std::function<void(u32, u32)>& progress) {
         std::memcpy(profile_data.data(), &profile, sizeof(profile));
         Storage::DataBase::Instance().Save(Storage::BlobType::ShaderProfile, "profile",
                                            std::move(profile_data));
-        return;
+        return false;
     }
     if (profile_data.size() != sizeof(Shader::Profile)) {
         LOG_WARNING(Render, "Pipeline cache profile has unexpected size ({} != {})",
@@ -463,6 +485,13 @@ void PipelineCache::WarmUp(const std::function<void(u32, u32)>& progress) {
         std::memcpy(profile_data.data(), &profile, sizeof(profile));
         Storage::DataBase::Instance().Save(Storage::BlobType::ShaderProfile, "profile",
                                            std::move(profile_data));
+        return false;
+    }
+    return true;
+}
+
+void PipelineCache::WarmUp(const std::function<void(u32, u32)>& progress) {
+    if (!CheckCacheProfile()) {
         return;
     }
 
@@ -548,7 +577,289 @@ void PipelineCache::WarmUp(const std::function<void(u32, u32)>& progress) {
     Storage::DataBase::Instance().FinishPreload();
 }
 
+// gow3: one cached shader stage read by the background warm-up, shared by every cached
+// pipeline that uses it. A pool thread fills it; the GPU thread merges it into program_cache
+// once (MergeWarmStage).
+struct PipelineCache::WarmStage {
+    vk::Device device;
+    std::unique_ptr<Program> program;
+    Shader::StageSpecialization spec{};
+    std::optional<Shader::Gcn::FetchShaderData> fetch;
+    size_t perm_idx{};
+    vk::ShaderModule module{};
+    // GPU thread, from the merge on.
+    bool merged = false;
+    bool module_kept = false;           ///< the module now belongs to a Program
+    const Shader::Info* info = nullptr; ///< null: not usable (read failed or conflict)
+    vk::ShaderModule result{};
+
+    ~WarmStage() {
+        if (module && !module_kept) {
+            device.destroyShaderModule(module);
+        }
+    }
+};
+
+// gow3: StartBackgroundWarmUp. The pool reads the store and builds the pipelines at low
+// priority; the GPU thread merges the stages and publishes the pipelines a few at a time.
+struct PipelineCache::BackgroundWarmup {
+    struct Entry {
+        bool compute = false;
+        GraphicsPipelineKey graphics_key{};
+        ComputePipelineKey compute_key{};
+        GraphicsPipeline::SerializationSupport sdata{};
+        std::array<std::shared_ptr<WarmStage>, MaxShaderStages> stages{};
+    };
+    struct Built {
+        GraphicsPipelineKey graphics_key{};
+        ComputePipelineKey compute_key{};
+        std::unique_ptr<GraphicsPipeline> graphics;
+        std::unique_ptr<ComputePipeline> compute;
+    };
+
+    std::unordered_map<u64, std::shared_ptr<WarmStage>> stages; ///< read job only
+    WarmupInbox<Entry> read;
+    WarmupInbox<Built> built;
+    std::atomic<u32> total{0}, done{0};
+    std::atomic<bool> reading{true}, stopping{false};
+    bool finished = false;
+    u32 loaded = 0, threads = 0;
+    std::chrono::steady_clock::time_point started, last_batch;
+    std::unique_ptr<WarmupPool> pool; ///< last: its jobs use the members above
+};
+
+bool PipelineCache::StartBackgroundWarmUp() {
+    if (!Storage::DataBase::Instance().ConcurrentReads()) {
+        return false;
+    }
+    if (!CheckCacheProfile()) {
+        return true; // nothing cached yet
+    }
+    background = new BackgroundWarmup;
+    auto& warm = *background;
+    warm.started = std::chrono::steady_clock::now();
+    warm.threads = WarmupThreadCount(std::max(1u, std::thread::hardware_concurrency()));
+    warm.pool = std::make_unique<WarmupPool>(warm.threads, true);
+    // The first job reads the whole store; with one thread the builds queue behind it.
+    warm.pool->Push([this, &warm] {
+        auto& db = Storage::DataBase::Instance();
+        warm.total = u32(db.CountBlobs(Storage::BlobType::PipelineKey));
+        db.ForEachBlob(
+            Storage::BlobType::PipelineKey,
+            [&](std::vector<u8>&& data) { ReadWarmEntry(warm, std::move(data)); },
+            [&] { return warm.stopping.load(std::memory_order_relaxed); });
+        warm.stages.clear();
+        warm.reading = false;
+        return true;
+    });
+    std::printf("Pipeline warm-up: loading in the background (%u threads)\n", warm.threads);
+    return true;
+}
+
+void PipelineCache::ReadWarmEntry(BackgroundWarmup& warm, std::vector<u8>&& data) {
+    const auto skip = [&] { warm.done.fetch_add(1, std::memory_order_relaxed); };
+    Serialization::Archive ar{std::move(data)};
+    Serialization::Reader pldata{ar};
+    u32 version{};
+    pldata.Read(version);
+    if (version != Serialization::PipelineKeyVersion) {
+        return skip();
+    }
+    u32 is_compute{};
+    pldata.Read(is_compute);
+
+    BackgroundWarmup::Entry entry{};
+    entry.compute = is_compute != 0;
+    std::array<u64, MaxShaderStages> hashes{};
+    if (entry.compute) {
+        entry.compute_key.Deserialize(ar);
+        ComputePipeline::SerializationSupport sdata{};
+        sdata.Deserialize(ar);
+        hashes[0] = entry.compute_key.value;
+    } else {
+        entry.graphics_key.Deserialize(ar);
+        entry.sdata.Deserialize(ar);
+        for (u32 i = 0; i < MaxShaderStages; ++i) {
+            hashes[i] = entry.graphics_key.stage_hashes[i];
+        }
+    }
+
+    auto& db = Storage::DataBase::Instance();
+    for (u32 i = 0; i < MaxShaderStages; ++i) {
+        if (!hashes[i]) {
+            continue;
+        }
+        auto& stage = warm.stages[hashes[i]];
+        if (!stage) {
+            stage = std::make_shared<WarmStage>();
+            stage->device = instance.GetDevice();
+            stage->program = std::make_unique<Program>();
+            stage->spec.info = &stage->program->info;
+            std::vector<u8> meta_blob;
+            db.Load(Storage::BlobType::ShaderMeta, fmt::format("{:#018x}", hashes[i]), meta_blob);
+            if (!meta_blob.empty()) {
+                Serialization::Archive meta_ar{std::move(meta_blob)};
+                if (LoadShaderMeta(meta_ar, stage->program->info, stage->fetch, stage->spec,
+                                   stage->perm_idx)) {
+                    std::vector<u32> spv;
+                    db.Load(Storage::BlobType::ShaderBinary,
+                            fmt::format("{:#018x}_{}", stage->program->info.pgm_hash,
+                                        stage->perm_idx),
+                            spv);
+                    if (!spv.empty()) {
+                        stage->module = CompileSPV(spv, stage->device);
+                    }
+                }
+            }
+            if (!stage->module) {
+                stage->merged = true; // unusable: info stays null
+            }
+        }
+        entry.stages[i] = stage;
+    }
+    warm.read.Push(std::move(entry));
+}
+
+bool PipelineCache::MergeWarmStage(WarmStage& stage) {
+    stage.merged = true;
+    const u64 hash = stage.program->info.pgm_hash;
+    const auto it_pgm = program_cache.find(hash);
+    if (it_pgm == program_cache.end()) {
+        Program* program = stage.program.get();
+        program->InsertPermut(stage.module, std::move(stage.spec), stage.perm_idx);
+        program_cache.emplace(hash, std::move(stage.program));
+        stage.module_kept = true;
+        stage.result = stage.module;
+        stage.info = &program->info;
+        return true;
+    }
+    // The game already uses this shader: its permutations are the ones that count.
+    Program& program = *it_pgm->second;
+    if (program.pending) {
+        return false; // the game is compiling a permutation that takes the next index
+    }
+    const auto it = std::ranges::find(program.modules, stage.spec, &Program::Module::spec);
+    if (it != program.modules.end()) {
+        if (size_t(std::distance(program.modules.begin(), it)) != stage.perm_idx) {
+            return false;
+        }
+        stage.result = it->module;
+    } else {
+        if (stage.perm_idx < program.modules.size() && program.modules[stage.perm_idx].module) {
+            return false;
+        }
+        stage.spec.info = &program.info;
+        program.InsertPermut(stage.module, std::move(stage.spec), stage.perm_idx);
+        stage.module_kept = true;
+        stage.result = stage.module;
+    }
+    stage.info = &program.info;
+    return true;
+}
+
+void PipelineCache::PumpWarmUp() {
+    if (!background || background->finished) {
+        return;
+    }
+    auto& warm = *background;
+    using namespace std::chrono_literals;
+
+    // Built pipelines: the first one ready for a key wins (the game may have compiled it).
+    for (auto& built : warm.built.Take(64)) {
+        const bool kept =
+            built.graphics
+                ? PublishFirst(graphics_pipelines, built.graphics_key, std::move(built.graphics))
+                : PublishFirst(compute_pipelines, built.compute_key, std::move(built.compute));
+        warm.loaded += kept;
+        warm.done.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    const auto now = std::chrono::steady_clock::now();
+    if (now - warm.last_batch < 4ms) {
+        return;
+    }
+    warm.last_batch = now;
+    const u32 done = warm.done + warm.pool->failed;
+    Gow3Overlay::SetBackgroundLoading(done, std::max(warm.total.load(), done));
+
+    static const std::array<Shader::RuntimeInfo, MaxShaderStages> no_runtime_infos{};
+    for (auto& entry : warm.read.Take(32)) {
+        if (entry.compute ? compute_pipelines.contains(entry.compute_key)
+                          : graphics_pipelines.contains(entry.graphics_key)) {
+            warm.done.fetch_add(1, std::memory_order_relaxed); // the game compiled it first
+            continue;
+        }
+        std::array<const Shader::Info*, MaxShaderStages> infos{};
+        std::array<vk::ShaderModule, MaxShaderStages> modules{};
+        std::optional<Shader::Gcn::FetchShaderData> fetch;
+        bool usable = true;
+        {
+            std::unique_lock lock{programs_mutex};
+            for (u32 i = 0; i < MaxShaderStages && usable; ++i) {
+                if (!entry.stages[i]) {
+                    continue;
+                }
+                auto& stage = *entry.stages[i];
+                if (!stage.merged) {
+                    MergeWarmStage(stage);
+                }
+                usable = stage.info != nullptr;
+                infos[i] = stage.info;
+                modules[i] = stage.result;
+                fetch = stage.fetch; // the blocking load keeps the last stage's too
+            }
+        }
+        if (!usable) {
+            warm.done.fetch_add(1, std::memory_order_relaxed);
+            continue;
+        }
+        warm.pool->Push([this, &warm, compute = entry.compute, graphics_key = entry.graphics_key,
+                         compute_key = entry.compute_key, sdata = entry.sdata, infos, modules,
+                         fetch]() mutable {
+            BackgroundWarmup::Built built{graphics_key, compute_key};
+            if (compute) {
+                ComputePipeline::SerializationSupport compute_data{};
+                built.compute = std::make_unique<ComputePipeline>(
+                    instance, scheduler, desc_heap, profile, *pipeline_cache, compute_key,
+                    *infos[0], modules[0], compute_data, true);
+            } else {
+                built.graphics = std::make_unique<GraphicsPipeline>(
+                    instance, scheduler, desc_heap, profile, graphics_key, *pipeline_cache, infos,
+                    no_runtime_infos, fetch, modules, sdata, true);
+            }
+            warm.built.Push(std::move(built));
+            return true;
+        });
+    }
+
+    if (warm.reading || !warm.read.Empty() || !warm.pool->Idle() || !warm.built.Empty()) {
+        return;
+    }
+    std::printf("Pipeline warm-up: %u of %u pipelines in %.2f s in the background (%u threads)\n",
+                warm.loaded, warm.total.load(),
+                std::chrono::duration<double>(now - warm.started).count(), warm.threads);
+    LOG_INFO(Render, "Preloaded {} pipelines in the background", warm.loaded);
+    // The idle threads stay parked (StopWarmUp).
+    warm.finished = true;
+    Gow3Overlay::SetBackgroundLoading(0, 0);
+    Storage::DataBase::Instance().FinishPreload();
+}
+
+void PipelineCache::StopWarmUp() {
+    if (!background) {
+        return;
+    }
+    background->stopping = true;
+    background->pool->Drain();
+    // ponytail: leaked with its parked threads (this runs at exit only): a thread that ended
+    // while the game ran crashed in ntdll (RtlWakeAllConditionVariable). Join them once the
+    // cause is known.
+    background = nullptr;
+    Gow3Overlay::SetBackgroundLoading(0, 0);
+}
+
 void PipelineCache::Sync() {
+    StopWarmUp();
     FinishCompilations();
     Storage::DataBase::Instance().Close();
 }
