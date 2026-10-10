@@ -17,8 +17,12 @@ God of War III do [fork do shadPS4 de cuesta4](https://github.com/cuesta4/shadPS
 > Santa Monica Studio. God of War é marca registrada da Sony Interactive Entertainment.
 
 Na máquina de teste (AMD Radeon RX 6700 XT, Ryzen 5 5600X, 32 GB), o jogo roda a 144 FPS de
-média (55 a 240) em 1080p com o motor a 240 FPS, e a 108 FPS de média em 4K com FSR 1. O
-andamento está em
+média (55 a 240) em 1080p com o motor a 240 FPS, e a 108 FPS de média em 4K com FSR 1.
+
+**Testado e jogável do início ao fim** em 1080p nativo, com o motor a 240 FPS. Em outras
+resoluções de renderização algumas texturas aparecem quebradas; a correção está em andamento.
+
+O andamento está em
 [docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.md).
 
 ## O que funciona

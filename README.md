@@ -17,7 +17,12 @@ fixes from [cuesta4's shadPS4 fork](https://github.com/cuesta4/shadPS4) (see [Cr
 
 On the test machine (AMD Radeon RX 6700 XT, Ryzen 5 5600X, 32 GB) the game runs at 144 FPS on
 average (55 to 240) at 1080p with the 240 FPS engine frame rate, and at 108 FPS on average at 4K
-with FSR 1. Progress is tracked (in Portuguese) in [docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.md).
+with FSR 1.
+
+**Tested and playable from start to finish** at native 1080p with the 240 FPS engine frame
+rate. At other render resolutions some textures look broken; a fix is in progress.
+
+Progress is tracked (in Portuguese) in [docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.md).
 
 ## What works
 
