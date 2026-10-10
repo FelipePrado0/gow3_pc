@@ -35,6 +35,7 @@ import save_backup  # noqa: E402  (scripts/)
 DATA_DIR = Path(os.environ.get('GOW3_DATA_DIR', PORT_DIR))
 CONFIG_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'gow3-launcher'
 CONFIG_FILE = CONFIG_DIR / 'settings.json'
+MOD_PRESETS = DATA_DIR / 'mods_presets.json'
 APP_NAME = 'God of War III'
 MAX_LOG_LINES = 6000
 NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
@@ -44,7 +45,7 @@ RELEASES_API = 'https://api.github.com/repos/FelipePrado0/gow3_pc/releases/lates
 RELEASES_PAGE = 'https://github.com/FelipePrado0/gow3_pc/releases/latest'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'gow3-update'
 # Never copied over an installation by an update (the package does not hold them either).
-USER_FILES = ('user', 'out', 'mods', 'gow3.ini', 'mods.json', 'patches.json', 'last_run.log')
+USER_FILES = ('user', 'out', 'mods', 'gow3.ini', 'mods.json', 'mods_presets.json', 'patches.json', 'last_run.log')
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1090,11 +1091,25 @@ class Launcher:
             self.mod_vars[name] = var
             ttk.Button(line, text='▲', width=3, command=lambda i=index: self.move_mod(i, -1)).pack(side='left')
             ttk.Button(line, text='▼', width=3, command=lambda i=index: self.move_mod(i, 1)).pack(side='left', padx=(2, 10))
-            ttk.Checkbutton(line, text=f'{index + 1}.  {name}', variable=var).pack(side='left')
+            ttk.Checkbutton(line, text=f'{index + 1}.  {name}', variable=var,
+                            command=self.refresh_conflicts).pack(side='left')
         if len(self.mod_order) > 1:
             ttk.Label(self.mods_frame, text=_('Lower in the list loads later and wins conflicts.',
                                               'Ниже в списке — загружается позже и перекрывает.'),
                       style='Muted.TLabel').pack(anchor='w', pady=(4, 0))
+        self.conflict_label = ttk.Label(self.mods_frame, text='', justify='left', foreground='#d9a441',
+                                        wraplength=self.px(680))
+        self.conflict_label.pack(anchor='w', pady=(4, 0))
+        self.refresh_conflicts()
+        if available:
+            presets = ttk.Frame(self.mods_frame)
+            presets.pack(anchor='w', pady=(8, 0))
+            ttk.Label(presets, text=_('Preset', 'Пресет')).pack(side='left', padx=(0, 6))
+            self.preset_choice = ttk.Combobox(presets, values=sorted(load_json(MOD_PRESETS, {})), width=24)
+            self.preset_choice.pack(side='left')
+            ttk.Button(presets, text=_('Load', 'Загрузить'), command=self.load_mod_preset).pack(side='left', padx=(6, 0))
+            ttk.Button(presets, text=_('Save', 'Сохранить'), command=self.save_mod_preset).pack(side='left', padx=(6, 0))
+            ttk.Button(presets, text=_('Delete', 'Удалить'), command=self.delete_mod_preset).pack(side='left', padx=(6, 0))
         chosen = load_json(DATA_DIR / 'patches.json', {})
         _title_id, game = game_profile_of(self.var('game_dir', 'app').get())
         found = external_patches(Path(self.var('patches_dir', 'app').get() or DATA_DIR / 'patches'),
@@ -1111,6 +1126,48 @@ class Launcher:
             self.patch_vars[key] = var
             author = meta.get('Author')
             ttk.Checkbutton(self.patches_frame, text=key + (f'  —  {author}' if author else ''), variable=var).pack(anchor='w')
+
+    def refresh_conflicts(self):
+        from mods import conflicts
+        if not getattr(self, 'conflict_label', None) or not self.conflict_label.winfo_exists():
+            return
+        root = Path(self.var('mods_dir', 'app').get() or DATA_DIR / 'mods')
+        found = conflicts(root, [n for n in self.mod_order if self.mod_vars[n].get()])
+        lines = [_('⚠ {} file(s) replaced by more than one mod (the last one wins):').format(len(found))] if found else []
+        lines += [f'   {path}: {" > ".join(owners)}' for path, owners in found[:12]]
+        if len(found) > 12:
+            lines.append(_('   … and {} more').format(len(found) - 12))
+        self.conflict_label.configure(text='\n'.join(lines))
+
+    def save_mod_preset(self):
+        name = self.preset_choice.get().strip()
+        if not name:
+            self.messagebox.showinfo(APP_NAME, _('Type a name for the preset first.'))
+            return
+        presets = load_json(MOD_PRESETS, {})
+        presets[name] = {'order': self.mod_order, 'disabled': [n for n, v in self.mod_vars.items() if not v.get()]}
+        MOD_PRESETS.write_text(json.dumps(presets, indent=2), encoding='utf-8')
+        self.preset_choice.configure(values=sorted(presets))
+
+    def load_mod_preset(self):
+        from mods import apply_preset
+        preset = load_json(MOD_PRESETS, {}).get(self.preset_choice.get().strip())
+        if not isinstance(preset, dict):
+            return
+        order, disabled = apply_preset(preset, list(self.mod_order))
+        self.mod_order = order
+        for name, var in self.mod_vars.items():
+            var.set(name not in disabled)
+        chosen = self.preset_choice.get()
+        self.refresh_lists()
+        self.preset_choice.set(chosen)
+
+    def delete_mod_preset(self):
+        presets = load_json(MOD_PRESETS, {})
+        if presets.pop(self.preset_choice.get().strip(), None) is not None:
+            MOD_PRESETS.write_text(json.dumps(presets, indent=2), encoding='utf-8')
+        self.preset_choice.configure(values=sorted(presets))
+        self.preset_choice.set('')
 
     def move_mod(self, index, step):
         other = index + step

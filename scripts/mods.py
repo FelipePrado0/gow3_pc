@@ -92,6 +92,30 @@ def mod_files(folder):
             yield relative, source
 
 
+def conflicts(root, names):
+    """Files more than one of `names` (in load order) replaces: [(game path, [mods])], the last
+    mod of each list wins. Paths match case-insensitively, as in build_overlay; unreadable mods
+    are skipped."""
+    owners = {}
+    for name in names:
+        try:
+            for relative, _source in mod_files(Path(root) / name):
+                key = relative.as_posix().casefold()
+                owners.setdefault(key, (relative.as_posix(), []))[1].append(name)
+        except (OSError, ValueError):
+            continue
+    return sorted((path, mods) for path, mods in owners.values() if len(mods) > 1)
+
+
+def apply_preset(preset, available):
+    """(order, disabled) of a saved preset for the mods present now: missing ones are dropped,
+    new ones go last and enabled."""
+    order = preset.get('order') if isinstance(preset.get('order'), list) else []
+    disabled = preset.get('disabled') if isinstance(preset.get('disabled'), list) else []
+    order = list(dict.fromkeys(n for n in [*order, *available] if n in available))
+    return order, [n for n in disabled if n in available]
+
+
 # Windows without the symlink privilege (Developer Mode off): directories become junctions,
 # files hard links (copies across volumes). Those are not symlinks, so the overlay remembers
 # what it linked and where to.
