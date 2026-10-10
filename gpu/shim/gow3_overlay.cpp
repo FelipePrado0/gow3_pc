@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "gow3_overlay.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cfloat>
 #include <chrono>
@@ -16,6 +17,7 @@
 #include "gow3_orbs.h"
 #include "gow3_actors.h"
 #include "gow3_graphics.h"
+#include "gow3_perf_stats.h"
 #include "../../src/actor_hook.h"
 
 extern Gow3ActorSlot gow3_actor_slots[2];
@@ -64,6 +66,7 @@ std::atomic<bool> loading{false};
 std::atomic<u32> loading_done{0}, loading_total{0};
 std::atomic<u32> background_done{0}, background_total{0};
 bool dirty = false; // settings changed while open: saved on close
+int requested_tab = -1; // switch on the next frame (L1/R1, Q/E, menu opened)
 // The game's text dialog (SetTextEntry), guarded by imgui_mutex.
 bool text_entry_active = false;
 std::string text_entry_prompt, text_entry_text;
@@ -84,6 +87,9 @@ void SetOpen(bool value) {
         return;
     }
     ImGui::GetIO().MouseDrawCursor = value;
+    if (value) {
+        requested_tab = Gow3Settings::Get().menu_tab;
+    }
     if (!value && dirty) {
         dirty = false;
         Gow3Settings::Save();
@@ -107,6 +113,8 @@ ImGuiKey KeyFromSdl(SDL_Keycode key) {
     case SDLK_RETURN: return ImGuiKey_Enter;
     case SDLK_KP_ENTER: return ImGuiKey_KeypadEnter;
     case SDLK_ESCAPE: return ImGuiKey_Escape;
+    case SDLK_Q: return ImGuiKey_Q;
+    case SDLK_E: return ImGuiKey_E;
     case SDLK_LCTRL: return ImGuiKey_LeftCtrl;
     case SDLK_RCTRL: return ImGuiKey_RightCtrl;
     case SDLK_LSHIFT: return ImGuiKey_LeftShift;
@@ -156,24 +164,6 @@ void Checkbox(const char* label, std::atomic<bool>& value) {
     Store(value, v, changed);
 }
 
-// A 0.1x to 100x multiplier with a reset button.
-void MultiplierSlider(const char* label, std::atomic<float>& value) {
-    ImGui::PushID(label);
-    float v = value;
-    const bool changed = ImGui::SliderFloat(label, &v, 0.1f, 100.0f, "%.2fx",
-                                            ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp);
-    if (changed) {
-        value = Gow3Orbs::ClampMultiplier(v);
-        dirty = true;
-    }
-    ImGui::SameLine();
-    if (ImGui::SmallButton("1x")) {
-        value = 1.0f;
-        dirty = true;
-    }
-    ImGui::PopID();
-}
-
 // A combo over `count` labels storing an index or a value from `values`.
 void Choice(const char* label, std::atomic<int>& target, const char* const* labels, const int* values,
             int count) {
@@ -186,187 +176,425 @@ void Choice(const char* label, std::atomic<int>& target, const char* const* labe
     }
 }
 
-// Graphics options (gow3_graphics.h): live ones apply on the next frame, startup ones on
-// "Apply and restart" (run.py turns them into patches and environment variables).
-void GraphicsSection() {
+// The note for the item under the mouse or the gamepad/keyboard focus, shown in the footer.
+const char* footer_help = nullptr;
+
+void Help(const char* text) {
+    if (text && (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) || ImGui::IsItemFocused())) {
+        footer_help = text;
+    }
+}
+
+// Two-column rows: the name on the left, the control on the right.
+bool BeginRows(const char* id) {
+    if (!ImGui::BeginTable(id, 2, ImGuiTableFlags_SizingStretchProp)) {
+        return false;
+    }
+    ImGui::TableSetupColumn("name", ImGuiTableColumnFlags_WidthStretch, 0.52f);
+    ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch, 0.48f);
+    return true;
+}
+
+void Row(const char* label) {
+    ImGui::TableNextRow();
+    ImGui::TableNextColumn();
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(label);
+    ImGui::TableNextColumn();
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    ImGui::PushID(label);
+}
+
+void CheckRow(const char* label, std::atomic<bool>& value, const char* help = nullptr) {
+    Row(label);
+    Checkbox("##value", value);
+    Help(help);
+    ImGui::PopID();
+}
+
+void ChoiceRow(const char* label, std::atomic<int>& target, const char* const* labels, const int* values,
+               int count, const char* help = nullptr) {
+    Row(label);
+    Choice("##value", target, labels, values, count);
+    Help(help);
+    ImGui::PopID();
+}
+
+// A 0.1x to 100x multiplier with a 1x button.
+void MultiplierRow(const char* label, std::atomic<float>& value, const char* help) {
+    Row(label);
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImGui::SetNextItemWidth(-(ImGui::CalcTextSize("1x").x + style.FramePadding.x * 2 + style.ItemSpacing.x));
+    float v = value;
+    if (ImGui::SliderFloat("##value", &v, 0.1f, 100.0f, "%.2fx",
+                           ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp)) {
+        value = Gow3Orbs::ClampMultiplier(v);
+        dirty = true;
+    }
+    Help(help);
+    ImGui::SameLine();
+    if (ImGui::SmallButton("1x")) {
+        value = 1.0f;
+        dirty = true;
+    }
+    Help(help);
+    ImGui::PopID();
+}
+
+void InfoRow(const char* label, const char* text) {
+    Row(label);
+    ImGui::TextDisabled("%s", text);
+    ImGui::PopID();
+}
+
+void SliderRow(const char* label, std::atomic<int>& value, int lo, int hi, const char* format, const char* help) {
+    Row(label);
+    int v = value;
+    if (ImGui::SliderInt("##value", &v, lo, hi, format, ImGuiSliderFlags_AlwaysClamp)) {
+        Store(value, std::clamp(v, lo, hi), true);
+    }
+    Help(help);
+    ImGui::PopID();
+}
+
+const char* UpscalerLabel(int upscaler) {
+    switch (upscaler) {
+    case Gow3Settings::UpscalerFsr3: return "FSR 3.1";
+    case Gow3Settings::UpscalerFsr4: return "FSR 4";
+    case Gow3Settings::UpscalerFsr411: return "FSR 4.1.1";
+    case Gow3Settings::UpscalerTaa: return "TAA";
+    case Gow3Settings::UpscalerDlss: return "DLSS";
+    default: return "";
+    }
+}
+
+const Vulkan::Instance* overlay_instance = nullptr; // for the overlay's measurements
+
+// The performance overlay's text with the current settings (also the menu's preview).
+std::string OverlayText() {
+    namespace P = Gow3PerfStats;
+    const auto& s = Gow3Settings::Get();
+    const unsigned items = s.overlay_items;
+    if ((items & (P::Gpu | P::Cpu | P::Ram | P::Vram)) && overlay_instance) {
+        P::Start(*overlay_instance);
+    }
+    P::Sample sample = P::Latest();
+    sample.fps = frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f;
+    sample.frame_ms = frame_ms_avg;
+    sample.upscaler = UpscalerLabel(s.upscaler);
+    return P::Format(sample, items, s.overlay_layout == 0);
+}
+
+constexpr const char* Unsupported = "Unavailable: game version or code signature mismatch.";
+
+void GameTab() {
+    auto& s = Gow3Settings::Get();
+    ImGui::SeparatorText("Cheats");
+    if (BeginRows("##cheats")) {
+        static const char* const names[] = {"Infinite health", "Infinite magic", "Infinite item meter",
+                                            "Infinite Rage of Sparta", "Max red orbs"};
+        static const char* const helps[] = {
+            "Health stays full. Only Kratos is protected. Turning it off does not undo past refills.",
+            "Magic stays full.", "The item meter (bow, Helios' head, boots) stays full.",
+            "Rage of Sparta stays full.", "Red orbs stay at the maximum."};
+        for (unsigned cheat = 0; cheat < 5; ++cheat) {
+            const bool available = (s.cheats_supported.load() & (1u << cheat)) != 0;
+            ImGui::BeginDisabled(!available);
+            CheckRow(names[cheat], s.cheats[cheat], available ? helps[cheat] : Unsupported);
+            ImGui::EndDisabled();
+        }
+        ImGui::EndTable();
+    }
+
+    ImGui::SeparatorText("Multipliers");
+    if (ImGui::Button("Reset all to 1x")) {
+        for (auto* m : {&s.red_orb_multiplier, &s.green_orb_multiplier, &s.blue_orb_multiplier,
+                        &s.gold_orb_multiplier, &s.damage_dealt, &s.damage_taken}) {
+            *m = 1.0f;
+        }
+        dirty = true;
+    }
+    Help("Every multiplier back to 1x (the game's normal values).");
+    if (BeginRows("##multipliers")) {
+        const bool max_orbs = (s.cheats_supported.load() & (1u << 4)) && s.cheats[4].load();
+        ImGui::BeginDisabled(!s.red_orbs_supported.load() || max_orbs);
+        MultiplierRow("Red orbs", s.red_orb_multiplier,
+                      !s.red_orbs_supported.load() ? Unsupported
+                      : max_orbs ? "Turn off Max red orbs to use the multiplier."
+                                 : "Red orbs gained. Orbs you have and prices stay the same.");
+        ImGui::EndDisabled();
+        ImGui::BeginDisabled(!s.orb_pickup_supported.load());
+        const char* pickup = s.orb_pickup_supported.load() ? nullptr : Unsupported;
+        MultiplierRow("Green orbs (health)", s.green_orb_multiplier,
+                      pickup ? pickup : "Health from each green orb. The bar stays within its maximum.");
+        MultiplierRow("Blue orbs (magic)", s.blue_orb_multiplier,
+                      pickup ? pickup : "Magic from each blue orb. The bar stays within its maximum.");
+        MultiplierRow("Gold orbs (Rage of Sparta)", s.gold_orb_multiplier,
+                      pickup ? pickup : "Rage of Sparta from each gold orb. The bar stays within its maximum.");
+        ImGui::EndDisabled();
+        ImGui::BeginDisabled(!s.damage_supported.load());
+        const char* damage = s.damage_supported.load() ? nullptr : Unsupported;
+        MultiplierRow("Damage dealt", s.damage_dealt, damage ? damage : "Damage Kratos does to enemies.");
+        MultiplierRow("Damage taken", s.damage_taken, damage ? damage : "Damage Kratos takes.");
+        ImGui::EndDisabled();
+        ImGui::EndTable();
+    }
+
+    ImGui::SeparatorText("HUD");
+    if (BeginRows("##hud")) {
+        ImGui::BeginDisabled(!s.actor_watch_supported.load());
+        CheckRow("Enemy health bar", s.enemy_health_bar,
+                 s.actor_watch_supported.load() ? "A thin bar at the top for the last enemy hit." : Unsupported);
+        ImGui::EndDisabled();
+        ImGui::EndTable();
+    }
+}
+
+void ImageTab() {
     namespace G = Gow3Graphics;
     auto& s = Gow3Settings::Get();
-    ImGui::SeparatorText("Graphics");
-    Choice("Display mode", s.display_mode, G::DisplayModeNames.data(), nullptr, G::DisplayModeCount);
-    Checkbox("VSync", s.vsync);
-    static const char* const fps_labels[] = {"30", "60", "120", "240", "Unlimited"};
-    Choice("Frame rate limit", s.fps_limit, fps_labels, G::FpsLimits.data(), int(G::FpsLimits.size()));
-    const int effective = G::EffectiveFps(s.fps_limit, s.startup_engine_fps);
-    if (s.fps_limit == 0 || effective < s.fps_limit) {
-        ImGui::TextDisabled("Limited to %d FPS by the engine frame rate (below).", effective);
+    ImGui::SeparatorText("Display");
+    if (BeginRows("##display")) {
+        ChoiceRow("Display mode", s.display_mode, G::DisplayModeNames.data(), nullptr, G::DisplayModeCount,
+                  "Windowed, borderless window or exclusive fullscreen.");
+        CheckRow("VSync", s.vsync, "Waits for the monitor: no tearing, a little more input delay.");
+        ImGui::EndTable();
     }
-    Checkbox("Compile new shaders in the background", s.async_shaders);
-    Checkbox("Upscaling: FSR 1", s.fsr1);
-    // What the FSR pass can do at the current sizes (the presenter reports them every frame).
     const int iw = s.image_width, ih = s.image_height, ww = s.window_width, wh = s.window_height;
     const bool upscaling = iw < ww && ih < wh;
     const bool downscaling = iw > ww || ih > wh;
-    if (s.fsr1 && upscaling) {
-        ImGui::TextDisabled("FSR 1 active: %dx%d to %dx%d.", iw, ih, ww, wh);
-    } else if (s.fsr1) {
-        ImGui::TextDisabled("FSR 1 has no effect: the game's image (%dx%d) is not smaller than the window (%dx%d).",
-                            iw, ih, ww, wh);
-    }
     const bool rcas_blocked = s.rcas && !s.rcas_applied;
-    ImGui::BeginDisabled(rcas_blocked);
-    Checkbox("Sharpening (RCAS)", s.rcas);
-    ImGui::EndDisabled();
-    const ImVec4 note(0.85f, 0.72f, 0.45f, 1.0f);
-    if (rcas_blocked && downscaling) {
-        ImGui::TextColored(note, "Sharpening has no effect: the game's image (%dx%d) is larger than the window "
-                                 "(%dx%d) and is downscaled, which already smooths edges.", iw, ih, ww, wh);
-    } else if (rcas_blocked) {
-        ImGui::TextColored(note, "Sharpening needs FSR 1: the game's image (%dx%d) is smaller than the window (%dx%d).",
-                           iw, ih, ww, wh);
+    ImGui::SeparatorText("Scaling and sharpening");
+    if (BeginRows("##scaling")) {
+        CheckRow("Upscale with FSR 1", s.fsr1,
+                 "Enlarges a smaller game image to the window. For more FPS: Render resolution 720p + FSR 1.");
+        ImGui::BeginDisabled(rcas_blocked);
+        CheckRow("Sharpening (RCAS)", s.rcas,
+                 rcas_blocked && downscaling ? "No effect: the game's image is larger than the window."
+                 : rcas_blocked              ? "Needs FSR 1: the game's image is smaller than the window."
+                                             : "Sharpens the final image.");
+        ImGui::EndDisabled();
+        ImGui::BeginDisabled(!s.rcas || rcas_blocked);
+        SliderRow("Sharpening strength", s.rcas_strength, 0, 100, "%d%%", "How strong the sharpening is.");
+        ImGui::EndDisabled();
+        ImGui::EndTable();
     }
-    if (!upscaling && !downscaling && s.fsr1) {
-        ImGui::TextDisabled("For more FPS: Render resolution 720p + FSR 1 (restart).");
+    ImGui::SeparatorText("Information");
+    if (BeginRows("##image_info")) {
+        char text[96];
+        std::snprintf(text, sizeof(text), "%d x %d", iw, ih);
+        InfoRow("Game image", text);
+        std::snprintf(text, sizeof(text), "%d x %d", ww, wh);
+        InfoRow("Window", text);
+        InfoRow("FSR 1", !s.fsr1 ? "off" : upscaling ? "active" : "no effect (image not smaller than window)");
+        InfoRow("Sharpening", s.rcas_applied ? "applied" : "not applied");
+        ImGui::EndTable();
     }
-    ImGui::BeginDisabled(!s.rcas || rcas_blocked);
-    int strength = s.rcas_strength;
-    if (ImGui::SliderInt("Sharpening strength", &strength, 0, 100, "%d%%")) {
-        Store(s.rcas_strength, G::ParseRcasStrength(strength), true);
-    }
-    ImGui::EndDisabled();
-    static const char* const queued_labels[] = {"1 (lowest latency)", "2", "Unlimited"};
-    Choice("Frames queued", s.frames_queued, queued_labels, G::FramesQueued.data(), int(G::FramesQueued.size()));
+}
 
-    ImGui::SeparatorText("Graphics (restart)");
-    static const char* const resolution_labels[] = {"Native (1080p)", "480p", "720p", "1440p", "1800p", "4K"};
-    Choice("Render resolution", s.render_resolution, resolution_labels, nullptr, int(G::Resolutions.size()));
-    static const char* const engine_labels[] = {"60 (original)", "120", "240 (experimental)"};
-    Choice("Engine frame rate", s.engine_fps, engine_labels, G::EngineFps.data(), int(G::EngineFps.size()));
-    Checkbox("Game reads GPU data without waiting", s.stale_readback);
-    Checkbox("Deferred GPU readbacks", s.deferred_readback);
-    const bool restart = Gow3Settings::GraphicsNeedRestart();
-    if (restart) {
-        ImGui::TextColored(ImVec4(0.85f, 0.72f, 0.45f, 1.0f), "Restart needed. Unsaved progress is lost.");
+void PerformanceTab() {
+    namespace G = Gow3Graphics;
+    auto& s = Gow3Settings::Get();
+    ImGui::SeparatorText("Live");
+    if (BeginRows("##live")) {
+        static const char* const fps_labels[] = {"30", "60", "120", "240", "Unlimited"};
+        ChoiceRow("Frame rate limit", s.fps_limit, fps_labels, G::FpsLimits.data(), int(G::FpsLimits.size()),
+                  "Caps the frame rate. The engine frame rate (below) is the highest it can go.");
+        const int effective = G::EffectiveFps(s.fps_limit, s.startup_engine_fps);
+        if (s.fps_limit == 0 || effective < s.fps_limit) {
+            char text[48];
+            std::snprintf(text, sizeof(text), "%d FPS (engine frame rate)", effective);
+            InfoRow("Effective limit", text);
+        }
+        static const char* const queued_labels[] = {"1 (lowest latency)", "2", "Unlimited"};
+        ChoiceRow("Frames queued", s.frames_queued, queued_labels, G::FramesQueued.data(),
+                  int(G::FramesQueued.size()), "More frames queued: steadier FPS, slower response to input.");
+        CheckRow("Compile new shaders in the background", s.async_shaders,
+                 "Fewer stutters in new areas; an object or effect may appear a moment later.");
+        ImGui::EndTable();
     }
-    ImGui::BeginDisabled(!restart || !std::getenv("GOW3_RESTART_COMMAND"));
-    if (ImGui::Button("Apply and restart")) {
-        // The new launch confirms the options once the game shows; run.py restores the
-        // previous ones if it never does (restart_unconfirmed).
-        s.restart_unconfirmed = true;
-        Gow3Settings::Save();
-        runtime_restart();
+    ImGui::SeparatorText("Applied on restart");
+    if (BeginRows("##restart")) {
+        static const char* const resolution_labels[] = {"Native (1080p)", "480p", "720p", "1440p", "1800p", "4K"};
+        ChoiceRow("Render resolution", s.render_resolution, resolution_labels, nullptr, int(G::Resolutions.size()),
+                  "The resolution the game draws at. Higher is sharper and slower.");
+        static const char* const engine_labels[] = {"60 (original)", "120", "240 (experimental)"};
+        ChoiceRow("Engine frame rate", s.engine_fps, engine_labels, G::EngineFps.data(), int(G::EngineFps.size()),
+                  "The highest frame rate the game itself runs at.");
+        CheckRow("Game reads GPU data without waiting", s.stale_readback,
+                 "Big FPS gain. Switch it off if lighting or objects look wrong.");
+        CheckRow("Deferred GPU readbacks", s.deferred_readback,
+                 "Fewer waits for the GPU. Switch it off if textures or shadows look wrong.");
+        ImGui::EndTable();
+    }
+}
+
+void OverlayTab() {
+    namespace P = Gow3PerfStats;
+    auto& s = Gow3Settings::Get();
+    if (BeginRows("##overlay_on")) {
+        CheckRow("Show overlay", s.show_fps, "The performance overlay in a corner of the screen.");
+        ImGui::EndTable();
+    }
+    ImGui::BeginDisabled(!s.show_fps);
+    ImGui::SeparatorText("What to show");
+    if (ImGui::BeginTable("##overlay_items", 2, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableNextColumn();
+        static const char* const names[] = {"FPS", "Frametime", "Upscaler", "GPU (name and use)", "CPU (game)",
+                                            "RAM (game / total)", "VRAM (used / available)"};
+        for (unsigned item = 0; item < 7; ++item) {
+            const unsigned bit = 1u << item;
+            bool on = (s.overlay_items & bit) != 0;
+            if (ImGui::Checkbox(names[item], &on)) {
+                s.overlay_items = on ? (s.overlay_items | bit) : (s.overlay_items & ~bit);
+                dirty = true;
+            }
+        }
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled("Preview");
+        ImGui::BeginChild("##preview", ImVec2(0, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+        ImGui::SetWindowFontScale(s.overlay_scale / 100.0f);
+        const std::string text = OverlayText();
+        ImGui::TextUnformatted(text.empty() ? "(nothing selected)" : text.c_str());
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::EndChild();
+        ImGui::EndTable();
+    }
+    ImGui::SeparatorText("Appearance");
+    if (BeginRows("##appearance")) {
+        SliderRow("Font size", s.overlay_scale, 50, 300, "%d%%", "Size of the overlay text.");
+        static const char* const corners[] = {"Top left", "Top right", "Bottom left", "Bottom right"};
+        ChoiceRow("Corner", s.overlay_corner, corners, nullptr, 4, "Where the overlay sits.");
+        SliderRow("Background opacity", s.overlay_opacity, 0, 100, "%d%%", "0% is no background.");
+        static const char* const layouts[] = {"One line", "One item per line"};
+        ChoiceRow("Layout", s.overlay_layout, layouts, nullptr, 2, "Items side by side or stacked.");
+        ImGui::EndTable();
     }
     ImGui::EndDisabled();
+    ImGui::SeparatorText("About");
+    if (BeginRows("##about")) {
+        const auto& elf = Common::ElfInfo::Instance();
+        char text[160];
+        std::snprintf(text, sizeof(text), "%.*s v%.*s", int(elf.GameSerial().size()), elf.GameSerial().data(),
+                      int(elf.AppVer().size()), elf.AppVer().data());
+        InfoRow("Game", text);
+        const u32 total = background_total;
+        if (total) {
+            std::snprintf(text, sizeof(text), "loading %u%%", u32(u64(background_done) * 100 / total));
+        } else {
+            std::snprintf(text, sizeof(text), "ready");
+        }
+        InfoRow("Shader cache", text);
+        std::string hooks;
+        const auto add = [&](bool on, const char* name) {
+            if (on) {
+                hooks += hooks.empty() ? name : std::string(", ") + name;
+            }
+        };
+        add(s.cheats_supported.load() != 0, "cheats");
+        add(s.red_orbs_supported.load(), "red orbs");
+        add(s.orb_pickup_supported.load(), "orb pickups");
+        add(s.damage_supported.load(), "damage");
+        add(s.actor_watch_supported.load(), "enemy health");
+        InfoRow("Game hooks", hooks.empty() ? "none" : hooks.c_str());
+        ImGui::EndTable();
+    }
+}
+
+// Startup options changed since this launch (applied by "Apply and restart").
+int RestartChanges() {
+    const auto& s = Gow3Settings::Get();
+    return (s.render_resolution != s.startup_render_resolution) + (s.engine_fps != s.startup_engine_fps) +
+           (s.deferred_readback != s.startup_deferred_readback) + (s.stale_readback != s.startup_stale_readback);
 }
 
 void Menu() {
     auto& s = Gow3Settings::Get();
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + 40.0f * base_scale,
-                                   viewport->WorkPos.y + 40.0f * base_scale),
-                            ImGuiCond_Appearing);
-    // Two columns: game options on the left, graphics on the right.
-    ImGui::SetNextWindowSize(ImVec2(860.0f * base_scale, 0.0f), ImGuiCond_Appearing);
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
+                                   viewport->WorkPos.y + viewport->WorkSize.y * 0.5f),
+                            ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(std::min(760.0f * base_scale, viewport->WorkSize.x * 0.95f),
+                                    std::min(680.0f * base_scale, viewport->WorkSize.y * 0.9f)),
+                             ImGuiCond_Appearing);
     bool keep_open = true;
     // gow3: the game's own title (param.sfo), not a fixed one.
     static const std::string heading = [] {
         const std::string_view title = Common::ElfInfo::Instance().Title();
-        return std::string(title.empty() ? "God of War III" : title) + " (Insert / R3+L2)";
+        return std::string(title.empty() ? "God of War III" : title) + "  (Insert / R3+L2)";
     }();
     if (!ImGui::Begin(heading.c_str(), &keep_open, ImGuiWindowFlags_NoCollapse)) {
         ImGui::End();
         return;
     }
-    ImGui::Text("%.0f FPS  (%.1f ms)", frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f,
-                frame_ms_avg);
-    ImGui::Separator();
-    if (!ImGui::BeginTable("##menu_columns", 2, ImGuiTableFlags_BordersInnerV)) {
-        ImGui::End();
-        return;
-    }
-    ImGui::TableNextColumn();
-    ImGui::SeparatorText("Overlay");
-    Checkbox("Show FPS counter", s.show_fps);
-    ImGui::SeparatorText("Health display");
-    ImGui::BeginDisabled(!s.actor_watch_supported.load());
-    Checkbox("Enemy health bar (last enemy hit)", s.enemy_health_bar);
-    ImGui::EndDisabled();
-    if (!s.actor_watch_supported.load()) {
-        ImGui::TextDisabled("Unavailable: game version or code signature mismatch.");
-    }
-    ImGui::SeparatorText("Cheats");
-    const char* cheat_names[] = {"Max / infinite health", "Infinite magic", "Infinite item meter",
-                                 "Infinite Rage of Sparta", "Max / infinite red orbs"};
-    for (unsigned cheat = 0; cheat < 5; ++cheat) {
-        const bool available = (s.cheats_supported.load() & (1u << cheat)) != 0;
-        ImGui::BeginDisabled(!available);
-        Checkbox(cheat_names[cheat], s.cheats[cheat]);
-        ImGui::EndDisabled();
-        if (!available) {
-            ImGui::TextDisabled("Unavailable: game version or code signature mismatch.");
+    footer_help = nullptr;
+    constexpr int TabCount = 4;
+    const ImGuiIO& io = ImGui::GetIO();
+    if (!io.WantTextInput) {
+        const int step = ImGui::IsKeyPressed(ImGuiKey_GamepadR1, false) || ImGui::IsKeyPressed(ImGuiKey_E, false) ? 1
+                         : ImGui::IsKeyPressed(ImGuiKey_GamepadL1, false) || ImGui::IsKeyPressed(ImGuiKey_Q, false)
+                             ? -1
+                             : 0;
+        if (step) {
+            requested_tab = (s.menu_tab + step + TabCount) % TabCount;
         }
     }
-    const bool max_orbs = (s.cheats_supported.load() & (1u << 4)) && s.cheats[4].load();
-    ImGui::BeginDisabled(!s.red_orbs_supported.load() || max_orbs);
-    float multiplier = s.red_orb_multiplier.load();
-    if (ImGui::SliderFloat("Red orb multiplier", &multiplier, 0.1f, 100.0f, "%.2fx",
-                           ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp)) {
-        s.red_orb_multiplier = Gow3Orbs::ClampMultiplier(multiplier);
-        dirty = true;
+    const float footer = ImGui::GetFrameHeightWithSpacing() * 2.0f + ImGui::GetTextLineHeightWithSpacing() * 2.0f;
+    if (ImGui::BeginTabBar("##tabs")) {
+        static const char* const tabs[TabCount] = {"Game", "Image", "Performance", "Overlay"};
+        for (int tab = 0; tab < TabCount; ++tab) {
+            const ImGuiTabItemFlags flags = requested_tab == tab ? ImGuiTabItemFlags_SetSelected : 0;
+            if (!ImGui::BeginTabItem(tabs[tab], nullptr, flags)) {
+                continue;
+            }
+            if (s.menu_tab != tab && requested_tab < 0) {
+                s.menu_tab = tab;
+                dirty = true;
+            }
+            if (ImGui::BeginChild("##body", ImVec2(0, -footer))) {
+                switch (tab) {
+                case 0: GameTab(); break;
+                case 1: ImageTab(); break;
+                case 2: PerformanceTab(); break;
+                default: OverlayTab(); break;
+                }
+            }
+            ImGui::EndChild();
+            ImGui::EndTabItem();
+        }
+        if (requested_tab >= 0) {
+            s.menu_tab = requested_tab;
+            dirty = true;
+            requested_tab = -1;
+        }
+        ImGui::EndTabBar();
     }
-    if (ImGui::InputFloat("Multiplier value", &multiplier, 0.1f, 1.0f, "%.3f")) {
-        s.red_orb_multiplier = Gow3Orbs::ClampMultiplier(multiplier);
-        dirty = true;
-    }
-    if (ImGui::Button("Reset to 1x")) {
-        s.red_orb_multiplier = 1.0f;
-        dirty = true;
-    }
-    ImGui::EndDisabled();
-    if (max_orbs) {
-        ImGui::TextWrapped("Turn off max / infinite red orbs to adjust the multiplier.");
-    }
-    ImGui::TextWrapped("Turning cheats off restores normal behavior, not previously granted resources.");
-    ImGui::TextDisabled("Applies to future gains. Existing orbs and prices stay unchanged.");
-    if (!s.red_orbs_supported.load()) {
-        ImGui::TextWrapped("Unavailable: executable does not match the validated CUSA01623 v01.02 gain routines.");
-    }
-    ImGui::SeparatorText("Multipliers");
-    ImGui::BeginDisabled(!s.damage_supported.load());
-    MultiplierSlider("Damage dealt", s.damage_dealt);
-    MultiplierSlider("Damage taken", s.damage_taken);
-    ImGui::EndDisabled();
-    if (!s.damage_supported.load()) {
-        ImGui::TextDisabled("Damage: unavailable (game version or code signature mismatch).");
-    }
-    ImGui::BeginDisabled(!s.orb_pickup_supported.load());
-    MultiplierSlider("Green orbs (health)", s.green_orb_multiplier);
-    MultiplierSlider("Blue orbs (magic)", s.blue_orb_multiplier);
-    MultiplierSlider("Gold orbs (Rage of Sparta)", s.gold_orb_multiplier);
-    ImGui::EndDisabled();
-    if (!s.orb_pickup_supported.load()) {
-        ImGui::TextDisabled("Orbs: unavailable (game version or code signature mismatch).");
-    }
-    ImGui::TextDisabled("Bars stay within their maximum.");
-    ImGui::TableNextColumn();
-    ImGui::PushTextWrapPos(0.0f); // notes wrap inside the column instead of being cut off
-    GraphicsSection();
-    ImGui::SeparatorText("Diagnostics");
-    if (ImGui::Button("Capture frame")) {
-        Vulkan::FrameCapture::Request();
-    }
-    ImGui::SameLine();
-    ImGui::TextDisabled("Records the next frame's passes for analysis.");
-    if (const std::string capture = Vulkan::FrameCapture::LastResult(); !capture.empty()) {
-        ImGui::TextWrapped("%s", capture.c_str());
-    }
+
+    ImGui::Separator();
+    ImGui::PushTextWrapPos(0.0f);
+    ImGui::TextDisabled("%s", footer_help ? footer_help : "L1 / R1 or Q / E: switch tabs. Settings are saved in gow3.ini.");
     ImGui::PopTextWrapPos();
-    ImGui::EndTable();
-    ImGui::Spacing();
+    if (const int changes = RestartChanges()) {
+        ImGui::TextColored(ImVec4(0.85f, 0.72f, 0.45f, 1.0f), "%d change%s need%s a restart (unsaved progress is lost).",
+                           changes, changes == 1 ? "" : "s", changes == 1 ? "s" : "");
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!std::getenv("GOW3_RESTART_COMMAND"));
+        if (ImGui::Button("Apply and restart")) {
+            // The new launch confirms the options once the game shows; run.py restores the
+            // previous ones if it never does (restart_unconfirmed).
+            s.restart_unconfirmed = true;
+            Gow3Settings::Save();
+            runtime_restart();
+        }
+        ImGui::EndDisabled();
+    } else {
+        ImGui::NewLine();
+    }
+    const float close_width = ImGui::CalcTextSize("Close").x + ImGui::GetStyle().FramePadding.x * 2;
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - close_width);
     if (ImGui::Button("Close")) {
         keep_open = false;
     }
-    ImGui::SameLine();
-    ImGui::TextDisabled("Saved in gow3.ini");
     ImGui::End();
     if (!keep_open) {
         SetOpen(false);
@@ -498,25 +726,25 @@ void LoadingScreen() {
 }
 
 void FpsCounter() {
+    const auto& s = Gow3Settings::Get();
+    const std::string text = OverlayText();
+    if (text.empty()) {
+        return;
+    }
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     const float pad = 12.0f * base_scale;
-    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x - pad,
-                                   viewport->WorkPos.y + pad),
-                            ImGuiCond_Always, ImVec2(1.0f, 0.0f));
-    ImGui::SetNextWindowBgAlpha(0.5f);
+    const int corner = s.overlay_corner;
+    const bool right = corner == 1 || corner == 3, bottom = corner >= 2;
+    ImGui::SetNextWindowPos(ImVec2(right ? viewport->WorkPos.x + viewport->WorkSize.x - pad : viewport->WorkPos.x + pad,
+                                   bottom ? viewport->WorkPos.y + viewport->WorkSize.y - pad : viewport->WorkPos.y + pad),
+                            ImGuiCond_Always, ImVec2(right ? 1.0f : 0.0f, bottom ? 1.0f : 0.0f));
+    ImGui::SetNextWindowBgAlpha(s.overlay_opacity / 100.0f);
     ImGui::Begin("##fps", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
                      ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
                      ImGuiWindowFlags_NoFocusOnAppearing);
-    const auto& s = Gow3Settings::Get();
-    ImGui::Text("%.0f FPS  %.1f ms  %s", frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f,
-                frame_ms_avg,
-                s.upscaler == Gow3Settings::UpscalerFsr3   ? "FSR 3.1"
-                : s.upscaler == Gow3Settings::UpscalerFsr4 ? "FSR 4"
-                : s.upscaler == Gow3Settings::UpscalerFsr411 ? "FSR 4.1.1"
-                : s.upscaler == Gow3Settings::UpscalerTaa ? "TAA"
-                : s.upscaler == Gow3Settings::UpscalerDlss ? "DLSS"
-                                                         : "");
+    ImGui::SetWindowFontScale(s.overlay_scale / 100.0f);
+    ImGui::TextUnformatted(text.c_str());
     ImGui::End();
 }
 
@@ -594,6 +822,7 @@ void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) 
         ImGui::DestroyContext();
         return;
     }
+    overlay_instance = &instance;
     initialized = true;
     std::printf("Overlay: menu ready (Insert or R3+L2)\n");
 }
@@ -655,6 +884,14 @@ bool HandleEvent(const SDL_Event& event) {
     case SDL_EVENT_KEY_DOWN:
     case SDL_EVENT_KEY_UP: {
         const bool down = event.type == SDL_EVENT_KEY_DOWN;
+        static const bool capture_key = [] {
+            const char* env = std::getenv("GOW3_FRAME_CAPTURE_KEY");
+            return env && *env == '1';
+        }();
+        if (down && !event.key.repeat && capture_key && event.key.key == SDLK_F11) {
+            Vulkan::FrameCapture::Request();
+            return true;
+        }
         if (down && !event.key.repeat &&
             (event.key.key == SDLK_INSERT || (is_open && event.key.key == SDLK_ESCAPE))) {
             SetOpen(event.key.key == SDLK_INSERT ? !is_open : false);

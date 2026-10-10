@@ -87,6 +87,7 @@ std::mutex result_mutex;
 std::string result; ///< for the menu (FrameCapture::LastResult)
 
 void SetResult(std::string text) {
+    std::printf("Frame capture: %s\n", text.c_str());
     std::scoped_lock lk{result_mutex};
     result = std::move(text);
 }

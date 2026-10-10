@@ -38,6 +38,12 @@ struct Values {
     std::atomic<float> reactive_max{0.9f};
     std::atomic<int> debug_view{DebugNone};
     std::atomic<bool> show_fps{false};
+    /// Performance overlay (gow3_perf_stats.h): items shown, font size and background opacity
+    /// in percent, corner (0 top left, 1 top right, 2 bottom left, 3 bottom right), layout
+    /// (0 one line, 1 one item per line). menu_tab: the menu's last tab.
+    std::atomic<unsigned> overlay_items{7};
+    std::atomic<int> overlay_scale{100}, overlay_corner{1}, overlay_opacity{50}, overlay_layout{0};
+    std::atomic<int> menu_tab{0};
     std::atomic<float> red_orb_multiplier{1.0f};
     std::atomic<bool> red_orbs_supported{false};
     /// Damage and orb pickup multipliers (src/damage_hook.h, src/orb_hook.h), 0.1x to 100x.

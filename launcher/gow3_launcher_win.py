@@ -140,7 +140,7 @@ FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('120', ('120',)), ('240', ('240
 APP_DEFAULTS = {'ui_language': '', 'game_dir': os.environ.get('GOW3_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623')), 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
                 'player_name': '', 'hdr': False, 'draw_pipe': '', 'readbacks': '',
-                'background_warmup': True, 'parallel_warmup': True, 'perf_diag': False, 'frame_stats': False, 'gpu_profile': False,
+                'background_warmup': True, 'parallel_warmup': True, 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation'}
 
@@ -316,7 +316,7 @@ def game_environment(s):
     env['GOW3_PARALLEL_WARMUP'] = '1' if s.get('parallel_warmup', True) else '0'
     env['GOW3_PERF_DIAG'] = '1' if s.get('perf_diag', False) else '0'
     for key, name in (('frame_stats', 'GOW3_FRAME_STATS'), ('gpu_profile', 'GOW3_GPU_PROFILE'),
-                      ('vk_validation', 'GOW3_VK_VALIDATION')):
+                      ('vk_validation', 'GOW3_VK_VALIDATION'), ('frame_capture_key', 'GOW3_FRAME_CAPTURE_KEY')):
         if s[key]:
             env[name] = '1'
     for kind, name in (('key', 'GOW3_KEY_MAP'), ('pad', 'GOW3_PAD_MAP')):
@@ -1065,6 +1065,8 @@ class Launcher:
         self.check(f, 'gpu_profile', 'app', _('GPU time per pass in the log', 'Профиль GPU в журнале'))
         self.check(f, 'vk_validation', 'app', _('Vulkan validation layers (needs the Vulkan SDK; much slower)',
                                                 'Слои валидации Vulkan (нужен Vulkan SDK; сильно замедляет)'))
+        self.check(f, 'frame_capture_key', 'app', _('F11 captures a frame for analysis'),
+                   _('Records how the next frame is drawn into the captures folder. For development only.'))
         self.check(f, 'perf_diag', 'app', _('GPU wait and readback report in the log (every 5 s)'),
                    _('Shows where the frame waits for the GPU and which reads cause it. For performance tests.'))
 

@@ -39,6 +39,8 @@ class ControlMapTest(unittest.TestCase):
         self.assertEqual(env['GOW3_PARALLEL_WARMUP'], '1')
         self.assertEqual(env['GOW3_BACKGROUND_WARMUP'], '1')
         self.assertEqual(env['GOW3_PERF_DIAG'], '0')
+        self.assertNotIn('GOW3_FRAME_CAPTURE_KEY', {k for k in env if k not in __import__('os').environ})
+        self.assertEqual(launcher.game_environment({**settings, 'frame_capture_key': True})['GOW3_FRAME_CAPTURE_KEY'], '1')
         # Graphics options live in gow3.ini (run.py and the in-game menu), not in the environment.
         for name in ('GOW3_FULLSCREEN', 'GOW3_PRESENT_MODE', 'GOW3_FPS_LIMIT', 'GOW3_ASYNC_SHADERS',
                      'GOW3_DEFERRED_READBACK', 'GOW3_STALE_READBACK', 'GOW3_FSR1', 'GOW3_RCAS'):
