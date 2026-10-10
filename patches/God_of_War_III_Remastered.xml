@@ -106,7 +106,7 @@
             <Line Type="bytes" Address="0x0075dbe4" Value="0000f042"/>
         </PatchList>
     </Metadata>
-    <Metadata Title="God of War III Remastered" Name="Frame Rate Patch - 240 FPS" Note="Experimental: the 120 FPS patch with the engine maximum framerate at 240 FPS (frametime clamp of 1/240 second). Same swing energy correction. Not tested through the whole game. Requires setting VBlank to 240 FPS." Author="kvicken, gow3_pc" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+    <Metadata Title="God of War III Remastered" Name="Frame Rate Patch - 240 FPS" Note="The 120 FPS patch with the engine maximum framerate at 240 FPS (frametime clamp of 1/240 second), adapted by Felipe Prado. Same swing energy correction. Requires setting VBlank to 240 FPS." Author="kvicken, gow3_pc" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
         <PatchList>
             <Line Type="bytes" Address="0x0048ff1a" Value="488d05b7c12600"/>
             <Line Type="bytes" Address="0x0075dbe4" Value="00007043"/>
