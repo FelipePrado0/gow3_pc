@@ -25,6 +25,7 @@ extern "C" void runtime_restart(void); // src/probe.c: starts run.py again, ends
 #include "imgui_impl_vulkan.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
+#include "video_core/renderer_vulkan/vk_frame_capture.h"
 
 // DejaVu Sans (Cyrillic), embedded (third_party/fonts, Bitstream Vera license).
 #ifdef _WIN32
@@ -312,6 +313,15 @@ void Menu() {
     }
     ImGui::TableNextColumn();
     GraphicsSection();
+    ImGui::SeparatorText("Diagnostics");
+    if (ImGui::Button("Capture frame")) {
+        Vulkan::FrameCapture::Request();
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("Records the next frame's passes for analysis.");
+    if (const std::string capture = Vulkan::FrameCapture::LastResult(); !capture.empty()) {
+        ImGui::TextWrapped("%s", capture.c_str());
+    }
     ImGui::EndTable();
     ImGui::Spacing();
     if (ImGui::Button("Close")) {

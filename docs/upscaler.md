@@ -83,41 +83,38 @@ Frame analyzer: `GOW3_CAPTURE_TRIGGER=<file> GOW3_CAPTURE_DIR=<dir>`; creating t
 the next frame (boundary: the pass writing a display buffer) — passes, targets, shaders,
 sampled textures, and the first 1 KiB of bound constants for small passes and first draws.
 
-## The frame the upscaler was calibrated on (1920x1080; God of War III's is still to be mapped)
+## God of War III's frame (mapped 2026-10-10, 2560x1440 render)
 
-| Passes | What |
+Captured with the in-game menu (Insert > Diagnostics > Capture frame, files in
+`user/captures/`). `tools/gow3_frame_map.py <capture>` finds every piece below by structure,
+not by address (addresses change with the render resolution patch), and exits 1 when one is
+missing. There is no velocity buffer: motion vectors have to be computed.
+
+| Stage | What |
 |---|---|
-| first pass of a frame | copy of the previous UI target into the display buffer (sRGB) |
-| shadow | 4096x4096 D32 depth |
-| G-buffer | 6 targets 1920x1080 (RGBA8 x3, sRGB albedo, B10G11R11, RGBA16F) + D32S8 depth |
-| lighting | light volumes into two B10G11R11 targets |
-| scene color | RGBA16F 1920x1080, also forward/transparent draws and effects |
-| volumetric fog | compute, reads linear depth (R32F 1920x1080) and composites into scene color |
-| half-res effects | RGBA8 960x540 with half-res depth |
-| post | combine/bloom pyramid in RGBA16F / B10G11R11 |
-| tonemap | into RGBA8 1920x1080 (the UI target) |
-| game AA | ping-pong RGBA8 1920x1080 after tonemap (to be skipped when upscaling) |
-| UI | stencil-masked draws over the same RGBA8 target |
+| first pass of a frame | 2 draws copying the previous frame's final image into the display buffer |
+| depth pre-pass | depth only, all opaque geometry (500–900 draws): **scene depth**, D32S8 at render size |
+| linear depth | full-screen pass into R32F at render size |
+| shadows + light pre-pass | 2048x2048 D32 cascades, lights accumulated into an RGBA8 sRGB target |
+| material pass | the pre-pass geometry again (same draw count), sampling the light buffer |
+| transparencies/effects | two RGBA8 sRGB targets with a second depth buffer |
+| post | bloom pyramid 1280x720 down to 160x90, luminance in R16G16F, **1x1 R16G16F exposure** (read by the CPU every frame) |
+| composite | full-size pass sampling the half-size bloom: **scene color before the HUD**, RGBA8 sRGB at render size |
+| HUD | later passes drawing into that same image (some with the second depth); the game hides the HUD out of combat |
 
-There is no velocity buffer, also with the camera moving: motion vectors are computed.
+## Camera constants
 
-## Scene constants (864 bytes, bound by most passes)
-
-Signature: `[0]=3000 (far) [1]=1/3000 [4]=1920 [5]=1080 [6]=1/1920 [7]=1/1080`.
-
-| Floats | Meaning |
+| Where | What |
 |---|---|
-| 8–19 | view matrix, 3x4 rows (rotation + translation); the only block that changes with the camera |
-| 36–51 | inverse projection (0.700285 = 1/1.42799, 0.39391 = 1/2.53865) |
-| 52, 57, 62, 63 | projection (rows 52–67), D3D depth 0..1: x 1.42799, y 2.53865, z 1.00002 / -0.0500679 (near 0.05, far 3000) |
-| 112–175 | shadow cascade matrices |
-| 180–191 | inverse view (camera to world), 3x4 (176–179: 2, 8, 15, 0) |
+| depth pre-pass vertex shader (`aed40011eb5259f3`), slot 1, 144 bytes, floats 0–15 | **view-projection**, column-major; the same for every draw of a frame, changes with the camera and its field of view |
+| same buffer, floats 16–31 | the object's world matrix (identity for static scenery) |
+| 64-byte buffers (`*bbe4f109`, slot 0) | projection alone: x 1.96855, y 3.49965 at 16:9 (cinematic shots narrow it, e.g. 1.5073), near 0.5, very far plane, D3D depth |
 
-The previous frame's matrices are not there; the port keeps them itself.
+The previous frame's matrices are not in the frame; the port has to keep them.
 
 ## Plan
 
-1. Find the scene constants every frame (signature), keep the previous view/projection.
+1. Find the camera constants every frame (depth pre-pass, above), keep the previous view-projection.
 2. Camera motion vectors: compute pass from depth and current/previous matrices into an
    RG16F target; debug view to check them. Object motion later (vertex shader replay with the
    previous frame's constants through the recompiler).

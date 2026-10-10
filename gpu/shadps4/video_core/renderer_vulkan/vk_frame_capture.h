@@ -45,11 +45,17 @@ public:
     static void Buffer(u64 stage_hash, u32 slot, VAddr address, const void* data, u64 size);
     static void Note(const char* text);
 
+    /// In-game menu: records the next full frame (as the trigger file does).
+    static void Request();
+    /// What the last request did, for the menu: empty, "Capturing...", the file or an error.
+    static std::string LastResult();
+
 private:
     enum : u32 { Idle, Armed, Recording };
     static inline std::atomic<u32> state{Idle};
     static inline std::atomic<u64> flips{0};
     static inline std::atomic<VAddr> last_presented{0};
+    static inline std::atomic<bool> requested{false};
 };
 
 } // namespace Vulkan

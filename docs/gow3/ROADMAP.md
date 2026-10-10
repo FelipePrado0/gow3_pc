@@ -131,6 +131,8 @@ Primeira execução real (60 s, 2026-10-08): o jogo inicia sem `STOP:` nem `Faul
 | Origem dos readbacks | Relatório por consumidor das esperas restantes (checkbox de diagnóstico) | Medido: 100% da espera é uma leitura da CPU por quadro, 11,6 ms |
 | Leitura sem esperar a GPU | O jogo usa a cópia do quadro anterior (exposição 1x1) e escreve ao lado dela sem esperar; checkbox ligada por padrão | Validado: 40,9 para 66,5 FPS na cena de referência |
 | Proteção de páginas | Teste permanente da regressão da permissão inválida | Teste ok |
+| FSR 1, nitidez e fila de quadros | Opções ao vivo no menu Insert, avisos com os tamanhos da imagem e da janela | Validado no jogo |
+| Mapa do quadro | Profundidade, câmera, cor da cena e HUD localizados para upscaler e frame generation (ver docs/upscaler.md) | Concluído |
 
 **Critérios da alpha (situação em 2026-10-08)**
 

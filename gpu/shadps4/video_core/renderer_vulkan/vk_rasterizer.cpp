@@ -2048,6 +2048,10 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
         const RingBinding* ring = num_ring_stages ? FindRingBinding(stage, buffer_index) : nullptr;
         if (ring) {
             // Copied by the GPU command thread into the constant ring (read-only).
+            if (FrameCapture::Active() && memory->IsValidGpuMapping(ring->address, 0)) {
+                FrameCapture::Buffer(stage.pgm_hash, buffer_index, ring->address,
+                                     reinterpret_cast<const void*>(ring->address), ring->size);
+            }
             if (!desc.IsSpecial()) {
                 if (ring->size == 864 && gbuffer_draw &&
                     memory->IsValidGpuMapping(ring->address, 0)) {
