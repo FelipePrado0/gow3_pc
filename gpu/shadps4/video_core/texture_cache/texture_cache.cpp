@@ -119,6 +119,15 @@ bool TextureCache::ResolveReadbacks(VAddr address, u64 size, bool assume_locks,
         std::scoped_lock lock{readback_mutex};
         bool waited = false;
         u64 wait_ns = 0;
+        if (diag && (source == ReadbackSource::CpuRead || source == ReadbackSource::CpuWrite)) {
+            // Which copied image the CPU touched while its copy was pending.
+            for (auto& image : readback_images) {
+                if (image.copies && address < image.address + image.Bytes() && image.address < address + size) {
+                    ++image.cpu_accesses;
+                }
+            }
+        }
+        Gow3Stats::Timer readback_timer{Gow3Stats::t_readback_wait};
         if (const u64 tick = pending_readbacks.RequiredTick(address, size)) {
             ++readbacks_waited;
             waited = !scheduler.IsFree(tick);
@@ -131,12 +140,7 @@ bool TextureCache::ResolveReadbacks(VAddr address, u64 size, bool assume_locks,
             }
             RetireReadbacks();
         }
-        if (diag) {
-            readback_sources.Record(source, waited, wait_ns, size);
-            if (waited && (source == ReadbackSource::CpuRead || source == ReadbackSource::CpuWrite)) {
-                last_cpu_wait_address = address;
-            }
-        }
+        if (diag) readback_sources.Record(source, waited, wait_ns, size);
     };
     if (assume_locks) resolve();
     else liverpool->SendCommand<true>(resolve);
@@ -190,7 +194,7 @@ void TextureCache::ProcessDownloadImages() {
                         if (slot != readback_images.end()) {
                             *slot = {image.info.guest_address, image.info.size.width,
                                      image.info.size.height, image.info.num_bits, slot->copies + 1,
-                                     image.info.pixel_format};
+                                     slot->cpu_accesses, image.info.pixel_format};
                         }
                     }
                     pending_readbacks.Push(copy->guest_address, copy->size,
@@ -222,15 +226,12 @@ void TextureCache::ProcessDownloadImages() {
                 std::ranges::sort(readback_images, std::greater{}, &ReadbackImageStat::copies);
                 for (u32 i = 0; i < 4 && readback_images[i].copies; ++i) {
                     const auto& r = readback_images[i];
-                    std::printf("Readback image %#llx: %ux%u, %u bits, %s, %u copies%s\n",
+                    std::printf("Readback image %#llx: %ux%u, %u bits, %s, %u copies, %u CPU accesses "
+                                "while pending\n",
                                 static_cast<unsigned long long>(r.address), r.width, r.height, r.bits,
-                                vk::to_string(r.format).c_str(), r.copies,
-                                last_cpu_wait_address >= r.address &&
-                                        last_cpu_wait_address < r.address + u64{r.width} * r.height * r.bits / 8
-                                    ? " (CPU waited here)" : "");
+                                vk::to_string(r.format).c_str(), r.copies, r.cpu_accesses);
                 }
                 readback_images = {};
-                last_cpu_wait_address = 0;
                 readback_report = now;
             }
         }
@@ -1394,6 +1395,7 @@ void TextureCache::UntrackImageTail(ImageId image_id) {
 }
 
 void TextureCache::GarbageCollectImages() {
+    Gow3Stats::Timer gc_timer{Gow3Stats::t_gc};
     if (instance.CanReportMemoryUsage()) {
         total_used_memory = instance.GetDeviceMemoryUsage();
         // gow3: on integrated GPUs (Steam Deck) the usage covers system-memory heaps holding

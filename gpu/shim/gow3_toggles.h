@@ -85,13 +85,14 @@ inline std::atomic<std::uint64_t> images_registered{0};
 inline std::atomic<std::uint64_t> image_upload_bytes{0};
 inline std::atomic<std::uint64_t> buffer_upload_bytes{0};
 inline std::atomic<int> gpu_thread_clock{-1}; ///< clockid_t of the GPU command thread
+inline std::atomic<unsigned long> gpu_thread_id{0}; ///< Windows thread id of the GPU command thread
 inline std::atomic<std::uint64_t> draws{0}, dispatches{0}, submissions{0};
 /// Frames the GPU command thread has started (display pass), for per-frame diagnostics.
 inline std::atomic<std::uint64_t> gpu_frames{0};
 /// Wall time spent in operations suspected of stalls (ns, all threads).
 inline std::atomic<std::uint64_t> t_resident{0}, t_protect{0}, t_image_create{0}, t_refresh{0},
     t_staging{0}, t_host_wait{0}, t_copy{0}, copy_bytes{0}, t_read_faults{0}, read_faults{0},
-    t_write_faults{0}, t_copy_cpu{0}, copy_sys_us{0}, copy_minflt{0};
+    t_write_faults{0}, t_copy_cpu{0}, copy_sys_us{0}, copy_minflt{0}, t_gc{0}, t_readback_wait{0};
 /// Diagnostics are collected only with GOW3_FRAME_STATS=1.
 inline const bool enabled = [] {
     const char* env = std::getenv("GOW3_FRAME_STATS");

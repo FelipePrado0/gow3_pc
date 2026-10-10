@@ -458,11 +458,11 @@ private:
     void WatchReadback(VAddr address, u64 size);
     struct ReadbackImageStat {
         VAddr address;
-        u32 width, height, bits, copies;
+        u32 width, height, bits, copies, cpu_accesses;
         vk::Format format;
+        u64 Bytes() const { return u64{width} * height * bits / 8; }
     };
     std::array<ReadbackImageStat, 16> readback_images{};
-    VAddr last_cpu_wait_address = 0;
     u64 readbacks_released = 0;
     ReadbackQueue<Vulkan::StagingBufferRef> pending_readbacks;
     std::mutex readback_mutex;

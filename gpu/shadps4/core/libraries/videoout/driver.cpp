@@ -8,6 +8,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <time.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #ifndef _WIN32
 #include <sys/resource.h>
 #endif
@@ -330,7 +333,29 @@ void VideoOutDriver::Flip(const Request& req) {
         static u64 last_proc_flt, last_copy_ns, last_copy_bytes, last_rf, last_trf, last_twf;
         const u64 rf = Gow3Stats::read_faults.load(), trf = Gow3Stats::t_read_faults.load(),
                   twf = Gow3Stats::t_write_faults.load();
-        if (frame_ms > 40.0 && last_gpu_ns != 0) {
+        // gow3: every frame over 40 ms after the first, at most 10 per 5 s window.
+        static bool primed = false;
+        static u32 stalls_shown = 0;
+        const bool stall = primed && frame_ms > 40.0 && stalls_shown < 10;
+        stalls_shown += stall;
+        primed = true;
+        // Waits and work inside the long frame (window counters are reset every 5 s, so the
+        // previous values are reset with them).
+        static u64 last_wait[7];
+        const u64 wait_now[7] = {Gow3Stats::t_readback_wait.load(), Gow3Stats::tick_wait_ns.load(),
+                                 Gow3Stats::sync_recording_ns.load(), Gow3Stats::host_copies_wait_ns.load(),
+                                 u64(Vulkan::g_gow3_compile_ns.load()), u64(Vulkan::g_gow3_compiles.load()),
+                                 Gow3Stats::t_gc.load()};
+        if (stall) {
+            std::printf("Stall: %.1f ms frame; waits: readback %.1f ms, GPU ticks %.1f ms, "
+                        "recorder %.1f ms, host copies %.1f ms; %llu compiles %.1f ms; GC %.1f ms\n",
+                        frame_ms, (wait_now[0] - last_wait[0]) / 1e6, (wait_now[1] - last_wait[1]) / 1e6,
+                        (wait_now[2] - last_wait[2]) / 1e6, (wait_now[3] - last_wait[3]) / 1e6,
+                        static_cast<unsigned long long>(wait_now[5] - last_wait[5]),
+                        (wait_now[4] - last_wait[4]) / 1e6, (wait_now[6] - last_wait[6]) / 1e6);
+        }
+        std::copy(std::begin(wait_now), std::end(wait_now), std::begin(last_wait));
+        if (stall) {
             std::printf("       fault handlers: %llu read faults %.1f ms, write faults %.1f ms\n",
                         static_cast<unsigned long long>(rf - last_rf), (trf - last_trf) / 1e6,
                         (twf - last_twf) / 1e6);
@@ -354,18 +379,35 @@ void VideoOutDriver::Flip(const Request& req) {
                   user_us = Gow3Stats::gpu_user_us.load(), invol = Gow3Stats::gpu_invol_switches.load(),
                   vol = Gow3Stats::gpu_vol_switches.load();
         u64 gpu_ns = 0;
+#ifdef _WIN32
+        // gow3: Windows has no per-thread clock id; the thread's user + kernel time instead.
+        static HANDLE gpu_thread = nullptr;
+        if (!gpu_thread) {
+            if (const unsigned long id = Gow3Stats::gpu_thread_id.load()) {
+                gpu_thread = OpenThread(THREAD_QUERY_LIMITED_INFORMATION, FALSE, id);
+            }
+        }
+        if (FILETIME created, exited, kernel, user;
+            gpu_thread && GetThreadTimes(gpu_thread, &created, &exited, &kernel, &user)) {
+            const auto ns = [](const FILETIME& t) {
+                return ((u64(t.dwHighDateTime) << 32) | t.dwLowDateTime) * 100;
+            };
+            gpu_ns = ns(kernel) + ns(user);
+        }
+#else
         if (const int clock = Gow3Stats::gpu_thread_clock.load(); clock != -1) {
             timespec ts{};
             clock_gettime(static_cast<clockid_t>(clock), &ts);
             gpu_ns = u64(ts.tv_sec) * 1000000000ull + u64(ts.tv_nsec);
         }
+#endif
         const u64 images = Gow3Stats::images_registered.load();
         const u64 image_bytes = Gow3Stats::image_upload_bytes.load();
         const u64 buffer_bytes = Gow3Stats::buffer_upload_bytes.load();
-        if (frame_ms > 40.0 && last_gpu_ns != 0) {
-            std::printf("Stall: %.1f ms frame; GPU thread on CPU %.1f ms; %llu images registered, "
+        if (stall) {
+            std::printf("       GPU thread on CPU %.1f ms; %llu images registered, "
                         "%.1f MB image uploads, %.1f MB buffer uploads\n",
-                        frame_ms, (gpu_ns - last_gpu_ns) / 1e6,
+                        (gpu_ns - last_gpu_ns) / 1e6,
                         static_cast<unsigned long long>(images - last_images),
                         (image_bytes - last_image_bytes) / 1e6,
                         (buffer_bytes - last_buffer_bytes) / 1e6);
@@ -377,7 +419,7 @@ void VideoOutDriver::Flip(const Request& req) {
                         (sys_us - last_sys) / 1e3, static_cast<unsigned long long>(invol - last_invol),
                         static_cast<unsigned long long>(vol - last_vol));
         }
-        if (frame_ms > 40.0 && last_gpu_ns != 0) {
+        if (stall) {
             std::printf("       ms in: resident %.1f, protect %.1f, image create %.1f, "
                         "image refresh %.1f, staging %.1f, waiting for host copies %.1f\n",
                         (t_now[0] - last_t[0]) / 1e6, (t_now[1] - last_t[1]) / 1e6,
@@ -398,7 +440,7 @@ void VideoOutDriver::Flip(const Request& req) {
         last_rc = rc;
         last_rp = rp;
         last_minflt = minflt;
-        if (frame_ms > 40.0 && last_gpu_ns != 0 && copy_ns > last_copy_ns) {
+        if (stall && copy_ns > last_copy_ns) {
             std::printf("       guest copies %.1f MB in %.1f thread-ms, %.1f ms on CPU (kernel %.1f ms, "
                         "%llu page faults in large copies) (%.2f GB/s per thread)\n",
                         (copy_bytes - last_copy_bytes) / 1e6, (copy_ns - last_copy_ns) / 1e6,
@@ -495,6 +537,8 @@ void VideoOutDriver::Flip(const Request& req) {
             window_start = now;
             frames = 0;
             worst_ms = 0;
+            stalls_shown = 0;
+            std::fill(std::begin(last_wait) + 1, std::begin(last_wait) + 6, 0);
         }
     }
 
