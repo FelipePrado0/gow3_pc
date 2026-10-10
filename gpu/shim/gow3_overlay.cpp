@@ -156,6 +156,24 @@ void Checkbox(const char* label, std::atomic<bool>& value) {
     Store(value, v, changed);
 }
 
+// A 0.1x to 100x multiplier with a reset button.
+void MultiplierSlider(const char* label, std::atomic<float>& value) {
+    ImGui::PushID(label);
+    float v = value;
+    const bool changed = ImGui::SliderFloat(label, &v, 0.1f, 100.0f, "%.2fx",
+                                            ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp);
+    if (changed) {
+        value = Gow3Orbs::ClampMultiplier(v);
+        dirty = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::SmallButton("1x")) {
+        value = 1.0f;
+        dirty = true;
+    }
+    ImGui::PopID();
+}
+
 // A combo over `count` labels storing an index or a value from `values`.
 void Choice(const char* label, std::atomic<int>& target, const char* const* labels, const int* values,
             int count) {
@@ -311,6 +329,14 @@ void Menu() {
     ImGui::TextDisabled("Applies to future gains. Existing orbs and prices stay unchanged.");
     if (!s.red_orbs_supported.load()) {
         ImGui::TextWrapped("Unavailable: executable does not match the validated CUSA01623 v01.02 gain routines.");
+    }
+    ImGui::SeparatorText("Multipliers");
+    ImGui::BeginDisabled(!s.damage_supported.load());
+    MultiplierSlider("Damage dealt", s.damage_dealt);
+    MultiplierSlider("Damage taken", s.damage_taken);
+    ImGui::EndDisabled();
+    if (!s.damage_supported.load()) {
+        ImGui::TextDisabled("Damage: unavailable (game version or code signature mismatch).");
     }
     ImGui::TableNextColumn();
     ImGui::PushTextWrapPos(0.0f); // notes wrap inside the column instead of being cut off

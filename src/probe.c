@@ -9,6 +9,7 @@
 #include "orb_hook.h"
 #include "cheat_hook.h"
 #include "actor_hook.h"
+#include "damage_hook.h"
 #include "gpu/gow3gpu.h"
 #if !defined(__x86_64__) || !defined(__GNUC__)
 #error This prototype requires x86-64 GCC or Clang (including MinGW).
@@ -319,6 +320,8 @@ extern uintptr_t gow3_cheat_flag(unsigned id);
 extern uintptr_t gow3_actor_slots_address(void);
 extern void gow3_actor_status(int supported);
 extern void gow3_cheat_status(unsigned id);
+extern uintptr_t gow3_damage_multiplier(int taken);
+extern void gow3_damage_status(int supported);
 
 static void install_cheats(const char *app0, Segment *segments, uint64_t count, uint64_t size) {
     char path[4096], serial[32] = "", version[32] = "";
@@ -434,6 +437,39 @@ static void install_orb_multiplier(const char *app0, Segment *segments, uint64_t
         memcpy(image + gow3_orb_calls[i] + 1, &displacements[i], 4);
     gow3_orbs_status(1);
     printf("Red orbs: live multiplier ready (3 validated gain paths, 0.1x to 100x)\n");
+}
+/* Writes a jump from image+at to `stub`; the rest of the replaced bytes become nops (the stub
+ * replays them). 0 when the stub is out of relative-jump range. */
+static int install_jump(uint64_t at, unsigned length, unsigned char *stub) {
+    const int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + at + 5);
+    if (delta < INT32_MIN || delta > INT32_MAX) return 0;
+    const int32_t relative = (int32_t)delta;
+    image[at] = 0xe9;
+    memcpy(image + at + 1, &relative, 4);
+    memset(image + at + 5, 0x90, length - 5);
+    return 1;
+}
+
+/* Damage dealt/taken multipliers (src/damage_hook.h): the stub reads the menu's floats
+ * directly, so changes apply on the next hit. */
+static void install_damage_multiplier(const char *app0, Segment *segments, uint64_t count, uint64_t size) {
+    char path[4096], serial[32] = "", version[32] = "";
+    snprintf(path, sizeof(path), "%s/sce_sys/param.sfo", app0 ? app0 : ".");
+    sfo_value(path, "TITLE_ID", serial, sizeof(serial), NULL);
+    sfo_value(path, "APP_VER", version, sizeof(version), NULL);
+    const uint64_t at = GOW3_DAMAGE_HOOK_OFFSET;
+    int damage = !strcmp(serial, "CUSA01623") && !strcmp(version, "01.02") && at < size &&
+                 mapped(segments, count, at, GOW3_DAMAGE_HOOK_LENGTH) &&
+                 gow3_damage_signature_match(image + at, size - at);
+    if (damage) {
+        unsigned char *stub = allocate(page_size);
+        gow3_damage_build_stub(stub, gow3_damage_multiplier(1), gow3_damage_multiplier(0),
+                               (uintptr_t)(image + at + GOW3_DAMAGE_HOOK_LENGTH));
+        protect(stub, page_size, 5);
+        damage = install_jump(at, GOW3_DAMAGE_HOOK_LENGTH, stub);
+    }
+    gow3_damage_status(damage);
+    printf("Multipliers: damage %s\n", damage ? "ready" : "unavailable");
 }
 /* G3PATCH2 (patches.py): the patches' image base, then byte writes at image offsets, applied
  * after relocation. A write may replace a whole base-relative pointer slot (60/90 FPS++ swap
@@ -746,6 +782,7 @@ int main(int argc, char **argv) {
     if (gpu_enabled) install_orb_multiplier(app0, segments, ns, size);
     if (gpu_enabled) install_cheats(app0, segments, ns, size);
     if (gpu_enabled) install_actor_watch(app0, segments, ns, size);
+    if (gpu_enabled) install_damage_multiplier(app0, segments, ns, size);
 #ifdef _WIN32
     printf("Guest TCB loads redirected to the TEB TLS slot: %" PRIu64 "\n", patch_tcb_loads(segments, ns));
 #endif

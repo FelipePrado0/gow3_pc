@@ -30,3 +30,14 @@ extern "C" void gow3_cheat_status(unsigned id) {
 extern "C" void gow3_orbs_status(int supported) {
     Gow3Settings::Get().red_orbs_supported = supported != 0;
 }
+
+/// Damage (src/damage_hook.h): the multiplier the player's (taken) or another actor's hits use.
+extern "C" uintptr_t gow3_damage_multiplier(int taken) {
+    static_assert(sizeof(std::atomic<float>) == 4 && std::atomic<float>::is_always_lock_free);
+    auto& s = Gow3Settings::Get();
+    return reinterpret_cast<uintptr_t>(taken ? &s.damage_taken : &s.damage_dealt);
+}
+
+extern "C" void gow3_damage_status(int supported) {
+    Gow3Settings::Get().damage_supported = supported != 0;
+}

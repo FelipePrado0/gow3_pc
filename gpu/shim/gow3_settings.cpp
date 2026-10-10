@@ -91,6 +91,10 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.enemy_health_bar = i != 0;
     } else if (key == "red_orb_multiplier") {
         v.red_orb_multiplier = Gow3Orbs::ClampMultiplier(f);
+    } else if (key == "damage_dealt") {
+        v.damage_dealt = Gow3Orbs::ClampMultiplier(f);
+    } else if (key == "damage_taken") {
+        v.damage_taken = Gow3Orbs::ClampMultiplier(f);
     } else if (key == "fsr4_auto_exposure") {
         v.fsr4_auto_exposure = i != 0;
     } else if (key == "fsr4_invert_jitter") {
@@ -236,6 +240,8 @@ void Save() {
                  int(v.fsr4_auto_exposure.load()), int(v.fsr4_invert_jitter.load()));
     std::fprintf(file, "output_res=%dx%d\n", OutputWidths[v.output_res], OutputHeights[v.output_res]);
     std::fprintf(file, "red_orb_multiplier=%.3f\n", v.red_orb_multiplier.load());
+    std::fprintf(file, "damage_dealt=%.3f\n", v.damage_dealt.load());
+    std::fprintf(file, "damage_taken=%.3f\n", v.damage_taken.load());
     std::fprintf(file, "cheat_health=%d\ncheat_magic=%d\ncheat_item=%d\ncheat_rage=%d\ncheat_orbs=%d\n",
                  int(v.cheats[0].load()), int(v.cheats[1].load()), int(v.cheats[2].load()),
                  int(v.cheats[3].load()), int(v.cheats[4].load()));

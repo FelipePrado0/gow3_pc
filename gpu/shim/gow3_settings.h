@@ -40,6 +40,10 @@ struct Values {
     std::atomic<bool> show_fps{false};
     std::atomic<float> red_orb_multiplier{1.0f};
     std::atomic<bool> red_orbs_supported{false};
+    /// Damage multipliers (src/damage_hook.h), 0.1x to 100x. The game's code reads these floats
+    /// directly.
+    std::atomic<float> damage_dealt{1.0f}, damage_taken{1.0f};
+    std::atomic<bool> damage_supported{false};
     std::atomic<bool> cheats[5]{};
     std::atomic<uint32_t> cheats_supported{0};
     /// Damage hook (src/actor_hook.h): enemy health bar, off by default.
