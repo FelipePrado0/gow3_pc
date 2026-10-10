@@ -13,6 +13,7 @@
 #include "core/memory.h"
 #include "core/signals.h"
 #include "video_core/page_manager.h"
+#include "video_core/page_state.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
 
 #ifndef _WIN64
@@ -45,49 +46,7 @@ constexpr size_t PM_PAGE_SIZE = 4_KB;
 constexpr size_t PM_PAGE_BITS = 12;
 
 struct PageManager::Impl {
-    struct PageState {
-        u8 num_write_watchers;
-        u8 num_read_watchers;
-
-        Core::MemoryPermission WritePerm() const noexcept {
-            return num_write_watchers == 0 ? Core::MemoryPermission::Write
-                                           : Core::MemoryPermission::None;
-        }
-
-        Core::MemoryPermission ReadPerm() const noexcept {
-            return num_read_watchers == 0 ? Core::MemoryPermission::Read
-                                          : Core::MemoryPermission::None;
-        }
-
-        Core::MemoryPermission Perms() const noexcept {
-            // A pending readback must block writes too, until its GPU version reaches RAM.
-            return num_read_watchers != 0 ? Core::MemoryPermission::None
-                                         : ReadPerm() | WritePerm();
-        }
-
-        template <s32 delta, bool is_read>
-        u8 AddDelta() {
-            if constexpr (is_read) {
-                if constexpr (delta == 1) {
-                    return ++num_read_watchers;
-                } else if (delta == -1) {
-                    ASSERT_MSG(num_read_watchers > 0, "Not enough watchers");
-                    return --num_read_watchers;
-                } else {
-                    return num_read_watchers;
-                }
-            } else {
-                if constexpr (delta == 1) {
-                    return ++num_write_watchers;
-                } else if (delta == -1) {
-                    ASSERT_MSG(num_write_watchers > 0, "Not enough watchers");
-                    return --num_write_watchers;
-                } else {
-                    return num_write_watchers;
-                }
-            }
-        }
-    };
+    using PageState = VideoCore::PageState;
 
     static constexpr size_t ADDRESS_BITS = 40;
     static constexpr size_t NUM_ADDRESS_PAGES = 1ULL << (40 - PM_PAGE_BITS);
