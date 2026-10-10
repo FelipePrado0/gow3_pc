@@ -136,7 +136,47 @@ APP_DEFAULTS = {'ui_language': '', 'game_dir': os.environ.get('GOW3_GAME_DIR', s
                 'frame_cap': '', 'draw_pipe': '', 'readbacks': '',
                 'frames_ahead': '', 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'extra_env': '', 'close_on_play': False,
-                'check_updates': False, 'game_patches': {}}
+                'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation'}
+
+# PS4 button, default key, default gamepad button (SDL names; src/runtime_pad.c). L2/R2 come
+# from the analog triggers and are not remapped on the gamepad.
+CONTROLS = [('cross', 'Space', 'a'), ('circle', 'Left Shift', 'b'), ('square', 'E', 'x'),
+            ('triangle', 'Q', 'y'), ('l1', '1', 'leftshoulder'), ('r1', '3', 'rightshoulder'),
+            ('l2', 'R', None), ('r2', 'F', None), ('l3', 'Z', 'leftstick'),
+            ('r3', 'C', 'rightstick'), ('options', 'Return', 'start'), ('touchpad', 'Tab', 'back'),
+            ('up', 'I', 'dpup'), ('down', 'K', 'dpdown'), ('left', 'J', 'dpleft'), ('right', 'L', 'dpright')]
+PS_BUTTON_NAMES = {'cross': 'Cross', 'circle': 'Circle', 'square': 'Square', 'triangle': 'Triangle',
+                   'l1': 'L1', 'r1': 'R1', 'l2': 'L2', 'r2': 'R2', 'l3': 'L3', 'r3': 'R3',
+                   'options': 'Options', 'touchpad': 'Touchpad', 'up': 'D-pad up', 'down': 'D-pad down',
+                   'left': 'D-pad left', 'right': 'D-pad right'}
+# Gamepad buttons by SDL name, labelled as on a PlayStation or an Xbox controller.
+PAD_STYLES = {
+    'playstation': {'a': 'Cross', 'b': 'Circle', 'x': 'Square', 'y': 'Triangle', 'leftshoulder': 'L1',
+                    'rightshoulder': 'R1', 'leftstick': 'L3', 'rightstick': 'R3', 'start': 'Options',
+                    'back': 'Share / Create', 'touchpad': 'Touchpad click', 'guide': 'PS button',
+                    'dpup': 'D-pad up', 'dpdown': 'D-pad down', 'dpleft': 'D-pad left',
+                    'dpright': 'D-pad right', 'misc1': 'Mute button'},
+    'xbox': {'a': 'A', 'b': 'B', 'x': 'X', 'y': 'Y', 'leftshoulder': 'LB', 'rightshoulder': 'RB',
+             'leftstick': 'LS (left stick click)', 'rightstick': 'RS (right stick click)', 'start': 'Menu',
+             'back': 'View', 'touchpad': 'Touchpad click', 'guide': 'Xbox button', 'dpup': 'D-pad up',
+             'dpdown': 'D-pad down', 'dpleft': 'D-pad left', 'dpright': 'D-pad right', 'misc1': 'Share'},
+}
+
+
+def control_changes(values, kind):
+    """The buttons whose chosen key or SDL gamepad name differs from the default."""
+    column = 1 if kind == 'key' else 2
+    return {row[0]: values[row[0]].strip() for row in CONTROLS
+            if row[column] and values.get(row[0], '').strip()
+            and values[row[0]].strip().casefold() != row[column].casefold()}
+
+
+def control_map(controls, kind):
+    """GOW3_KEY_MAP/GOW3_PAD_MAP value: 'cross=Q,circle=Left Shift' for the changed buttons."""
+    chosen = controls.get(kind, {}) if isinstance(controls, dict) else {}
+    return ','.join(f'{button}={chosen[button].strip()}' for button, _key, _pad in CONTROLS
+                    if isinstance(chosen.get(button), str) and chosen[button].strip()
+                    and not set(chosen[button]) & set(',='))
 
 UPSCALERS = [('dlss', ('DLSS (NVIDIA GeForce RTX)',)),
              ('fsr4', ('FSR 4 (best quality)', 'FSR 4 (лучшее качество)')),
@@ -282,6 +322,9 @@ def game_environment(s):
                       ('vk_validation', 'GOW3_VK_VALIDATION')):
         if s[key]:
             env[name] = '1'
+    for kind, name in (('key', 'GOW3_KEY_MAP'), ('pad', 'GOW3_PAD_MAP')):
+        if value := control_map(s.get('controls', {}), kind):
+            env[name] = value
     for item in str(s['extra_env']).split():
         if '=' in item:
             key, value = item.split('=', 1)
@@ -546,6 +589,7 @@ class Launcher:
                             ('display', _('Display & FPS', 'Экран и FPS')), ('game', _('Game & effects', 'Игра и эффекты')),
                             ('gamepatches', _('Game patches', 'Патчи игры')),
                             ('mods', _('Mods & patches', 'Моды и патчи')),
+                            ('controls', _('Controls', 'Управление')),
                             ('advanced', _('Advanced', 'Дополнительно')),
                             ('log', _('Log', 'Журнал'))):
             item = tk.Label(side, text='    ' + title, bg=BG, fg=TEXT, anchor='w', font=('Segoe UI', 11),
@@ -586,6 +630,7 @@ class Launcher:
         self.build_game()
         self.build_game_patches()
         self.build_mods()
+        self.build_controls()
         self.build_advanced()
         self.build_log()
         self.root.bind_all('<MouseWheel>', self.wheel)
@@ -898,6 +943,64 @@ class Launcher:
         self.ttk.Button(f, text=_('Refresh', 'Обновить'), command=self.refresh_lists).grid(
             row=self.next_row(f), column=0, sticky='w', pady=(14, 0))
 
+    def build_controls(self):
+        """Remapping of the PS4 buttons (run.py passes GOW3_KEY_MAP and GOW3_PAD_MAP to the game)."""
+        tk, ttk = self.tk, self.ttk
+        f = self.scrolled_page('controls', _('Controls', 'Управление'),
+                               _('Which key or gamepad button presses each button of the game.'))
+        saved = self.app.get('controls') if isinstance(self.app.get('controls'), dict) else {}
+        style = self.app.get('pad_style') if self.app.get('pad_style') in PAD_STYLES else 'playstation'
+        self.pad_style = tk.StringVar(value=style)
+        self.section(f, _('Gamepad button names'), top=4)
+        names = ttk.Frame(f)
+        for value, label in (('playstation', 'PlayStation'), ('xbox', 'Xbox')):
+            ttk.Radiobutton(names, text=label, value=value, variable=self.pad_style,
+                            command=self.relabel_pad_controls).pack(side='left', padx=(0, 14))
+        self.row(f, _('Show as'), names)
+        self.section(f, _('Game button: keyboard key / gamepad button'))
+        self.control_vars, self.pad_boxes = {'key': {}, 'pad': {}}, {}
+        labels = PAD_STYLES[style]
+        for button, key, pad in CONTROLS:
+            holder = ttk.Frame(f)
+            key_var = tk.StringVar(value=saved.get('key', {}).get(button) or key)
+            self.control_vars['key'][button] = key_var
+            ttk.Entry(holder, textvariable=key_var, width=16).pack(side='left', padx=(0, 8))
+            pad_name = saved.get('pad', {}).get(button) or pad
+            pad_var = tk.StringVar(value=pad_name or '')
+            self.control_vars['pad'][button] = pad_var
+            if pad:
+                box = ttk.Combobox(holder, state='readonly', width=24, values=list(labels.values()))
+                box.set(labels.get(pad_name, pad_name))
+                box.bind('<<ComboboxSelected>>', lambda _e, b=box, v=pad_var: v.set(self.pad_name(b.get())))
+                self.pad_boxes[button] = box
+            else:
+                box = ttk.Label(holder, text=_('{} trigger').format(PS_BUTTON_NAMES[button]), style='Muted.TLabel', width=24)
+            box.pack(side='left')
+            self.row(f, PS_BUTTON_NAMES[button], holder)
+        self.note(f, _('Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, '
+                       'Backspace, Up, Down, Left, Right, F1 to F12. A name the game does not know keeps the default '
+                       '(the log says which). L2/R2 on the gamepad stay on the triggers. Insert and R3+L2 always open '
+                       'the port\'s menu. Applied when the game starts.'))
+        self.ttk.Button(f, text=_('Reset to defaults'), command=self.reset_controls).grid(
+            row=self.next_row(f), column=0, sticky='w', pady=(14, 0))
+
+    def pad_name(self, label):
+        """SDL gamepad button name of a label in the current naming style."""
+        return next((n for n, l in PAD_STYLES[self.pad_style.get()].items() if l == label), label)
+
+    def relabel_pad_controls(self):
+        labels = PAD_STYLES[self.pad_style.get()]
+        for button, box in self.pad_boxes.items():
+            box.configure(values=list(labels.values()))
+            name = self.control_vars['pad'][button].get()
+            box.set(labels.get(name, name))
+
+    def reset_controls(self):
+        for button, key, pad in CONTROLS:
+            self.control_vars['key'][button].set(key)
+            self.control_vars['pad'][button].set(pad or '')
+        self.relabel_pad_controls()
+
     def build_advanced(self):
         ttk = self.ttk
         f = self.scrolled_page('advanced', _('Advanced', 'Дополнительно'),
@@ -1188,6 +1291,9 @@ class Launcher:
                     f'{float(value):.2f}' if key == 'sharpness' else str(value)
             else:
                 self.app[key] = value
+        self.app['controls'] = {kind: control_changes({b: v.get() for b, v in vars_.items()}, kind)
+                                for kind, vars_ in self.control_vars.items()}
+        self.app['pad_style'] = self.pad_style.get()
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         CONFIG_FILE.write_text(json.dumps(self.app, indent=2, ensure_ascii=False), encoding='utf-8')
         save_ini({key: self.ini[key] for key in INI_DEFAULTS}, self.ini_lines)
