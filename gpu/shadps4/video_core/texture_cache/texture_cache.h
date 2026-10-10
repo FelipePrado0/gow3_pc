@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include "video_core/texture_cache/readback_queue.h"
+#include "video_core/texture_cache/readback_sources.h"
 #include <chrono>
 #include "gow3_toggles.h"
 #include <optional>
@@ -119,7 +120,8 @@ public:
 
     /// Schedules a copy of pending images for download back to CPU memory.
     void ProcessDownloadImages();
-    bool ResolveReadbacks(VAddr address, u64 size, bool assume_locks = true);
+    bool ResolveReadbacks(VAddr address, u64 size, bool assume_locks = true,
+                          ReadbackSource source = ReadbackSource::Unknown);
     void CancelReadbacks(VAddr address, u64 size);
 
     /// Retrieves the image handle of the image with the provided attributes.
@@ -402,7 +404,8 @@ private:
 
     void FreeImage(ImageId image_id) {
         const auto& image = slot_images[image_id];
-        ResolveReadbacks(image.info.guest_address, image.info.guest_size);
+        ResolveReadbacks(image.info.guest_address, image.info.guest_size, true,
+                         ReadbackSource::ImageFree);
         UntrackImage(image_id);
         UnregisterImage(image_id);
         DeleteImage(image_id);
@@ -448,6 +451,7 @@ private:
     u64 readbacks_queued = 0, readbacks_completed = 0, readbacks_waited = 0;
     u64 readbacks_canceled = 0, readbacks_peak_bytes = 0;
     std::chrono::steady_clock::time_point readback_report = std::chrono::steady_clock::now();
+    ReadbackSourceStats readback_sources;
     void RetireReadbacks();
     PageTable page_table;
     std::mutex mutex;

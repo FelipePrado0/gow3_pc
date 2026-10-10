@@ -90,19 +90,31 @@ void TextureCache::RetireReadbacks() {
     has_pending_readbacks.store(pending_readbacks.Bytes() != 0, std::memory_order_release);
 }
 
-bool TextureCache::ResolveReadbacks(VAddr address, u64 size, bool assume_locks) {
+bool TextureCache::ResolveReadbacks(VAddr address, u64 size, bool assume_locks,
+                                    ReadbackSource source) {
     if (!deferred_readbacks || !has_pending_readbacks.load(std::memory_order_acquire)) return false;
     {
         std::scoped_lock lock{readback_mutex};
         if (!pending_readbacks.RequiredTick(address, size)) return false;
     }
-    const auto resolve = [this, address, size] {
+    const auto resolve = [this, address, size, source] {
+        const bool diag = Vulkan::WaitDiagnostics::Enabled();
         std::scoped_lock lock{readback_mutex};
+        bool waited = false;
+        u64 wait_ns = 0;
         if (const u64 tick = pending_readbacks.RequiredTick(address, size)) {
             ++readbacks_waited;
+            waited = !scheduler.IsFree(tick);
+            const auto start = diag ? std::chrono::steady_clock::now()
+                                    : std::chrono::steady_clock::time_point{};
             scheduler.Wait(tick);
+            if (diag) {
+                wait_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                              std::chrono::steady_clock::now() - start).count();
+            }
             RetireReadbacks();
         }
+        if (diag) readback_sources.Record(source, waited, wait_ns, size);
     };
     if (assume_locks) resolve();
     else liverpool->SendCommand<true>(resolve);
@@ -166,6 +178,7 @@ void TextureCache::ProcessDownloadImages() {
                     pending_readbacks.Bytes() / 1048576.0, readbacks_peak_bytes / 1048576.0);
                 readbacks_queued = readbacks_completed = readbacks_waited = readbacks_canceled = 0;
                 readbacks_peak_bytes = pending_readbacks.Bytes();
+                readback_sources.Report(stdout);
                 readback_report = now;
             }
         }
@@ -222,7 +235,8 @@ std::optional<TextureCache::PendingDownload> TextureCache::RecordImageDownload(I
 
 void TextureCache::DownloadImageMemory(ImageId image_id, bool sync) {
     Image& image = slot_images[image_id];
-    ResolveReadbacks(image.info.guest_address, image.info.guest_size);
+    ResolveReadbacks(image.info.guest_address, image.info.guest_size, true,
+                     ReadbackSource::ImageDownload);
     if (False(image.flags & ImageFlagBits::GpuModified)) {
         return;
     }
@@ -439,7 +453,7 @@ void TextureCache::InvalidateMemory(VAddr addr, size_t size) {
 
 void TextureCache::InvalidateMemoryFromGPU(VAddr address, size_t max_size) {
     // Partial buffer writes still need the image's untouched bytes in guest memory.
-    ResolveReadbacks(address, max_size);
+    ResolveReadbacks(address, max_size, true, ReadbackSource::GpuPartialWrite);
     std::scoped_lock lock{mutex};
     ForEachImageInRegion(address, max_size, [&](ImageId image_id, Image& image) {
         // Only consider images that match base address.
@@ -1055,7 +1069,8 @@ void TextureCache::RefreshImage(Image& image) {
     if (False(image.flags & ImageFlagBits::Dirty) || image.info.num_samples > 1) {
         return;
     }
-    ResolveReadbacks(image.info.guest_address, image.info.guest_size);
+    ResolveReadbacks(image.info.guest_address, image.info.guest_size, true,
+                     ReadbackSource::ImageRefresh);
     Gow3Stats::Timer timer{Gow3Stats::t_refresh};
 
     RENDERER_TRACE;
@@ -1370,7 +1385,8 @@ void TextureCache::GarbageCollectImages() {
         }
         --num_deletions;
         auto& image = slot_images[image_id];
-        ResolveReadbacks(image.info.guest_address, image.info.guest_size);
+        ResolveReadbacks(image.info.guest_address, image.info.guest_size, true,
+                         ReadbackSource::CacheCleanup);
         const bool download = image.SafeToDownload();
         const bool tiled = image.info.IsTiled();
         if (tiled && download) {

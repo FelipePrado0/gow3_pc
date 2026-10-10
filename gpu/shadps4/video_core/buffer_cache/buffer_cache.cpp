@@ -296,7 +296,7 @@ void PrintBufferStats() {
 
 std::pair<const Buffer*, u64> BufferCache::ObtainBuffer(VAddr device_addr, u32 size,
                                                         bool is_written, bool is_texel_buffer) {
-    texture_cache.ResolveReadbacks(device_addr, size);
+    texture_cache.ResolveReadbacks(device_addr, size, true, ReadbackSource::BufferObtain);
     const bool stats = BufferStatsEnabled();
     if (stats) {
         PrintBufferStats();
@@ -350,7 +350,7 @@ std::pair<const Buffer*, u64> BufferCache::ObtainBuffer(VAddr device_addr, u32 s
 }
 
 std::pair<const Buffer*, u64> BufferCache::ObtainBufferForImage(VAddr device_addr, u32 size) {
-    texture_cache.ResolveReadbacks(device_addr, size);
+    texture_cache.ResolveReadbacks(device_addr, size, true, ReadbackSource::BufferForImage);
     if (IsRegionGpuModified(device_addr, size)) {
         return ObtainBuffer(device_addr, size, false);
     }
@@ -543,7 +543,7 @@ const Buffer* BufferCache::UploadCopies(const Buffer* arena, std::span<vk::Buffe
     }
     // Resolve before launching host copies: a copy-thread fault could deadlock submission.
     for (const auto& copy : copies) {
-        texture_cache.ResolveReadbacks(copy.dstOffset, copy.size);
+        texture_cache.ResolveReadbacks(copy.dstOffset, copy.size, true, ReadbackSource::BufferUpload);
     }
     Gow3Stats::buffer_upload_bytes.fetch_add(total_size_bytes, std::memory_order_relaxed);
     const auto staging = staging_pool.Request(total_size_bytes, MemoryType::HostUncached);
