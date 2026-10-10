@@ -50,6 +50,16 @@ class ControlMapTest(unittest.TestCase):
         self.assertEqual(launcher.game_environment({**settings, 'parallel_warmup': False})['GOW3_PARALLEL_WARMUP'], '0')
         self.assertEqual(launcher.game_environment({**settings, 'background_warmup': False})['GOW3_BACKGROUND_WARMUP'], '0')
 
+    def test_settings_keys_kept(self):
+        # The redesign hides some options (player name) but keeps every saved setting working.
+        for key in ('game_dir', 'user_dir', 'mods_dir', 'patches_dir', 'language', 'player_name', 'hdr',
+                    'draw_pipe', 'readbacks', 'background_warmup', 'parallel_warmup', 'controls', 'pad_style'):
+            self.assertIn(key, launcher.APP_DEFAULTS)
+        env = launcher.game_environment({**launcher.APP_DEFAULTS, 'player_name': ' Kratos '})
+        self.assertEqual(env['GOW3_USER_NAME'], 'Kratos')
+        for key in ('display_mode', 'fps_limit', 'render_resolution', 'engine_fps', 'rcas_strength'):
+            self.assertIn(key, launcher.INI_DEFAULTS)
+
     def test_graphics_defaults_match_the_game(self):
         d = launcher.INI_DEFAULTS
         self.assertEqual((d['display_mode'], d['vsync'], d['fps_limit'], d['engine_fps']), ('windowed', '1', '0', '120'))
