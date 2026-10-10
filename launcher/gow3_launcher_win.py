@@ -31,6 +31,7 @@ import zipfile
 FROZEN = getattr(sys, 'frozen', False)
 PORT_DIR = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PORT_DIR / 'scripts'))
+import save_backup  # noqa: E402  (scripts/)
 DATA_DIR = Path(os.environ.get('GOW3_DATA_DIR', PORT_DIR))
 CONFIG_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'gow3-launcher'
 CONFIG_FILE = CONFIG_DIR / 'settings.json'
@@ -764,9 +765,51 @@ class Launcher:
                     _('Choose the saves folder', 'Выберите папку сохранений'),
                     _('Empty: {} (shader caches are kept there too).',
                       'Пусто: {} (там же кэш шейдеров).').format(DATA_DIR / 'user'), on_change=self.refresh_status)
+        self.build_save_backups(f)
         self.row(f, _('Game language', 'Язык игры'), self.choice(f, 'language', 'app', LANGUAGES))
         self.row(f, _('Player name', 'Имя игрока'), self.ttk.Entry(f, textvariable=self.var('player_name', 'app'), width=30),
                  _('Where the game shows the PSN name; empty: the default.', 'Где игра показывает имя PSN; пусто — по умолчанию.'))
+
+    def user_dir(self):
+        return Path(self.var('user_dir', 'app').get() or DATA_DIR / 'user')
+
+    def build_save_backups(self, f):
+        """run.py backs the saves up before every start; one of them can be restored here."""
+        ttk = self.ttk
+        holder = ttk.Frame(f)
+        self.backup_choice = ttk.Combobox(holder, state='readonly', width=30)
+        self.backup_choice.pack(side='left')
+        ttk.Button(holder, text=_('Restore', 'Восстановить'), command=self.restore_backup).pack(side='left', padx=(6, 0))
+        ttk.Button(holder, text=_('Refresh', 'Обновить'), command=self.refresh_backups).pack(side='left', padx=(6, 0))
+        self.row(f, _('Save backups', 'Резервные копии'), holder,
+                 _('Made before every start, newest first; the last {} are kept. Restoring backs up the '
+                   'current saves first.').format(save_backup.KEEP))
+        self.refresh_backups()
+
+    def refresh_backups(self):
+        names = save_backup.list_backups(self.user_dir())
+        self.backup_choice.configure(values=names)
+        self.backup_choice.set(names[0] if names else '')
+
+    def restore_backup(self):
+        name = self.backup_choice.get()
+        if not name:
+            return
+        if self.process:
+            self.messagebox.showwarning(APP_NAME, _('Close the game before restoring saves.'))
+            return
+        if not self.messagebox.askyesno(APP_NAME, _('Replace the current saves with the backup {}? '
+                                                    'The current saves are backed up first.').format(name)):
+            return
+        try:
+            safety = save_backup.restore(self.user_dir(), name)
+        except (OSError, ValueError) as error:
+            self.messagebox.showerror(APP_NAME, _('Could not restore: {}').format(error))
+            return
+        self.refresh_backups()
+        self.refresh_status()
+        self.messagebox.showinfo(APP_NAME, _('Saves restored from {}.').format(name) +
+                                 (_(' Previous saves: {}.').format(safety.name) if safety else ''))
 
     def build_game_patches(self):
         """Patches of the selected game's built-in XML (God of War III): one resolution, the rest
