@@ -9,7 +9,7 @@ Port nativo de **God of War III Remastered** (PS4) para Windows, construído a p
 | Jogo alvo | God of War III Remastered, **CUSA01623**, versão **01.02** |
 | Plataforma | Windows 10/11 64-bit, Vulkan 1.3 |
 | Máquina de teste | AMD Radeon RX 6700 XT, Ryzen 5 5600X, 32 GB |
-| Última atualização | 2026-10-08 (spec 6 em andamento; código só do God of War III) |
+| Última atualização | 2026-10-09 (otimizações de GPU e lote de qualidade de vida) |
 
 ---
 
@@ -114,6 +114,23 @@ God of War III Remastered abre pelo loader nativo, roda a cutscene de abertura e
 
 Primeira execução real (60 s, 2026-10-08): o jogo inicia sem `STOP:` nem `Fault:`; abre as portas de áudio, inicia o Ajm, cria o save, carrega os WADs das fases e envia comandos de GPU. O que aparece na tela ainda não foi verificado (início da spec 6).
 
+| 7 (GPU) | Compilação assíncrona de shaders (`GOW3_ASYNC_SHADERS=1`), com workers, fila urgente e caches por worker. | `adde71e`, `cd9c70f` |
+| 7 (GPU) | Correções portadas do fork eltutz: brilho estourado (aliasing de imagens) e sombras quebradas (depth/stencil sem uso). Blend MIN/MAX igual ao PS4. | `036d5d7`, `4676e1c`, `9c88add` |
+| 7 (GPU) | Diagnóstico de esperas da GPU (`GOW3_PERF_DIAG=1`) e readback diferido (`GOW3_DEFERRED_READBACK=1`): esperas por quadro de 8 para 1 e FPS médio de 38,0 para 40,2 na cena de referência. | `d169080`, `7c1db31` |
+| Extras | Multiplicador de orbes vermelhos e cheats com alternância no menu Insert. | `14b5c6d`, `c7d58c3` |
+
+**Lote de 2026-10-09**
+
+| Item | O que faz | Estado |
+|---|---|---|
+| Backup de saves | Cópia de `user/savedata` antes de cada abertura, 10 mantidas, restauração pelo launcher | Validado |
+| Mods | Aviso de arquivos em conflito e presets de mods no launcher | Testes automáticos ok |
+| Controles | Remapeamento de teclado e controle na página Controls, nomes PlayStation ou Xbox | Testes automáticos ok |
+| Warmup paralelo | Loading do cache de 300 s para cerca de 70 s, mesmas pipelines (checkbox, ligada por padrão) | Validado no jogo |
+| Barra de vida do inimigo | Hook na rotina de dano; barra verde centralizada com a vida em números, opção no menu Insert | Validado no jogo |
+| Origem dos readbacks | Relatório por consumidor das esperas restantes (checkbox de diagnóstico) | Medido: 100% da espera é uma leitura da CPU por quadro, 11,6 ms |
+| Proteção de páginas | Teste permanente da regressão da permissão inválida | Teste ok |
+
 **Critérios da alpha (situação em 2026-10-08)**
 
 | Critério | Situação |
@@ -132,7 +149,8 @@ Primeira execução real (60 s, 2026-10-08): o jogo inicia sem `STOP:` nem `Faul
 
 - **Skip Intro** não foi portado: o código dele não bate com este eboot e ficou fora do XML.
 - **120 FPS:** o jogo limita o tempo de cada quadro a 1/FPS alvo. Abaixo de 120 FPS ele roda em câmera lenta (no PS4 acontece o mesmo abaixo de 60). Nas cenas pesadas a RX 6700 XT fica entre 52 e 65 FPS, então o patch só vale onde 120 se sustenta.
-- **Inicialização:** o jogo pode levar mais de um minuto para abrir a janela porque pré-compila o cache de shaders.
+- **Inicialização:** com o cache cheio (5226 pipelines) o loading serial leva de 300 a 400 s. O warmup paralelo leva cerca de 70 s e vem ligado por padrão no launcher.
+- **Desempenho real:** a cena de referência roda a cerca de 40 FPS com o patch de 120 FPS; ainda há cerca de 11,5 ms por quadro esperando readbacks.
 - **Saves de teste:** existem 10 saves `SD-2610080631xx` criados antes da lista de saves; podem ser apagados.
 - **Predicação da GPU** (`IT_SET_PREDICATION`) continua sem implementação, como no shadPS4.
 - **Linux:** o `build.sh` do Linux recebeu os testes novos e o FFmpeg no runtime, mas não foi compilado.
