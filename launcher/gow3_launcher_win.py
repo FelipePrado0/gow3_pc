@@ -134,8 +134,8 @@ APP_DEFAULTS = {'ui_language': '', 'game_dir': os.environ.get('GOW3_GAME_DIR', s
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
                 'player_name': '', 'fullscreen': False, 'hdr': False, 'present_mode': 'Mailbox',
                 'frame_cap': '', 'draw_pipe': '', 'readbacks': '',
-                'frames_ahead': '', 'frame_stats': False, 'gpu_profile': False,
-                'vk_validation': False, 'extra_env': '', 'close_on_play': False,
+                'frames_ahead': '', 'parallel_warmup': True, 'async_shaders': True, 'deferred_readback': True, 'perf_diag': False, 'frame_stats': False, 'gpu_profile': False,
+                'vk_validation': False, 'close_on_play': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation'}
 
 # PS4 button, default key, default gamepad button (SDL names; src/runtime_pad.c). L2/R2 come
@@ -318,6 +318,10 @@ def game_environment(s):
     for key, name in (('draw_pipe', 'GOW3_DRAW_PIPE'), ('readbacks', 'GOW3_READBACKS'), ('frames_ahead', 'GOW3_FRAMES_AHEAD')):
         if s[key]:
             env[name] = s[key]
+    env['GOW3_PARALLEL_WARMUP'] = '1' if s.get('parallel_warmup', True) else '0'
+    env['GOW3_ASYNC_SHADERS'] = '1' if s.get('async_shaders', True) else '0'
+    env['GOW3_DEFERRED_READBACK'] = '1' if s.get('deferred_readback', True) else '0'
+    env['GOW3_PERF_DIAG'] = '1' if s.get('perf_diag', False) else '0'
     for key, name in (('frame_stats', 'GOW3_FRAME_STATS'), ('gpu_profile', 'GOW3_GPU_PROFILE'),
                       ('vk_validation', 'GOW3_VK_VALIDATION')):
         if s[key]:
@@ -325,10 +329,6 @@ def game_environment(s):
     for kind, name in (('key', 'GOW3_KEY_MAP'), ('pad', 'GOW3_PAD_MAP')):
         if value := control_map(s.get('controls', {}), kind):
             env[name] = value
-    for item in str(s['extra_env']).split():
-        if '=' in item:
-            key, value = item.split('=', 1)
-            env[key] = value
     env['PYTHONUNBUFFERED'] = '1'
     env['PYTHONIOENCODING'] = 'utf-8'
     return env
@@ -1035,13 +1035,22 @@ class Launcher:
         self.row(f, _('GPU readbacks', 'Чтение данных GPU'), self.choice(f, 'readbacks', 'app', READBACKS),
                  _('How exactly data the GPU writes is copied back for the game.',
                    'Насколько точно данные, записанные GPU, возвращаются игре.'))
+        self.check(f, 'async_shaders', 'app', _('Compile new shaders in the background'),
+                   _('Fewer stutters in new areas: the game keeps running while new shaders compile. An object '
+                     'or effect may appear a moment later. Switch it off if something stays missing.'))
+        self.check(f, 'deferred_readback', 'app', _('Deferred GPU readbacks'),
+                   _('The GPU copies data back for the game without stopping each time: fewer waits, a few '
+                     'more FPS. Switch it off if textures or shadows look wrong.'))
+        self.check(f, 'parallel_warmup', 'app', _('Fast shader cache loading (parallel)'),
+                   _('Builds the cached pipelines on several CPU threads at start: about 70 s instead of 300 s '
+                     'with a full cache. Switch it off if the image looks wrong after loading.'))
         self.section(f, _('Diagnostics', 'Для разработчика'))
         self.check(f, 'frame_stats', 'app', _('Frame statistics in the log (every 5 s)', 'Статистика кадров в журнале (раз в 5 с)'))
         self.check(f, 'gpu_profile', 'app', _('GPU time per pass in the log', 'Профиль GPU в журнале'))
         self.check(f, 'vk_validation', 'app', _('Vulkan validation layers (needs the Vulkan SDK; much slower)',
                                                 'Слои валидации Vulkan (нужен Vulkan SDK; сильно замедляет)'))
-        self.row(f, _('Extra variables', 'Доп. переменные'), ttk.Entry(f, textvariable=self.var('extra_env', 'app'), width=58),
-                 _('NAME=value pairs separated by spaces (README lists them).', 'Пары ИМЯ=значение через пробел (список в README).'))
+        self.check(f, 'perf_diag', 'app', _('GPU wait and readback report in the log (every 5 s)'),
+                   _('Shows where the frame waits for the GPU and which reads cause it. For performance tests.'))
 
     def build_log(self):
         tk, ttk = self.tk, self.ttk

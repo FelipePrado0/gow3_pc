@@ -36,6 +36,13 @@ class ControlMapTest(unittest.TestCase):
         env = launcher.game_environment(settings)
         self.assertEqual(env['GOW3_KEY_MAP'], 'cross=Q')
         self.assertNotIn('GOW3_PAD_MAP', env)
+        self.assertEqual(env['GOW3_PARALLEL_WARMUP'], '1')
+        self.assertEqual(env['GOW3_ASYNC_SHADERS'], '1')
+        self.assertEqual((env['GOW3_DEFERRED_READBACK'], env['GOW3_PERF_DIAG']), ('1', '0'))
+        old = launcher.game_environment({**settings, 'extra_env': 'GOW3_ASYNC_SHADERS=0'})
+        self.assertEqual(old['GOW3_ASYNC_SHADERS'], '1')  # the old free-text field is ignored
+        self.assertEqual(launcher.game_environment({**settings, 'async_shaders': False})['GOW3_ASYNC_SHADERS'], '0')
+        self.assertEqual(launcher.game_environment({**settings, 'parallel_warmup': False})['GOW3_PARALLEL_WARMUP'], '0')
 
 
 if __name__ == '__main__':
