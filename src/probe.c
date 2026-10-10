@@ -321,7 +321,8 @@ extern uintptr_t gow3_actor_slots_address(void);
 extern void gow3_actor_status(int supported);
 extern void gow3_cheat_status(unsigned id);
 extern uintptr_t gow3_damage_multiplier(int taken);
-extern void gow3_damage_status(int supported);
+extern uintptr_t gow3_orb_pickup_multiplier(unsigned kind);
+extern void gow3_stat_multipliers_status(int damage, int orb_pickup);
 
 static void install_cheats(const char *app0, Segment *segments, uint64_t count, uint64_t size) {
     char path[4096], serial[32] = "", version[32] = "";
@@ -450,26 +451,35 @@ static int install_jump(uint64_t at, unsigned length, unsigned char *stub) {
     return 1;
 }
 
-/* Damage dealt/taken multipliers (src/damage_hook.h): the stub reads the menu's floats
- * directly, so changes apply on the next hit. */
-static void install_damage_multiplier(const char *app0, Segment *segments, uint64_t count, uint64_t size) {
+/* Damage dealt/taken and green/blue/gold orb multipliers (src/damage_hook.h, src/orb_hook.h):
+ * the stubs read the menu's floats directly, so changes apply on the next hit or pickup. */
+static void install_stat_multipliers(const char *app0, Segment *segments, uint64_t count, uint64_t size) {
     char path[4096], serial[32] = "", version[32] = "";
     snprintf(path, sizeof(path), "%s/sce_sys/param.sfo", app0 ? app0 : ".");
     sfo_value(path, "TITLE_ID", serial, sizeof(serial), NULL);
     sfo_value(path, "APP_VER", version, sizeof(version), NULL);
-    const uint64_t at = GOW3_DAMAGE_HOOK_OFFSET;
-    int damage = !strcmp(serial, "CUSA01623") && !strcmp(version, "01.02") && at < size &&
-                 mapped(segments, count, at, GOW3_DAMAGE_HOOK_LENGTH) &&
-                 gow3_damage_signature_match(image + at, size - at);
+    const int game = !strcmp(serial, "CUSA01623") && !strcmp(version, "01.02");
+    const uint64_t damage_at = GOW3_DAMAGE_HOOK_OFFSET, pickup_at = GOW3_ORB_PICKUP_OFFSET;
+    int damage = game && damage_at < size && mapped(segments, count, damage_at, GOW3_DAMAGE_HOOK_LENGTH) &&
+                 gow3_damage_signature_match(image + damage_at, size - damage_at);
+    int pickup = game && pickup_at < size && mapped(segments, count, pickup_at, GOW3_ORB_PICKUP_LENGTH) &&
+                 gow3_orb_pickup_signature_match(image + pickup_at, size - pickup_at);
+    unsigned char *stubs = damage || pickup ? allocate(page_size) : NULL;
     if (damage) {
-        unsigned char *stub = allocate(page_size);
-        gow3_damage_build_stub(stub, gow3_damage_multiplier(1), gow3_damage_multiplier(0),
-                               (uintptr_t)(image + at + GOW3_DAMAGE_HOOK_LENGTH));
-        protect(stub, page_size, 5);
-        damage = install_jump(at, GOW3_DAMAGE_HOOK_LENGTH, stub);
+        gow3_damage_build_stub(stubs, gow3_damage_multiplier(1), gow3_damage_multiplier(0),
+                               (uintptr_t)(image + damage_at + GOW3_DAMAGE_HOOK_LENGTH));
     }
-    gow3_damage_status(damage);
-    printf("Multipliers: damage %s\n", damage ? "ready" : "unavailable");
+    if (pickup) {
+        gow3_orb_pickup_build_stub(stubs + 256, gow3_orb_pickup_multiplier(0), gow3_orb_pickup_multiplier(1),
+                                   gow3_orb_pickup_multiplier(2),
+                                   (uintptr_t)(image + pickup_at + GOW3_ORB_PICKUP_LENGTH));
+    }
+    if (stubs) protect(stubs, page_size, 5);
+    damage = damage && install_jump(damage_at, GOW3_DAMAGE_HOOK_LENGTH, stubs);
+    pickup = pickup && install_jump(pickup_at, GOW3_ORB_PICKUP_LENGTH, stubs + 256);
+    gow3_stat_multipliers_status(damage, pickup);
+    printf("Multipliers: damage %s, green/blue/gold orbs %s\n", damage ? "ready" : "unavailable",
+           pickup ? "ready" : "unavailable");
 }
 /* G3PATCH2 (patches.py): the patches' image base, then byte writes at image offsets, applied
  * after relocation. A write may replace a whole base-relative pointer slot (60/90 FPS++ swap
@@ -782,7 +792,7 @@ int main(int argc, char **argv) {
     if (gpu_enabled) install_orb_multiplier(app0, segments, ns, size);
     if (gpu_enabled) install_cheats(app0, segments, ns, size);
     if (gpu_enabled) install_actor_watch(app0, segments, ns, size);
-    if (gpu_enabled) install_damage_multiplier(app0, segments, ns, size);
+    if (gpu_enabled) install_stat_multipliers(app0, segments, ns, size);
 #ifdef _WIN32
     printf("Guest TCB loads redirected to the TEB TLS slot: %" PRIu64 "\n", patch_tcb_loads(segments, ns));
 #endif

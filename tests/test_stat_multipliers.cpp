@@ -1,4 +1,4 @@
-// Damage multipliers (src/damage_hook.h).
+// Damage and green/blue/gold orb multipliers (src/damage_hook.h, src/orb_hook.h).
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include "../src/damage_hook.h"
+#include "../src/orb_hook.h"
 #include "gow3_settings.h"
 #ifdef _WIN32
 #include <windows.h>
@@ -65,6 +66,26 @@ static float Damage(bool player, float health, float damage, float taken, float 
     return result;
 }
 
+struct Amounts {
+    float health, magic, rage;
+};
+
+// Runs the pickup stub with the routine's arguments; the resume point stores them and undoes
+// the prologue the stub replayed.
+static Amounts Pickup(Amounts in, float green, float blue, float gold) {
+    unsigned char* code = Executable();
+    assert(gow3_orb_pickup_build_stub(code, Address(&green), Address(&blue), Address(&gold),
+                                      Address(code + 512)) < 512);
+    const unsigned char leave[] = {0xc5,0xfa,0x11,0x07, 0xc5,0xfa,0x11,0x4f,0x04, 0xc5,0xfa,0x11,0x57,0x08,
+                                   0x48,0x83,0xc4,0x18, 0x5b, 0x5d, 0xc3};
+    std::memcpy(code + 512, leave, sizeof(leave));
+    Seal(code);
+    Amounts out{};
+    reinterpret_cast<void(__attribute__((sysv_abi))*)(Amounts*, float, float, float)>(code)(
+        &out, in.health, in.magic, in.rage);
+    return out;
+}
+
 static std::string Read(const char* path) {
     std::ifstream in(path);
     std::stringstream s;
@@ -75,11 +96,13 @@ static std::string Read(const char* path) {
 int main(int argc, char** argv) {
     assert(gow3_damage_signature_match(gow3_damage_original, GOW3_DAMAGE_HOOK_LENGTH));
     assert(!gow3_damage_signature_match(gow3_damage_original, GOW3_DAMAGE_HOOK_LENGTH - 1));
+    assert(gow3_orb_pickup_signature_match(gow3_orb_pickup_original, GOW3_ORB_PICKUP_LENGTH));
     if (argc > 1) {
         std::ifstream file(argv[1], std::ios::binary);
         std::vector<unsigned char> image((std::istreambuf_iterator<char>(file)), {});
-        assert(image.size() > 0x4000 + GOW3_DAMAGE_HOOK_OFFSET + GOW3_DAMAGE_HOOK_LENGTH);
+        assert(image.size() > 0x4000 + GOW3_ORB_PICKUP_OFFSET + GOW3_ORB_PICKUP_LENGTH);
         assert(gow3_damage_signature_match(image.data() + 0x4000 + GOW3_DAMAGE_HOOK_OFFSET, GOW3_DAMAGE_HOOK_LENGTH));
+        assert(gow3_orb_pickup_signature_match(image.data() + 0x4000 + GOW3_ORB_PICKUP_OFFSET, GOW3_ORB_PICKUP_LENGTH));
     }
 
     float left;
@@ -92,10 +115,16 @@ int main(int argc, char** argv) {
     Damage(false, 100, nan, 2, 5, &left);
     assert(left != left);
 
+    Amounts a = Pickup({10, 20, 30}, 2, 3, 0.5f);
+    assert(a.health == 20 && a.magic == 60 && a.rage == 15);
+    a = Pickup({0, -5, 4}, 2, 3, 100);
+    assert(a.health == 0 && a.magic == -5 && a.rage == 400);
+
     const char* path = "stat-multipliers-test.ini";
     {
         std::ofstream out(path);
-        out << "damage_dealt=2.5\ndamage_taken=1000\n";
+        out << "damage_dealt=2.5\ndamage_taken=0.5\ngreen_orb_multiplier=3\n"
+               "blue_orb_multiplier=1000\ngold_orb_multiplier=0\n";
     }
 #ifdef _WIN32
     _putenv_s("GOW3_CONFIG", path);
@@ -104,13 +133,15 @@ int main(int argc, char** argv) {
 #endif
     auto& v = Gow3Settings::Get();
     Gow3Settings::Load();
-    assert(v.damage_dealt == 2.5f && v.damage_taken == 100.0f);
-    v.damage_taken = 0.5f;
+    assert(v.damage_dealt == 2.5f && v.damage_taken == 0.5f && v.green_orb_multiplier == 3.0f);
+    assert(v.blue_orb_multiplier == 100.0f && v.gold_orb_multiplier == 0.1f);
+    v.gold_orb_multiplier = 4.0f;
     Gow3Settings::Save();
     const std::string saved = Read(path);
-    for (const char* line : {"damage_dealt=2.500\n", "damage_taken=0.500\n"}) {
+    for (const char* line : {"damage_dealt=2.500\n", "damage_taken=0.500\n", "green_orb_multiplier=3.000\n",
+                             "blue_orb_multiplier=100.000\n", "gold_orb_multiplier=4.000\n"}) {
         assert(saved.find(line) != std::string::npos);
     }
     std::remove(path);
-    std::puts("PASS: damage multipliers");
+    std::puts("PASS: stat multipliers");
 }

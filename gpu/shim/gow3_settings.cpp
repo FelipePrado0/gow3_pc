@@ -95,6 +95,12 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.damage_dealt = Gow3Orbs::ClampMultiplier(f);
     } else if (key == "damage_taken") {
         v.damage_taken = Gow3Orbs::ClampMultiplier(f);
+    } else if (key == "green_orb_multiplier") {
+        v.green_orb_multiplier = Gow3Orbs::ClampMultiplier(f);
+    } else if (key == "blue_orb_multiplier") {
+        v.blue_orb_multiplier = Gow3Orbs::ClampMultiplier(f);
+    } else if (key == "gold_orb_multiplier") {
+        v.gold_orb_multiplier = Gow3Orbs::ClampMultiplier(f);
     } else if (key == "fsr4_auto_exposure") {
         v.fsr4_auto_exposure = i != 0;
     } else if (key == "fsr4_invert_jitter") {
@@ -242,6 +248,9 @@ void Save() {
     std::fprintf(file, "red_orb_multiplier=%.3f\n", v.red_orb_multiplier.load());
     std::fprintf(file, "damage_dealt=%.3f\n", v.damage_dealt.load());
     std::fprintf(file, "damage_taken=%.3f\n", v.damage_taken.load());
+    std::fprintf(file, "green_orb_multiplier=%.3f\n", v.green_orb_multiplier.load());
+    std::fprintf(file, "blue_orb_multiplier=%.3f\n", v.blue_orb_multiplier.load());
+    std::fprintf(file, "gold_orb_multiplier=%.3f\n", v.gold_orb_multiplier.load());
     std::fprintf(file, "cheat_health=%d\ncheat_magic=%d\ncheat_item=%d\ncheat_rage=%d\ncheat_orbs=%d\n",
                  int(v.cheats[0].load()), int(v.cheats[1].load()), int(v.cheats[2].load()),
                  int(v.cheats[3].load()), int(v.cheats[4].load()));

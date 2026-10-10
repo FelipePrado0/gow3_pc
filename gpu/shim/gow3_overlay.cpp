@@ -338,6 +338,15 @@ void Menu() {
     if (!s.damage_supported.load()) {
         ImGui::TextDisabled("Damage: unavailable (game version or code signature mismatch).");
     }
+    ImGui::BeginDisabled(!s.orb_pickup_supported.load());
+    MultiplierSlider("Green orbs (health)", s.green_orb_multiplier);
+    MultiplierSlider("Blue orbs (magic)", s.blue_orb_multiplier);
+    MultiplierSlider("Gold orbs (Rage of Sparta)", s.gold_orb_multiplier);
+    ImGui::EndDisabled();
+    if (!s.orb_pickup_supported.load()) {
+        ImGui::TextDisabled("Orbs: unavailable (game version or code signature mismatch).");
+    }
+    ImGui::TextDisabled("Bars stay within their maximum.");
     ImGui::TableNextColumn();
     ImGui::PushTextWrapPos(0.0f); // notes wrap inside the column instead of being cut off
     GraphicsSection();

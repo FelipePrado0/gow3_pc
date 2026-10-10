@@ -38,6 +38,15 @@ extern "C" uintptr_t gow3_damage_multiplier(int taken) {
     return reinterpret_cast<uintptr_t>(taken ? &s.damage_taken : &s.damage_dealt);
 }
 
-extern "C" void gow3_damage_status(int supported) {
-    Gow3Settings::Get().damage_supported = supported != 0;
+/// Orb pickup (src/orb_hook.h): 0 green, 1 blue, 2 gold.
+extern "C" uintptr_t gow3_orb_pickup_multiplier(unsigned kind) {
+    auto& s = Gow3Settings::Get();
+    return reinterpret_cast<uintptr_t>(kind == 0 ? &s.green_orb_multiplier
+                                       : kind == 1 ? &s.blue_orb_multiplier
+                                                   : &s.gold_orb_multiplier);
+}
+
+extern "C" void gow3_stat_multipliers_status(int damage, int orb_pickup) {
+    Gow3Settings::Get().damage_supported = damage != 0;
+    Gow3Settings::Get().orb_pickup_supported = orb_pickup != 0;
 }
