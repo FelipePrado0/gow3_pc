@@ -587,6 +587,7 @@ void Presenter::PresentLoadingFrame() {
     if (window.GetWidth() == 0 || window.GetHeight() == 0) {
         return;
     }
+    swapchain.UpdateVsync();
     if (window.GetWidth() != swapchain.GetWidth() || window.GetHeight() != swapchain.GetHeight()) {
         swapchain.Recreate(window.GetWidth(), window.GetHeight());
     }
@@ -657,6 +658,7 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
     }
 
     // Recreate the swapchain if the window was resized.
+    swapchain.UpdateVsync();
     if (window.GetWidth() != swapchain.GetWidth() || window.GetHeight() != swapchain.GetHeight()) {
         swapchain.Recreate(window.GetWidth(), window.GetHeight());
     }

@@ -106,6 +106,12 @@
             <Line Type="bytes" Address="0x0075dbe4" Value="0000f042"/>
         </PatchList>
     </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Frame Rate Patch - 240 FPS" Note="Experimental: the 120 FPS patch with the engine maximum framerate at 240 FPS (frametime clamp of 1/240 second). Same swing energy correction. Not tested through the whole game. Requires setting VBlank to 240 FPS." Author="kvicken, gow3_pc" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x0048ff1a" Value="488d05b7c12600"/>
+            <Line Type="bytes" Address="0x0075dbe4" Value="00007043"/>
+        </PatchList>
+    </Metadata>
     <Metadata Title="God of War III Remastered" Name="Skip Any Video With X Button" Note="Allows manual skipping of cinematics any cinematic with the X button. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy." Author="cuesta4" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="true">
         <PatchList>
             <Line Type="bytes" Address="0x0041b2a3" Value="7542"/>

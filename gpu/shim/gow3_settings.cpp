@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "gow3_settings.h"
 #include "gow3_orbs.h"
+#include "gow3_graphics.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -60,6 +61,24 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.debug_view = std::clamp(i, 0, DebugViewCount - 1);
     } else if (key == "show_fps") {
         v.show_fps = i != 0;
+    } else if (key == "display_mode") {
+        v.display_mode = Gow3Graphics::ParseDisplayMode(value);
+    } else if (key == "vsync") {
+        v.vsync = i != 0;
+    } else if (key == "fps_limit") {
+        v.fps_limit = Gow3Graphics::ParseFpsLimit(i);
+    } else if (key == "async_shaders") {
+        v.async_shaders = i != 0;
+    } else if (key == "render_resolution") {
+        v.render_resolution = Gow3Graphics::ParseResolution(value);
+    } else if (key == "engine_fps") {
+        v.engine_fps = Gow3Graphics::ParseEngineFps(i);
+    } else if (key == "deferred_readback") {
+        v.deferred_readback = i != 0;
+    } else if (key == "stale_readback") {
+        v.stale_readback = i != 0;
+    } else if (key == "restart_unconfirmed") {
+        v.restart_unconfirmed = i != 0;
     } else if (key == "enemy_health_bar") {
         v.enemy_health_bar = i != 0;
     } else if (key == "red_orb_multiplier") {
@@ -114,9 +133,11 @@ void Load() {
         {"GOW3_REACTIVE", "reactive"},              {"GOW3_REACTIVE_SCALE", "reactive_scale"},
         {"GOW3_REACTIVE_THRESHOLD", "reactive_threshold"}, {"GOW3_REACTIVE_MAX", "reactive_max"},
         {"GOW3_UPSCALE_PRESET", "preset"},            {"GOW3_OBJECT_MOTION", "object_motion"},
+        {"GOW3_ASYNC_SHADERS", "async_shaders"},      {"GOW3_DEFERRED_READBACK", "deferred_readback"},
+        {"GOW3_STALE_READBACK", "stale_readback"},
     };
     for (const auto& [env, key] : env_keys) {
-        if (const char* value = std::getenv(env)) {
+        if (const char* value = std::getenv(env); value && value[0]) {
             Set(v, key, value);
         }
     }
@@ -125,6 +146,18 @@ void Load() {
     v.startup_object_motion = v.object_motion;
     v.startup_output_res = v.output_res;
     v.startup_live_resolution = v.live_resolution;
+    v.startup_render_resolution = v.render_resolution;
+    v.startup_engine_fps = v.engine_fps;
+    v.startup_deferred_readback = v.deferred_readback;
+    v.startup_stale_readback = v.stale_readback;
+}
+
+bool GraphicsNeedRestart() {
+    const auto& v = Get();
+    return v.render_resolution != v.startup_render_resolution ||
+           v.engine_fps != v.startup_engine_fps ||
+           v.deferred_readback != v.startup_deferred_readback ||
+           v.stale_readback != v.startup_stale_readback;
 }
 
 void ConfigureUpscalerSupport(bool fsr4, bool fsr411) {
@@ -198,6 +231,15 @@ void Save() {
                  int(v.cheats[0].load()), int(v.cheats[1].load()), int(v.cheats[2].load()),
                  int(v.cheats[3].load()), int(v.cheats[4].load()));
     std::fprintf(file, "enemy_health_bar=%d\n", int(v.enemy_health_bar.load()));
+    std::fprintf(file,
+                 "display_mode=%s\nvsync=%d\nfps_limit=%d\nasync_shaders=%d\n"
+                 "render_resolution=%s\nengine_fps=%d\ndeferred_readback=%d\nstale_readback=%d\n"
+                 "restart_unconfirmed=%d\n",
+                 Gow3Graphics::DisplayModeKeys[std::clamp(v.display_mode.load(), 0, 2)].data(),
+                 int(v.vsync.load()), v.fps_limit.load(), int(v.async_shaders.load()),
+                 Gow3Graphics::Resolutions[std::clamp(v.render_resolution.load(), 0, 5)].data(),
+                 v.engine_fps.load(), int(v.deferred_readback.load()), int(v.stale_readback.load()),
+                 int(v.restart_unconfirmed.load()));
     // Read by run.sh at start.
     std::fprintf(file, "live_resolution=%s\n", v.live_resolution < 0 ? "auto"
                                                   : v.live_resolution ? "1" : "0");

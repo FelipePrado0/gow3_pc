@@ -40,6 +40,8 @@ private:
     std::atomic<bool> is_open{true};
     std::mutex text_mutex;
     bool text_requested{}, text_active{};
+    int display_mode = -1; ///< applied Gow3Settings display mode (window thread)
+    void ApplyDisplayMode(int mode);
     int text_state{};
     std::string text, text_prompt, base_title;
     void UpdateTextTitle();

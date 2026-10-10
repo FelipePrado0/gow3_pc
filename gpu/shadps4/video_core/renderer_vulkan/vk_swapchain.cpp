@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include <cstdio>
 #include <limits>
 #include "common/assert.h"
 #include "common/logging/log.h"
 #include "core/emulator_settings.h"
+#include "gow3_settings.h"
 #include "imgui/renderer/imgui_core.h"
 #include "sdl_window.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
@@ -198,26 +200,27 @@ void Swapchain::FindPresentMode() {
         return;
     }
 
-    const auto requested_mode = EmulatorSettings.GetPresentMode();
-    if (requested_mode == "Mailbox") {
-        present_mode = vk::PresentModeKHR::eMailbox;
-    } else if (requested_mode == "Fifo") {
-        present_mode = vk::PresentModeKHR::eFifo;
-    } else if (requested_mode == "Immediate") {
-        present_mode = vk::PresentModeKHR::eImmediate;
-    } else {
-        LOG_ERROR(Render_Vulkan, "Unknown present mode {}, defaulting to Mailbox.",
-                  EmulatorSettings.GetPresentMode());
-        present_mode = vk::PresentModeKHR::eMailbox;
-    }
+    // gow3: VSync on is Fifo (no tearing, waits for the display); off is Mailbox when the
+    // driver has it, else Immediate (tearing allowed), else Fifo.
+    vsync = Gow3Settings::Get().vsync;
+    const auto has = [&](vk::PresentModeKHR mode) { return std::ranges::find(modes, mode) != modes.cend(); };
+    present_mode = vsync ? vk::PresentModeKHR::eFifo
+                   : has(vk::PresentModeKHR::eMailbox) ? vk::PresentModeKHR::eMailbox
+                   : has(vk::PresentModeKHR::eImmediate) ? vk::PresentModeKHR::eImmediate
+                                                         : vk::PresentModeKHR::eFifo;
+    std::printf("Swapchain: VSync %s (%s)\n", vsync ? "on" : "off", vk::to_string(present_mode).c_str());
+}
 
-    if (std::ranges::find(modes, present_mode) == modes.cend()) {
-        // FIFO is guaranteed to be supported by the Vulkan spec.
-        constexpr auto fallback = vk::PresentModeKHR::eFifo;
-        LOG_WARNING(Render, "Requested present mode {} is not supported, falling back to {}.",
-                    vk::to_string(present_mode), vk::to_string(fallback));
-        present_mode = fallback;
+void Swapchain::UpdateVsync() {
+    if (Gow3Settings::Get().vsync == vsync) {
+        return;
     }
+    if (const auto result = instance.GetDevice().waitIdle(); result != vk::Result::eSuccess) {
+        LOG_WARNING(Render_Vulkan, "Failed to wait for the device before a VSync change: {}",
+                    vk::to_string(result));
+    }
+    FindPresentMode();
+    Recreate(width, height);
 }
 
 void Swapchain::SetSurfaceProperties() {

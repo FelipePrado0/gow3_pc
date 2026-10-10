@@ -126,15 +126,20 @@ def windows_language():
 # Settings. gow3.ini keys (the game reads them, the in-game menu edits them) and the
 # launcher's own settings.json (passed to run.py as environment variables).
 
-INI_FLAGS = {'sharpen', 'object_motion', 'show_fps'}
+INI_FLAGS = {'sharpen', 'object_motion', 'show_fps', 'vsync', 'async_shaders', 'deferred_readback',
+             'stale_readback'}
+# The graphics keys are also in the in-game menu (Insert / R3+L2); run.py reads the startup ones.
 INI_DEFAULTS = {'upscaler': 'fsr4', 'preset': '1', 'sharpen': '1', 'sharpness': '0.50',
                 'object_motion': '1', 'show_fps': '1', 'output_res': '1920x1080',
-                'live_resolution': 'auto'}
+                'live_resolution': 'auto', 'display_mode': 'windowed', 'vsync': '1', 'fps_limit': '0',
+                'async_shaders': '1', 'deferred_readback': '1', 'stale_readback': '1',
+                'render_resolution': 'native', 'engine_fps': '120'}
+DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
+FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('120', ('120',)), ('240', ('240',)), ('0', ('Unlimited',))]
 APP_DEFAULTS = {'ui_language': '', 'game_dir': os.environ.get('GOW3_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623')), 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
-                'player_name': '', 'fullscreen': False, 'hdr': False, 'present_mode': 'Mailbox',
-                'frame_cap': '', 'draw_pipe': '', 'readbacks': '',
-                'frames_ahead': '', 'parallel_warmup': True, 'async_shaders': True, 'deferred_readback': True, 'stale_readback': True, 'perf_diag': False, 'frame_stats': False, 'gpu_profile': False,
+                'player_name': '', 'hdr': False, 'draw_pipe': '', 'readbacks': '',
+                'frames_ahead': '', 'parallel_warmup': True, 'perf_diag': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation'}
 
@@ -190,9 +195,6 @@ OUTPUTS = [('1280x720', ('1280 × 720 (Steam Deck)',)), ('1920x1080', ('1920 × 
            ('2560x1440', ('2560 × 1440',)), ('3840x2160', ('3840 × 2160 (4K)',))]
 LIVE = [('auto', ('Auto (by graphics card)', 'Авто (по видеокарте)')), ('0', ('Off (faster)', 'Выключена (быстрее)')),
         ('1', ('On (change without restarting)', 'Включена (без перезапуска)'))]
-PRESENT_MODES = [('Mailbox', ('Mailbox (low latency, no tearing)', 'Mailbox (без разрывов)')),
-                 ('Fifo', ('FIFO (VSync)',)), ('FifoRelaxed', ('FIFO Relaxed',)),
-                 ('Immediate', ('Immediate (tearing)', 'Immediate (с разрывами)'))]
 LANGUAGES = [('1', ('English', 'Английский')), ('8', ('Russian', 'Русский')), ('0', ('Japanese', 'Японский')),
              ('2', ('French', 'Французский')), ('3', ('Spanish', 'Испанский')), ('4', ('German', 'Немецкий')),
              ('5', ('Italian', 'Итальянский'))]
@@ -200,11 +202,6 @@ DRAW_PIPE = [('', ('Auto (8+ threads)', 'Авто (8+ потоков)')), ('1', 
              ('0', ('Off (more stable)', 'Выключен (стабильнее)'))]
 READBACKS = [('', ('Relaxed (default)', 'Relaxed (по умолчанию)')), ('0', ('Off', 'Выключены')),
              ('2', ('Precise',))]
-# Frame cap of the unlocked mode (GOW3_FPS_LIMIT). '' leaves the port's own: the display refresh,
-# at most 120, because the game's movement timing breaks above about 120 FPS.
-FRAME_CAPS = [('', ('Auto: display refresh, max 120 (recommended)', 'Авто: частота монитора, макс. 120 (рекомендуется)')),
-              ('60', ('60',)), ('90', ('90',)), ('120', ('120',)), ('144', ('144  ⚠',)), ('165', ('165  ⚠',)),
-              ('240', ('240  ⚠',)), ('0', ('No limit  ⚠', 'Без ограничения  ⚠'))]
 FRAMES_AHEAD = [('', ('1 (default)', '1 (по умолчанию)')), ('2', ('2',)), ('0', ('Unbounded', 'Без ограничения'))]
 UI_LANGUAGES = gow3_lang.LANGUAGE_NAMES
 
@@ -309,19 +306,12 @@ def game_environment(s):
     env['GOW3_LANGUAGE'] = s['language']
     if str(s['player_name']).strip():
         env['GOW3_USER_NAME'] = str(s['player_name']).strip()
-    env['GOW3_FULLSCREEN'] = '1' if s['fullscreen'] else '0'
-    env['GOW3_PRESENT_MODE'] = s['present_mode']
     if s['hdr']:
         env['GOW3_HDR'] = '1'
-    if s.get('frame_cap', ''):
-        env['GOW3_FPS_LIMIT'] = s['frame_cap']
     for key, name in (('draw_pipe', 'GOW3_DRAW_PIPE'), ('readbacks', 'GOW3_READBACKS'), ('frames_ahead', 'GOW3_FRAMES_AHEAD')):
         if s[key]:
             env[name] = s[key]
     env['GOW3_PARALLEL_WARMUP'] = '1' if s.get('parallel_warmup', True) else '0'
-    env['GOW3_ASYNC_SHADERS'] = '1' if s.get('async_shaders', True) else '0'
-    env['GOW3_DEFERRED_READBACK'] = '1' if s.get('deferred_readback', True) else '0'
-    env['GOW3_STALE_READBACK'] = '1' if s.get('stale_readback', True) else '0'
     env['GOW3_PERF_DIAG'] = '1' if s.get('perf_diag', False) else '0'
     for key, name in (('frame_stats', 'GOW3_FRAME_STATS'), ('gpu_profile', 'GOW3_GPU_PROFILE'),
                       ('vk_validation', 'GOW3_VK_VALIDATION')):
@@ -681,8 +671,9 @@ class Launcher:
         quick.grid(row=0, column=1, sticky='nw')
         ttk.Label(quick, text=_('Quick settings', 'Основное'), style='Section.TLabel').grid(
             row=0, column=0, columnspan=2, sticky='w', pady=(0, 2))
-        ttk.Checkbutton(quick, text=_('Fullscreen', 'Полный экран'), variable=self.var('fullscreen', 'app')).grid(
-            row=self.next_row(quick), column=1, sticky='w', pady=(8, 0))
+        ttk.Label(quick, text=_('Display mode')).grid(row=self.next_row(quick), column=0, sticky='w', pady=(8, 0))
+        self.choice(quick, 'display_mode', 'ini', DISPLAY_MODES, width=16).grid(
+            row=self.next_row(quick) - 1, column=1, sticky='w', pady=(8, 0), padx=(8, 0))
 
     def draw_banner(self):
         """The cover art of the selected dump (sce_sys/pic1.png) under the title."""
@@ -783,17 +774,16 @@ class Launcher:
         f = self.scrolled_page('display', _('Display & FPS', 'Экран и FPS'),
                                _('Applied when the game starts.', 'Применяется при запуске игры.'))
         self.section(f, _('Frame rate', 'Частота кадров'), top=4)
-        self.row(f, _('Frame cap', 'Ограничение FPS'), self.choice(f, 'frame_cap', 'app', FRAME_CAPS),
-                 _('Below its target frame rate the game runs slower than real time: higher caps are at '
-                   'your own risk.',
-                   'Ниже целевой частоты кадров игра идёт медленнее реального времени: более высокие '
-                   'значения на ваш риск.'))
+        self.row(f, _('Frame rate limit'), self.choice(f, 'fps_limit', 'ini', FPS_LIMITS),
+                 _('Also in the in-game menu (Insert / R3+L2), applied live. The engine frame rate of the '
+                   'game patches is the ceiling.'))
         self.row(f, _('Frames ahead of the GPU', 'Кадров впереди GPU'), self.choice(f, 'frames_ahead', 'app', FRAMES_AHEAD),
                  _('1 keeps frame pacing even; more can raise FPS when the graphics card is the limit.',
                    '1 — ровная подача кадров; больше может поднять FPS, если упирается в видеокарту.'))
         self.section(f, _('Window', 'Окно'))
-        self.check(f, 'fullscreen', 'app', _('Fullscreen', 'Полноэкранный режим'))
-        self.row(f, _('Presentation', 'Режим показа кадров'), self.choice(f, 'present_mode', 'app', PRESENT_MODES))
+        self.row(f, _('Display mode'), self.choice(f, 'display_mode', 'ini', DISPLAY_MODES),
+                 _('Borderless covers the screen without changing the display mode.'))
+        self.check(f, 'vsync', 'ini', _('VSync'), _('Off allows tearing for the lowest latency.'))
         self.check(f, 'hdr', 'app', _('Allow HDR output', 'Разрешить HDR'),
                    _('When HDR is on in Windows and the display supports it.',
                      'Если HDR включён в Windows и монитор его поддерживает.'))
@@ -887,6 +877,13 @@ class Launcher:
         chosen = self.app.get('game_patches', {}).get(title_id)
         on = set(chosen) if chosen is not None else {m.get('Name') for m in metas
                                                          if m.get('isEnabled', 'false').lower() == 'true'}
+        # gow3.ini decides the resolution and frame rate patches (run.py, in-game menu).
+        resolution, engine = self.ini.get('render_resolution', 'native'), self.ini.get('engine_fps', '120')
+        on = {n for n in on if not n.startswith(EXCLUSIVE_PREFIX) and not n.startswith('Frame Rate Patch')}
+        if resolution != 'native':
+            on.add(f'{EXCLUSIVE_PREFIX} - {resolution}')
+        if engine != '60':
+            on.add(f'Frame Rate Patch - {engine} FPS')
         self.note(f, _('{} · version {} · {}', '{} · версия {} · {}').format(title_id, version, xml.name), top=0)
         resolutions = [m for m in metas if m.get('Name', '').startswith(EXCLUSIVE_PREFIX)]
         if resolutions:
@@ -916,11 +913,16 @@ class Launcher:
 
     def store_game_patches(self):
         """The page's selection into settings (the whole list for this game)."""
+        from patches import EXCLUSIVE_PREFIX
         if not self.game_patch_title:
             return
         names = [self.game_patch_res.get()] if self.game_patch_res and self.game_patch_res.get() else []
         names += [n for n, v in self.game_patch_vars.items() if v.get()]
         self.app.setdefault('game_patches', {})[self.game_patch_title] = names
+        resolution = next((n for n in names if n.startswith(EXCLUSIVE_PREFIX)), '')
+        self.ini['render_resolution'] = resolution.split(' - ', 1)[1] if resolution else 'native'
+        self.ini['engine_fps'] = ('240' if 'Frame Rate Patch - 240 FPS' in names else
+                                  '120' if 'Frame Rate Patch - 120 FPS' in names else '60')
 
     def build_mods(self):
         f = self.scrolled_page('mods', _('Mods & patches', 'Моды и патчи'),
@@ -1036,13 +1038,13 @@ class Launcher:
         self.row(f, _('GPU readbacks', 'Чтение данных GPU'), self.choice(f, 'readbacks', 'app', READBACKS),
                  _('How exactly data the GPU writes is copied back for the game.',
                    'Насколько точно данные, записанные GPU, возвращаются игре.'))
-        self.check(f, 'async_shaders', 'app', _('Compile new shaders in the background'),
+        self.check(f, 'async_shaders', 'ini', _('Compile new shaders in the background'),
                    _('Fewer stutters in new areas: the game keeps running while new shaders compile. An object '
                      'or effect may appear a moment later. Switch it off if something stays missing.'))
-        self.check(f, 'deferred_readback', 'app', _('Deferred GPU readbacks'),
+        self.check(f, 'deferred_readback', 'ini', _('Deferred GPU readbacks'),
                    _('The GPU copies data back for the game without stopping each time: fewer waits, a few '
                      'more FPS. Switch it off if textures or shadows look wrong.'))
-        self.check(f, 'stale_readback', 'app', _('Game reads GPU data without waiting (big FPS gain)'),
+        self.check(f, 'stale_readback', 'ini', _('Game reads GPU data without waiting (big FPS gain)'),
                    _('The game reads data the GPU wrote, such as the scene exposure, from the previous frame '
                      'instead of waiting for the current one: about 40 to 66 FPS in a heavy scene. Needs '
                      'deferred GPU readbacks. Switch it off if lighting or objects look wrong.'))

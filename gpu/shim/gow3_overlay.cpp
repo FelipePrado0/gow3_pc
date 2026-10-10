@@ -15,9 +15,11 @@
 #include "gow3_settings.h"
 #include "gow3_orbs.h"
 #include "gow3_actors.h"
+#include "gow3_graphics.h"
 #include "../../src/actor_hook.h"
 
 extern Gow3ActorSlot gow3_actor_slots[2];
+extern "C" void runtime_restart(void); // src/probe.c: starts run.py again, ends this process
 #include "common/elf_info.h"
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
@@ -152,6 +154,56 @@ void Checkbox(const char* label, std::atomic<bool>& value) {
     Store(value, v, changed);
 }
 
+// A combo over `count` labels storing an index or a value from `values`.
+void Choice(const char* label, std::atomic<int>& target, const char* const* labels, const int* values,
+            int count) {
+    int current = 0;
+    for (int i = 0; i < count; ++i) {
+        if ((values ? values[i] : i) == target.load()) current = i;
+    }
+    if (ImGui::Combo(label, &current, labels, count)) {
+        Store(target, values ? values[current] : current, true);
+    }
+}
+
+// Graphics options (gow3_graphics.h): live ones apply on the next frame, startup ones on
+// "Apply and restart" (run.py turns them into patches and environment variables).
+void GraphicsSection() {
+    namespace G = Gow3Graphics;
+    auto& s = Gow3Settings::Get();
+    ImGui::SeparatorText("Graphics");
+    Choice("Display mode", s.display_mode, G::DisplayModeNames.data(), nullptr, G::DisplayModeCount);
+    Checkbox("VSync", s.vsync);
+    static const char* const fps_labels[] = {"30", "60", "120", "240", "Unlimited"};
+    Choice("Frame rate limit", s.fps_limit, fps_labels, G::FpsLimits.data(), int(G::FpsLimits.size()));
+    const int effective = G::EffectiveFps(s.fps_limit, s.startup_engine_fps);
+    if (s.fps_limit == 0 || effective < s.fps_limit) {
+        ImGui::TextDisabled("Limited to %d FPS by the engine frame rate (below).", effective);
+    }
+    Checkbox("Compile new shaders in the background", s.async_shaders);
+
+    ImGui::SeparatorText("Graphics (restart)");
+    static const char* const resolution_labels[] = {"Native (1080p)", "480p", "720p", "1440p", "1800p", "4K"};
+    Choice("Render resolution", s.render_resolution, resolution_labels, nullptr, int(G::Resolutions.size()));
+    static const char* const engine_labels[] = {"60 (original)", "120", "240 (experimental)"};
+    Choice("Engine frame rate", s.engine_fps, engine_labels, G::EngineFps.data(), int(G::EngineFps.size()));
+    Checkbox("Game reads GPU data without waiting", s.stale_readback);
+    Checkbox("Deferred GPU readbacks", s.deferred_readback);
+    const bool restart = Gow3Settings::GraphicsNeedRestart();
+    if (restart) {
+        ImGui::TextColored(ImVec4(0.85f, 0.72f, 0.45f, 1.0f), "Restart needed. Unsaved progress is lost.");
+    }
+    ImGui::BeginDisabled(!restart || !std::getenv("GOW3_RESTART_COMMAND"));
+    if (ImGui::Button("Apply and restart")) {
+        // The new launch confirms the options once the game shows; run.py restores the
+        // previous ones if it never does (restart_unconfirmed).
+        s.restart_unconfirmed = true;
+        Gow3Settings::Save();
+        runtime_restart();
+    }
+    ImGui::EndDisabled();
+}
+
 void Menu() {
     auto& s = Gow3Settings::Get();
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -172,6 +224,8 @@ void Menu() {
     ImGui::Text("%.0f FPS  (%.1f ms)", frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f,
                 frame_ms_avg);
     ImGui::Separator();
+    GraphicsSection();
+    ImGui::SeparatorText("Overlay");
     Checkbox("Show FPS counter", s.show_fps);
     ImGui::SeparatorText("Health display");
     ImGui::BeginDisabled(!s.actor_watch_supported.load());
@@ -585,6 +639,19 @@ bool HandleEvent(const SDL_Event& event) {
     }
 }
 
+// After "Apply and restart", the new options are kept once the game has shown about ten
+// seconds of frames after loading (run.py restores the previous ones otherwise).
+void ConfirmRestart() {
+    static u32 frames = 0;
+    auto& s = Gow3Settings::Get();
+    if (!s.restart_unconfirmed || loading || ++frames < 600) {
+        return;
+    }
+    s.restart_unconfirmed = false;
+    Gow3Settings::Save();
+    std::puts("Settings: graphics options confirmed after restart");
+}
+
 void SetLoading(bool active, u32 done, u32 total) {
     loading_done = done;
     loading_total = total;
@@ -629,6 +696,7 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
     if (ms > 0.0f && ms < 1000.0f) {
         frame_ms_avg = frame_ms_avg == 0.0f ? ms : frame_ms_avg * 0.95f + ms * 0.05f;
     }
+    ConfirmRestart();
     if (!Visible()) {
         return;
     }

@@ -74,6 +74,17 @@ def main():
     out = data / 'out'
     out.mkdir(parents=True, exist_ok=True)
     env.setdefault('GOW3_CONFIG', str(data / 'gow3.ini'))
+    # Values this script derived on the previous start ("Apply and restart" inherits them) are
+    # derived again from the new options.
+    for key in env.pop('GOW3_DERIVED', '').split(','):
+        env.pop(key, None)
+    derived = []
+    sys.path.insert(0, str(PORT / 'scripts'))
+    import graphics_options
+    graphics, reverted = graphics_options.prepare(env['GOW3_CONFIG'], out / 'graphics_state.json')
+    if reverted:
+        print('Graphics: the last restart never reached the game; previous options restored', flush=True)
+    env.update(graphics_options.environment(graphics))
     if not env.get('GOW3_FSR411_DIR') and not (PORT / 'fsr4_411').is_dir() and (data / 'fsr4_411').is_dir():
         env['GOW3_FSR411_DIR'] = str(data / 'fsr4_411')
 
@@ -101,7 +112,6 @@ def main():
         run_script('link_modules.py', game, '--out', out)
         run_script('content_profile.py', game, '--out', out, '--sku', env.get('GOW3_CONTENT_SKU', 'full'))
 
-        sys.path.insert(0, str(PORT / 'scripts'))
         from patches import (eboot_matches, game_app_version, game_profile, game_title_id,
                              patch_requirements, selected_patches)
         profile = game_profile(game_title_id(game))
@@ -122,15 +132,22 @@ def main():
         if patched:
             # The patch notes give the direct memory and VBlank rate the selected patches need.
             names = selected_patches(profile[1], profile[2], env.get('GOW3_PATCHES', ''), env.get('GOW3_PATCHES_ONLY') == '1')
+            # gow3.ini decides the resolution and frame rate patches (in-game menu, launcher).
+            names = graphics_options.patch_names(names, graphics)
+            env['GOW3_PATCHES'] = ';'.join(names)
+            env['GOW3_PATCHES_ONLY'] = '1'
             dmem, vblank = patch_requirements(profile[1], names, profile[2])
-            if dmem:
-                env.setdefault('GOW3_DMEM_MB', str(dmem))
-            if vblank:
-                env.setdefault('GOW3_VBLANK_HZ', str(vblank))
+            for key, value in (('GOW3_DMEM_MB', dmem), ('GOW3_VBLANK_HZ', vblank)):
+                if value and key not in env:
+                    env[key] = str(value)
+                    derived.append(key)
         run_script('patches.py', '--out', out, '--extra', env.get('GOW3_PATCHES', ''), '--game-dir', game,
                    '--patches-dir', env.get('GOW3_PATCHES_DIR', data / 'patches'),
                    '--patches-config', env.get('GOW3_PATCHES_CONFIG', data / 'patches.json'))
-        env.setdefault('GOW3_VBLANK_HZ', '60')
+        if 'GOW3_VBLANK_HZ' not in env:
+            env['GOW3_VBLANK_HZ'] = '60'
+            derived.append('GOW3_VBLANK_HZ')
+        env['GOW3_DERIVED'] = ','.join(derived)
 
         # The in-game restart starts this script again once this process is gone.
         # GPU caches (shaders, pipelines) beside the saves; read before main(), so set here.

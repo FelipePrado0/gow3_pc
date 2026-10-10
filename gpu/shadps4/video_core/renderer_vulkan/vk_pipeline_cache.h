@@ -180,6 +180,7 @@ private:
     void PublishGraphics(bool wait = false);
     void FinishCompilations();
     void SeedWorkerCaches();
+    bool AsyncCompilation() const;
     bool RefreshGraphicsKey(PipelineSelection& sel);
     bool RefreshGraphicsStages(PipelineSelection& sel);
     bool RefreshComputeKey();

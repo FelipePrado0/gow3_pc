@@ -88,6 +88,10 @@ public:
 
     void SetHDR(bool hdr);
 
+    /// gow3: VSync from the in-game menu (Gow3Settings::vsync); recreates the swapchain when it
+    /// changed. Present thread only.
+    void UpdateVsync();
+
     bool GetHDR() const {
         return needs_hdr;
     }
@@ -119,6 +123,7 @@ private:
     vk::SurfaceFormatKHR surface_format;
     vk::Format view_format;
     vk::PresentModeKHR present_mode;
+    bool vsync = true; ///< the setting present_mode was chosen for
     vk::Extent2D extent;
     vk::SurfaceTransformFlagBitsKHR transform;
     vk::CompositeAlphaFlagBitsKHR composite_alpha;

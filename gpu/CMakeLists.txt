@@ -304,6 +304,10 @@ target_compile_options(readback-queue-test PRIVATE -UNDEBUG -Wall -Wextra -Werro
 add_executable(wait-diagnostics-test EXCLUDE_FROM_ALL ../tests/test_wait_diagnostics.cpp)
 target_include_directories(wait-diagnostics-test PRIVATE shadps4)
 target_compile_options(wait-diagnostics-test PRIVATE -UNDEBUG)
+add_executable(graphics-settings-test EXCLUDE_FROM_ALL ../tests/test_graphics_settings.cpp
+    shim/gow3_settings.cpp)
+target_include_directories(graphics-settings-test PRIVATE shim)
+target_compile_options(graphics-settings-test PRIVATE -UNDEBUG)
 add_executable(actor-hook-test EXCLUDE_FROM_ALL ../tests/test_actor_hook.cpp)
 target_include_directories(actor-hook-test PRIVATE shim)
 target_compile_options(actor-hook-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)

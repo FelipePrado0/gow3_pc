@@ -37,14 +37,19 @@ class ControlMapTest(unittest.TestCase):
         self.assertEqual(env['GOW3_KEY_MAP'], 'cross=Q')
         self.assertNotIn('GOW3_PAD_MAP', env)
         self.assertEqual(env['GOW3_PARALLEL_WARMUP'], '1')
-        self.assertEqual(env['GOW3_ASYNC_SHADERS'], '1')
-        self.assertEqual((env['GOW3_DEFERRED_READBACK'], env['GOW3_PERF_DIAG']), ('1', '0'))
-        self.assertEqual(env['GOW3_STALE_READBACK'], '1')
-        self.assertEqual(launcher.game_environment({**settings, 'stale_readback': False})['GOW3_STALE_READBACK'], '0')
-        old = launcher.game_environment({**settings, 'extra_env': 'GOW3_ASYNC_SHADERS=0'})
-        self.assertEqual(old['GOW3_ASYNC_SHADERS'], '1')  # the old free-text field is ignored
-        self.assertEqual(launcher.game_environment({**settings, 'async_shaders': False})['GOW3_ASYNC_SHADERS'], '0')
+        self.assertEqual(env['GOW3_PERF_DIAG'], '0')
+        # Graphics options live in gow3.ini (run.py and the in-game menu), not in the environment.
+        for name in ('GOW3_FULLSCREEN', 'GOW3_PRESENT_MODE', 'GOW3_FPS_LIMIT', 'GOW3_ASYNC_SHADERS',
+                     'GOW3_DEFERRED_READBACK', 'GOW3_STALE_READBACK'):
+            self.assertNotIn(name, {k for k in env if k not in __import__('os').environ})
+        old = launcher.game_environment({**settings, 'extra_env': 'GOW3_DRAW_PIPE=0'})
+        self.assertNotIn('GOW3_DRAW_PIPE', old)  # the old free-text field is ignored
         self.assertEqual(launcher.game_environment({**settings, 'parallel_warmup': False})['GOW3_PARALLEL_WARMUP'], '0')
+
+    def test_graphics_defaults_match_the_game(self):
+        d = launcher.INI_DEFAULTS
+        self.assertEqual((d['display_mode'], d['vsync'], d['fps_limit'], d['engine_fps']), ('windowed', '1', '0', '120'))
+        self.assertEqual([v for v, _t in launcher.FPS_LIMITS], ['30', '60', '120', '240', '0'])
 
 
 if __name__ == '__main__':

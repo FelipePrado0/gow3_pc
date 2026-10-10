@@ -1,4 +1,5 @@
 // gow3: SDL3 window for the Vulkan swapchain (X11 or Wayland).
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <SDL3/SDL.h>
@@ -6,6 +7,8 @@
 #include "common/logging/log.h"
 #include "sdl_window.h"
 #include "gow3_overlay.h"
+#include "gow3_graphics.h"
+#include "gow3_settings.h"
 
 namespace Frontend {
 
@@ -22,8 +25,6 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, height_);
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, true);
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_VULKAN_BOOLEAN, true);
-    const char* fullscreen = std::getenv("GOW3_FULLSCREEN");
-    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_FULLSCREEN_BOOLEAN, fullscreen && fullscreen[0] == '1');
     base_title = title;
     window = SDL_CreateWindowWithProperties(props);
     SDL_DestroyProperties(props);
@@ -55,11 +56,35 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     } else {
         UNREACHABLE_MSG("Unsupported SDL video driver {}", driver ? driver : "(none)");
     }
+    // gow3: GOW3_FULLSCREEN=1 (older launchers) still asks for fullscreen.
+    if (const char* fullscreen = std::getenv("GOW3_FULLSCREEN"); fullscreen && fullscreen[0] == '1' &&
+        Gow3Settings::Get().display_mode == Gow3Graphics::Windowed) {
+        Gow3Settings::Get().display_mode = Gow3Graphics::Borderless;
+    }
+    ApplyDisplayMode(Gow3Settings::Get().display_mode);
     int w = 0, h = 0;
     SDL_GetWindowSizeInPixels(window, &w, &h);
     width = w;
     height = h;
     LOG_INFO(Frontend, "Window {}x{} on {}", w, h, driver);
+}
+
+// Windowed, borderless (desktop-sized, no mode change) or exclusive fullscreen at the desktop
+// mode. Window thread only (SDL). The swapchain follows the size events.
+void WindowSDL::ApplyDisplayMode(int mode) {
+    display_mode = mode;
+    if (mode == Gow3Graphics::Windowed) {
+        SDL_SetWindowFullscreen(window, false);
+    } else {
+        const SDL_DisplayMode* desktop = SDL_GetDesktopDisplayMode(SDL_GetDisplayForWindow(window));
+        const bool exclusive = mode == Gow3Graphics::Fullscreen && desktop;
+        if (!SDL_SetWindowFullscreenMode(window, exclusive ? desktop : nullptr)) {
+            LOG_WARNING(Frontend, "Fullscreen mode: {}", SDL_GetError());
+        }
+        SDL_SetWindowFullscreen(window, true);
+    }
+    SDL_SyncWindow(window);
+    std::printf("Window: %s\n", Gow3Graphics::DisplayModeNames[mode]);
 }
 
 WindowSDL::~WindowSDL() {
@@ -99,6 +124,9 @@ bool WindowSDL::PollEvents() {
     }
     if (!text_active) {
         Gow3Overlay::UpdateTextInput(window);
+    }
+    if (const int mode = Gow3Settings::Get().display_mode; mode != display_mode) {
+        ApplyDisplayMode(mode);
     }
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
