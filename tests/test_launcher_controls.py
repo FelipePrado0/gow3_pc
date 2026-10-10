@@ -75,6 +75,10 @@ class ReleaseVersionTest(unittest.TestCase):
         self.assertGreater(launcher.version_tuple(launcher.VERSION), launcher.version_tuple('windows-v1.5'))
         self.assertGreater(launcher.version_tuple('windows-v2.1'), launcher.version_tuple(launcher.VERSION))
 
+    def test_first_start_is_in_english(self):
+        # The translations are partial; 'System' stays a choice in Advanced.
+        self.assertEqual(launcher.APP_DEFAULTS['ui_language'], 'en')
+
 
 if __name__ == '__main__':
     unittest.main()
