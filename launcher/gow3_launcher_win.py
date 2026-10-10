@@ -127,19 +127,20 @@ def windows_language():
 # launcher's own settings.json (passed to run.py as environment variables).
 
 INI_FLAGS = {'sharpen', 'object_motion', 'show_fps', 'vsync', 'async_shaders', 'deferred_readback',
-             'stale_readback'}
+             'stale_readback', 'fsr1', 'rcas'}
 # The graphics keys are also in the in-game menu (Insert / R3+L2); run.py reads the startup ones.
 INI_DEFAULTS = {'upscaler': 'fsr4', 'preset': '1', 'sharpen': '1', 'sharpness': '0.50',
                 'object_motion': '1', 'show_fps': '1', 'output_res': '1920x1080',
                 'live_resolution': 'auto', 'display_mode': 'windowed', 'vsync': '1', 'fps_limit': '0',
                 'async_shaders': '1', 'deferred_readback': '1', 'stale_readback': '1',
-                'render_resolution': 'native', 'engine_fps': '120'}
+                'render_resolution': 'native', 'engine_fps': '120', 'fsr1': '0', 'rcas': '1',
+                'rcas_strength': '75', 'frames_queued': '1'}
 DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
 FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('120', ('120',)), ('240', ('240',)), ('0', ('Unlimited',))]
 APP_DEFAULTS = {'ui_language': '', 'game_dir': os.environ.get('GOW3_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623')), 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
                 'player_name': '', 'hdr': False, 'draw_pipe': '', 'readbacks': '',
-                'frames_ahead': '', 'parallel_warmup': True, 'perf_diag': False, 'frame_stats': False, 'gpu_profile': False,
+                'parallel_warmup': True, 'perf_diag': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation'}
 
@@ -202,7 +203,7 @@ DRAW_PIPE = [('', ('Auto (8+ threads)', 'Авто (8+ потоков)')), ('1', 
              ('0', ('Off (more stable)', 'Выключен (стабильнее)'))]
 READBACKS = [('', ('Relaxed (default)', 'Relaxed (по умолчанию)')), ('0', ('Off', 'Выключены')),
              ('2', ('Precise',))]
-FRAMES_AHEAD = [('', ('1 (default)', '1 (по умолчанию)')), ('2', ('2',)), ('0', ('Unbounded', 'Без ограничения'))]
+FRAMES_QUEUED = [('1', ('1 (lowest latency)',)), ('2', ('2',)), ('0', ('Unlimited',))]
 UI_LANGUAGES = gow3_lang.LANGUAGE_NAMES
 
 FSR4_COMMIT = 'ae8d628fae208813172446d1e49ed94150b04658'
@@ -308,7 +309,7 @@ def game_environment(s):
         env['GOW3_USER_NAME'] = str(s['player_name']).strip()
     if s['hdr']:
         env['GOW3_HDR'] = '1'
-    for key, name in (('draw_pipe', 'GOW3_DRAW_PIPE'), ('readbacks', 'GOW3_READBACKS'), ('frames_ahead', 'GOW3_FRAMES_AHEAD')):
+    for key, name in (('draw_pipe', 'GOW3_DRAW_PIPE'), ('readbacks', 'GOW3_READBACKS')):
         if s[key]:
             env[name] = s[key]
     env['GOW3_PARALLEL_WARMUP'] = '1' if s.get('parallel_warmup', True) else '0'
@@ -777,9 +778,13 @@ class Launcher:
         self.row(f, _('Frame rate limit'), self.choice(f, 'fps_limit', 'ini', FPS_LIMITS),
                  _('Also in the in-game menu (Insert / R3+L2), applied live. The engine frame rate of the '
                    'game patches is the ceiling.'))
-        self.row(f, _('Frames ahead of the GPU', 'Кадров впереди GPU'), self.choice(f, 'frames_ahead', 'app', FRAMES_AHEAD),
-                 _('1 keeps frame pacing even; more can raise FPS when the graphics card is the limit.',
-                   '1 — ровная подача кадров; больше может поднять FPS, если упирается в видеокарту.'))
+        self.row(f, _('Frames queued'), self.choice(f, 'frames_queued', 'ini', FRAMES_QUEUED),
+                 _('1 is the lowest input latency; more can raise FPS when the graphics card is the limit.'))
+        self.section(f, _('Upscaling and sharpening'))
+        self.check(f, 'fsr1', 'ini', _('Upscaling: FSR 1'),
+                   _('Enlarges the image of the game to the window with AMD FSR 1. With Render resolution 720p '
+                     '(Game patches) it raises the FPS; at the size of the window it does nothing.'))
+        self.check(f, 'rcas', 'ini', _('Sharpening (RCAS)'), _('Strength in the in-game menu (Insert / R3+L2).'))
         self.section(f, _('Window', 'Окно'))
         self.row(f, _('Display mode'), self.choice(f, 'display_mode', 'ini', DISPLAY_MODES),
                  _('Borderless covers the screen without changing the display mode.'))

@@ -13,6 +13,8 @@
 #include "video_core/renderdoc.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
 #include "gow3_overlay.h"
+#include "gow3_settings.h"
+#include "gow3_graphics.h"
 #include "video_core/renderer_vulkan/vk_temporal_upscaler.h"
 #include "video_core/renderer_vulkan/vk_presenter.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
@@ -147,11 +149,6 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
         frame.present_done = fence;
         free_queue.push(&frame);
     }
-
-    fsr_settings.enable = EmulatorSettings.IsFsrEnabled();
-    fsr_settings.use_rcas = EmulatorSettings.IsRcasEnabled();
-    fsr_settings.rcas_attenuation =
-        static_cast<float>(EmulatorSettings.GetRcasAttenuation() / 1000.f);
 
     fsr_pass.Create(device, instance.GetAllocator(), num_images);
     pp_pass.Create(device, swapchain.GetSurfaceFormat().format);
@@ -462,6 +459,19 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     }
     expected_ratio = static_cast<float>(image_size.width) / static_cast<float>(image_size.height);
 
+    // gow3: FSR 1, RCAS and its strength come from the in-game menu, every frame.
+    const auto& graphics = Gow3Settings::Get();
+    fsr_settings.enable = graphics.fsr1;
+    fsr_settings.use_rcas = graphics.rcas;
+    fsr_settings.rcas_attenuation = Gow3Graphics::RcasAttenuation(graphics.rcas_strength);
+    Gow3Settings::Get().image_width = int(image_size.width);
+    Gow3Settings::Get().image_height = int(image_size.height);
+    Gow3Settings::Get().window_width = int(frame->width);
+    Gow3Settings::Get().window_height = int(frame->height);
+    Gow3Settings::Get().rcas_applied =
+        fsr_settings.use_rcas &&
+        Gow3Graphics::FsrPassRuns(fsr_settings.enable, true, int(image_size.width), int(image_size.height),
+                                  int(frame->width), int(frame->height));
     image_view = fsr_pass.Render(cmdbuf, image_view, image_size, {frame->width, frame->height},
                                  fsr_settings, frame->is_hdr);
 
@@ -493,11 +503,11 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     // bottleneck it finishes frames at an even rate; without this bound the command thread ran
     // ahead and then blocked wherever a resource ran out, so flips (and the guest's frame
     // timing) came in bursts: 12.5/25 ms alternation at 80 FPS. 0 turns it off.
-    static const u32 frames_ahead = [] {
-        const char* env = std::getenv("GOW3_FRAMES_AHEAD");
-        return env ? u32(std::max(0, std::atoi(env))) : 1u;
-    }();
-    if (frames_ahead) {
+    // The in-game menu changes it live (Gow3Settings::frames_queued; GOW3_FRAMES_AHEAD at start).
+    const u32 frames_ahead = u32(std::max(0, Gow3Settings::Get().frames_queued.load()));
+    if (!frames_ahead) {
+        recent_frame_ticks.clear();
+    } else {
         recent_frame_ticks.push_back(frame->ready_tick);
         while (recent_frame_ticks.size() > frames_ahead) {
             const u64 tick = recent_frame_ticks.front();

@@ -25,7 +25,6 @@ public:
     u32 GetInternalScreenWidth() { static const auto value = u32(Number("GOW3_INTERNAL_WIDTH", 1920)); return value; }
     u32 GetInternalScreenHeight() { static const auto value = u32(Number("GOW3_INTERNAL_HEIGHT", 1080)); return value; }
     std::string GetPresentMode() { const char* v = std::getenv("GOW3_PRESENT_MODE"); return v ? v : "Mailbox"; }
-    int GetRcasAttenuation() { static const auto value = int(Number("GOW3_RCAS_ATTENUATION", 250)); return value; }
     // gow3: Relaxed by default: without readbacks FaceGen reads stale GPU-written vertices
     // (vertex explosions); in the test scene it costs no measurable frame rate.
     u32 GetReadbacksMode() { static const auto value = u32(Number("GOW3_READBACKS", GpuReadbacksMode::Relaxed)); return value; }
@@ -53,13 +52,11 @@ public:
     bool IsCopyGpuBuffers() { static const auto value = Flag("GOW3_COPY_GPU_BUFFERS", false); return value; }
     bool IsDirectMemoryAccessEnabled() { static const auto value = Flag("GOW3_DIRECT_MEMORY_ACCESS", false); return value; }
     bool IsDumpShaders() { static const auto value = Flag("GOW3_DUMP_SHADERS", false); return value; }
-    bool IsFsrEnabled() { static const auto value = Flag("GOW3_FSR1", false); return value; }
     bool IsHdrAllowed() { static const auto value = Flag("GOW3_HDR", false); return value; }
     bool IsNullGPU() { static const auto value = Flag("GOW3_NULL_GPU", false); return value; }
     bool IsPatchShaders() { return false; }
     bool IsPipelineCacheArchived() { return false; }
     bool IsPipelineCacheEnabled() { static const auto value = Flag("GOW3_PIPELINE_CACHE", true); return value; }
-    bool IsRcasEnabled() { static const auto value = Flag("GOW3_RCAS", true); return value; }
     bool IsReadbackLinearImagesEnabled() { static const auto value = Flag("GOW3_READBACK_LINEAR", false); return value; }
     bool IsRenderdocEnabled() { return false; }
     bool IsShaderCollect() { return false; }

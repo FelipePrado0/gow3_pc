@@ -181,6 +181,40 @@ void GraphicsSection() {
         ImGui::TextDisabled("Limited to %d FPS by the engine frame rate (below).", effective);
     }
     Checkbox("Compile new shaders in the background", s.async_shaders);
+    Checkbox("Upscaling: FSR 1", s.fsr1);
+    // What the FSR pass can do at the current sizes (the presenter reports them every frame).
+    const int iw = s.image_width, ih = s.image_height, ww = s.window_width, wh = s.window_height;
+    const bool upscaling = iw < ww && ih < wh;
+    const bool downscaling = iw > ww || ih > wh;
+    if (s.fsr1 && upscaling) {
+        ImGui::TextDisabled("FSR 1 active: %dx%d to %dx%d.", iw, ih, ww, wh);
+    } else if (s.fsr1) {
+        ImGui::TextDisabled("FSR 1 has no effect: the game's image (%dx%d) is not smaller than the window (%dx%d).",
+                            iw, ih, ww, wh);
+    }
+    const bool rcas_blocked = s.rcas && !s.rcas_applied;
+    ImGui::BeginDisabled(rcas_blocked);
+    Checkbox("Sharpening (RCAS)", s.rcas);
+    ImGui::EndDisabled();
+    const ImVec4 note(0.85f, 0.72f, 0.45f, 1.0f);
+    if (rcas_blocked && downscaling) {
+        ImGui::TextColored(note, "Sharpening has no effect: the game's image (%dx%d) is larger than the window "
+                                 "(%dx%d) and is downscaled, which already smooths edges.", iw, ih, ww, wh);
+    } else if (rcas_blocked) {
+        ImGui::TextColored(note, "Sharpening needs FSR 1: the game's image (%dx%d) is smaller than the window (%dx%d).",
+                           iw, ih, ww, wh);
+    }
+    if (!upscaling && !downscaling && s.fsr1) {
+        ImGui::TextDisabled("For more FPS: Render resolution 720p + FSR 1 (restart).");
+    }
+    ImGui::BeginDisabled(!s.rcas || rcas_blocked);
+    int strength = s.rcas_strength;
+    if (ImGui::SliderInt("Sharpening strength", &strength, 0, 100, "%d%%")) {
+        Store(s.rcas_strength, G::ParseRcasStrength(strength), true);
+    }
+    ImGui::EndDisabled();
+    static const char* const queued_labels[] = {"1 (lowest latency)", "2", "Unlimited"};
+    Choice("Frames queued", s.frames_queued, queued_labels, G::FramesQueued.data(), int(G::FramesQueued.size()));
 
     ImGui::SeparatorText("Graphics (restart)");
     static const char* const resolution_labels[] = {"Native (1080p)", "480p", "720p", "1440p", "1800p", "4K"};
@@ -210,7 +244,8 @@ void Menu() {
     ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + 40.0f * base_scale,
                                    viewport->WorkPos.y + 40.0f * base_scale),
                             ImGuiCond_Appearing);
-    ImGui::SetNextWindowSize(ImVec2(420.0f * base_scale, 0.0f), ImGuiCond_Appearing);
+    // Two columns: game options on the left, graphics on the right.
+    ImGui::SetNextWindowSize(ImVec2(860.0f * base_scale, 0.0f), ImGuiCond_Appearing);
     bool keep_open = true;
     // gow3: the game's own title (param.sfo), not a fixed one.
     static const std::string heading = [] {
@@ -224,7 +259,11 @@ void Menu() {
     ImGui::Text("%.0f FPS  (%.1f ms)", frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f,
                 frame_ms_avg);
     ImGui::Separator();
-    GraphicsSection();
+    if (!ImGui::BeginTable("##menu_columns", 2, ImGuiTableFlags_BordersInnerV)) {
+        ImGui::End();
+        return;
+    }
+    ImGui::TableNextColumn();
     ImGui::SeparatorText("Overlay");
     Checkbox("Show FPS counter", s.show_fps);
     ImGui::SeparatorText("Health display");
@@ -271,6 +310,9 @@ void Menu() {
     if (!s.red_orbs_supported.load()) {
         ImGui::TextWrapped("Unavailable: executable does not match the validated CUSA01623 v01.02 gain routines.");
     }
+    ImGui::TableNextColumn();
+    GraphicsSection();
+    ImGui::EndTable();
     ImGui::Spacing();
     if (ImGui::Button("Close")) {
         keep_open = false;

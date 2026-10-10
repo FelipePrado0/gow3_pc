@@ -40,7 +40,7 @@ class ControlMapTest(unittest.TestCase):
         self.assertEqual(env['GOW3_PERF_DIAG'], '0')
         # Graphics options live in gow3.ini (run.py and the in-game menu), not in the environment.
         for name in ('GOW3_FULLSCREEN', 'GOW3_PRESENT_MODE', 'GOW3_FPS_LIMIT', 'GOW3_ASYNC_SHADERS',
-                     'GOW3_DEFERRED_READBACK', 'GOW3_STALE_READBACK'):
+                     'GOW3_DEFERRED_READBACK', 'GOW3_STALE_READBACK', 'GOW3_FSR1', 'GOW3_RCAS'):
             self.assertNotIn(name, {k for k in env if k not in __import__('os').environ})
         old = launcher.game_environment({**settings, 'extra_env': 'GOW3_DRAW_PIPE=0'})
         self.assertNotIn('GOW3_DRAW_PIPE', old)  # the old free-text field is ignored
@@ -50,6 +50,9 @@ class ControlMapTest(unittest.TestCase):
         d = launcher.INI_DEFAULTS
         self.assertEqual((d['display_mode'], d['vsync'], d['fps_limit'], d['engine_fps']), ('windowed', '1', '0', '120'))
         self.assertEqual([v for v, _t in launcher.FPS_LIMITS], ['30', '60', '120', '240', '0'])
+        self.assertEqual((d['fsr1'], d['rcas'], d['rcas_strength'], d['frames_queued']), ('0', '1', '75', '1'))
+        self.assertEqual([v for v, _t in launcher.FRAMES_QUEUED], ['1', '2', '0'])
+        self.assertNotIn('GOW3_FRAMES_AHEAD', launcher.game_environment({**launcher.APP_DEFAULTS, 'frames_ahead': '2'}))
 
 
 if __name__ == '__main__':

@@ -69,6 +69,14 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.fps_limit = Gow3Graphics::ParseFpsLimit(i);
     } else if (key == "async_shaders") {
         v.async_shaders = i != 0;
+    } else if (key == "fsr1") {
+        v.fsr1 = i != 0;
+    } else if (key == "rcas") {
+        v.rcas = i != 0;
+    } else if (key == "rcas_strength") {
+        v.rcas_strength = Gow3Graphics::ParseRcasStrength(value.empty() ? -1 : i);
+    } else if (key == "frames_queued") {
+        v.frames_queued = Gow3Graphics::ParseFramesQueued(value.empty() ? -1 : i);
     } else if (key == "render_resolution") {
         v.render_resolution = Gow3Graphics::ParseResolution(value);
     } else if (key == "engine_fps") {
@@ -134,7 +142,8 @@ void Load() {
         {"GOW3_REACTIVE_THRESHOLD", "reactive_threshold"}, {"GOW3_REACTIVE_MAX", "reactive_max"},
         {"GOW3_UPSCALE_PRESET", "preset"},            {"GOW3_OBJECT_MOTION", "object_motion"},
         {"GOW3_ASYNC_SHADERS", "async_shaders"},      {"GOW3_DEFERRED_READBACK", "deferred_readback"},
-        {"GOW3_STALE_READBACK", "stale_readback"},
+        {"GOW3_STALE_READBACK", "stale_readback"},     {"GOW3_FSR1", "fsr1"},
+        {"GOW3_RCAS", "rcas"},                        {"GOW3_FRAMES_AHEAD", "frames_queued"},
     };
     for (const auto& [env, key] : env_keys) {
         if (const char* value = std::getenv(env); value && value[0]) {
@@ -233,10 +242,12 @@ void Save() {
     std::fprintf(file, "enemy_health_bar=%d\n", int(v.enemy_health_bar.load()));
     std::fprintf(file,
                  "display_mode=%s\nvsync=%d\nfps_limit=%d\nasync_shaders=%d\n"
+                 "fsr1=%d\nrcas=%d\nrcas_strength=%d\nframes_queued=%d\n"
                  "render_resolution=%s\nengine_fps=%d\ndeferred_readback=%d\nstale_readback=%d\n"
                  "restart_unconfirmed=%d\n",
                  Gow3Graphics::DisplayModeKeys[std::clamp(v.display_mode.load(), 0, 2)].data(),
                  int(v.vsync.load()), v.fps_limit.load(), int(v.async_shaders.load()),
+                 int(v.fsr1.load()), int(v.rcas.load()), v.rcas_strength.load(), v.frames_queued.load(),
                  Gow3Graphics::Resolutions[std::clamp(v.render_resolution.load(), 0, 5)].data(),
                  v.engine_fps.load(), int(v.deferred_readback.load()), int(v.stale_readback.load()),
                  int(v.restart_unconfirmed.load()));

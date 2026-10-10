@@ -48,6 +48,27 @@ inline int ParseEngineFps(int value) {
     return IndexOf(EngineFps, value, -1) >= 0 ? value : 120;
 }
 
+/// Frames the GPU command thread may queue ahead of the GPU; 0 = unbounded.
+inline constexpr std::array<int, 3> FramesQueued = {1, 2, 0};
+inline int ParseFramesQueued(int value) {
+    return IndexOf(FramesQueued, value, -1) >= 0 ? value : 1;
+}
+/// RCAS strength in percent; invalid values fall back to 75.
+inline int ParseRcasStrength(int value) {
+    return value >= 0 && value <= 100 ? value : 75;
+}
+/// FSR RCAS attenuation for a strength: 0 is the sharpest, 2 the softest.
+inline float RcasAttenuation(int strength) {
+    return 2.0f * (1.0f - float(ParseRcasStrength(strength)) / 100.0f);
+}
+/// Whether the FSR pass runs: FSR 1 when the window is larger than the game's image, RCAS
+/// alone when they are the same size. A smaller window is left to the regular scaling.
+inline bool FsrPassRuns(bool fsr1, bool rcas, int in_w, int in_h, int out_w, int out_h) {
+    const bool upscale = in_w < out_w && in_h < out_h;
+    const bool same = in_w == out_w && in_h == out_h;
+    return (fsr1 && upscale) || (rcas && same);
+}
+
 /// What the present limit really allows: the engine ceiling caps it.
 inline int EffectiveFps(int limit, int engine_fps) {
     return limit == 0 || limit > engine_fps ? engine_fps : limit;

@@ -50,6 +50,15 @@ struct Values {
     std::atomic<bool> vsync{true};
     std::atomic<int> fps_limit{0};
     std::atomic<bool> async_shaders{true};
+    std::atomic<bool> fsr1{false};
+    std::atomic<bool> rcas{true};
+    std::atomic<int> rcas_strength{75};
+    /// Set by the presenter: sharpening ran on the last frame (it needs FSR 1 when the game's
+    /// image is smaller than the window).
+    std::atomic<bool> rcas_applied{false};
+    /// Set by the presenter: the game's image and the window it is shown in, in pixels.
+    std::atomic<int> image_width{0}, image_height{0}, window_width{0}, window_height{0};
+    std::atomic<int> frames_queued{1};
     // Startup: run.py turns them into patches and environment variables; "Apply and restart".
     std::atomic<int> render_resolution{0};
     std::atomic<int> engine_fps{120};
