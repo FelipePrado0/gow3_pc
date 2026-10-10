@@ -5,66 +5,85 @@
 Port nativo de **God of War III Remastered** (PlayStation 4) para Windows 10 e 11.
 
 O executável original do jogo roda direto no processador do PC (o PS4 usa a mesma arquitetura
-x86-64). Um runtime próprio substitui as bibliotecas do sistema do PS4, e os gráficos são
-traduzidos para Vulkan. Não é um emulador genérico: o projeto atende a um jogo só.
+x86-64). Um runtime escrito para este jogo substitui as bibliotecas de sistema do PS4, e os
+gráficos são traduzidos para Vulkan. Não é um emulador genérico: o projeto atende um único jogo.
 
-> **Nenhum arquivo do jogo é incluído.** Você precisa de uma cópia extraída do seu próprio PS4
-> (CUSA01623, versão 01.02). Este projeto não tem relação com a Sony Interactive Entertainment
-> nem com a Santa Monica Studio. God of War é marca da Sony Interactive Entertainment.
+> **Nenhum arquivo do jogo está incluído.** É preciso um dump do seu próprio PS4 (CUSA01623,
+> versão 01.02). Este projeto não tem relação com a Sony Interactive Entertainment nem com o
+> Santa Monica Studio. God of War é marca registrada da Sony Interactive Entertainment.
 
-**Situação: alpha em desenvolvimento.** O jogo abre, toca as cutscenes, tem som e controle, e o
-gameplay roda a 60 FPS em 1080p numa AMD Radeon RX 6700 XT. Ainda não existe um pacote pronto
-para baixar: por enquanto o projeto é compilado a partir do código. O andamento está em
+**Situação: alpha em desenvolvimento.** O jogo abre, toca as cutscenes, tem som, controle e
+save. Na máquina de teste (AMD Radeon RX 6700 XT, Ryzen 5 5600X), uma cena pesada de gameplay
+roda a cerca de 66 FPS em 1080p com o patch de 120 FPS, e os menus chegam a 240 FPS. Ainda não
+há download pronto: por enquanto o projeto é compilado a partir do código. O andamento está em
 [docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.md).
 
 ## O que funciona
 
 - Abertura, menus, cutscenes em vídeo (H.264) e gameplay.
 - Áudio: música, vozes e efeitos (ATRAC9 e MP3).
-- Controle (DualSense e outros, via SDL3) e teclado ao mesmo tempo.
+- Controle (DualSense, Xbox e outros, via SDL3) e teclado ao mesmo tempo, os dois com botões
+  configuráveis.
 - Salvar e carregar: a lista de saves aparece na tela, como no PS4. O autosave também funciona.
-- Patches da comunidade, escolhidos no launcher antes de jogar:
-  - resolução de 480p, 720p, 1440p, 1800p ou 4K;
-  - correção de texturas corrompidas;
-  - 120 FPS;
-  - pular vídeos com o botão X.
-- Launcher com a identidade do God of War III (banner e ícone do próprio jogo), em 13 idiomas
-  (a página de patches do jogo está em português, inglês e russo).
-- Menu de configurações dentro do jogo (Insert ou R3+L2).
+  O launcher faz backup dos saves antes de cada partida.
+- Patches da comunidade: resolução de renderização de 480p, 720p, 1440p, 1800p ou 4K; correção
+  de texturas corrompidas; FPS do motor de 120 ou 240; pular vídeos com o botão X.
+- **Abertura imediata:** o cache de shaders salvo carrega em segundo plano enquanto você joga, e
+  os shaders novos também são compilados em segundo plano, sem parar o jogo.
+- **Launcher** com as cores do jogo, em 13 idiomas: ajustes rápidos na tela inicial, tela,
+  desempenho, pasta do jogo e backups de save, patches, mods (ordem, presets e conflitos),
+  controles com ícones de botões PlayStation ou Xbox, atualizações e diagnóstico.
+- **Menu dentro do jogo** (Insert no teclado, R3+L2 no controle), com quatro abas:
+  - **Game:** trapaças (vida, magia, item e Fúria de Esparta infinitos, orbes vermelhos no
+    máximo); multiplicadores de 0,1x a 100x para orbes vermelhos, verdes (vida), azuis (magia)
+    e dourados (Fúria de Esparta) e para dano causado e recebido; barra de vida do inimigo.
+  - **Image:** modo de tela (janela, sem borda, tela cheia), VSync, ampliação FSR 1 e nitidez
+    RCAS.
+  - **Performance:** limite de FPS (de 30 a ilimitado), quadros na fila, compilação de shaders
+    em segundo plano; resolução, FPS do motor e as opções de leitura da GPU valem com um único
+    botão "Apply and restart".
+  - **Overlay:** contador de desempenho com FPS, tempo de quadro, upscaler, GPU (nome e uso),
+    CPU, RAM e VRAM, cada um opcional, com tamanho da fonte, canto, transparência e formato. Os
+    números são o uso do próprio jogo, não do sistema inteiro.
 
 ## Problemas conhecidos
 
-- **120 FPS:** o jogo limita o tempo de cada quadro a 1/FPS alvo. Abaixo de 120 FPS ele roda em
-  câmera lenta (no PS4 acontece o mesmo abaixo de 60). Só vale a pena onde o PC sustenta 120.
-- **Skip Intro** não está disponível: o patch da comunidade não corresponde a este executável.
-- A primeira abertura de cada área pode engasgar enquanto os shaders são compilados. A abertura
-  do jogo pode levar mais de um minuto quando o cache de shaders está grande.
-- Sem upscaling temporal (FSR, DLSS ou TAA) por enquanto: o código está no port, mas desligado
+- **240 FPS** é experimental.
+- **Skip Intro** não está disponível: o patch da comunidade não bate com este executável.
+- Com um cache grande (cerca de 10 mil shaders), a carga em segundo plano leva por volta de 3
+  minutos em prioridade baixa; até terminar, uma área nova pode mostrar um objeto ou efeito um
+  instante depois.
+- Raramente uma partida para antes do primeiro quadro (no carregador do intro do jogo). Abrir
+  de novo resolve.
+- Ainda não há upscaling temporal (FSR 3/4, DLSS ou TAA): o código está no port, mas desligado
   até ser calibrado para o God of War III.
-- Testado só no Windows 11 com AMD Radeon RX 6700 XT.
+- Testado apenas no Windows 11 com AMD Radeon RX 6700 XT.
 
 ## Requisitos
 
 - Windows 10 (1903 ou mais novo) ou Windows 11, 64 bits.
 - Placa de vídeo com Vulkan 1.3 e driver atualizado.
-- A sua cópia do jogo: CUSA01623 com o update 01.02 aplicado (a pasta com `eboot.bin`,
+- Sua cópia do jogo: CUSA01623 com a atualização 01.02 aplicada (a pasta com `eboot.bin`,
   `sce_module` e `sce_sys`).
-- Os patches só são aplicados ao `eboot.bin` em que foram conferidos byte a byte (sha256
-  `d85c8135d330c3b601bf5dc3f1dd86bd6119fb8a9fce372bed2c9785f9a79299`). Com outro executável o
-  jogo abre sem patches, e o log explica o motivo.
-- Para compilar: [MSYS2](https://www.msys2.org) e [Python 3](https://www.python.org) com
-  Pillow (`pip install pillow`, usado para o ícone do jogo).
+- Os patches só são aplicados ao `eboot.bin` com que foram conferidos byte a byte (sha256
+  `d85c8135d330c3b601bf5dc3f1dd86bd6119fb8a9fce372bed2c9785f9a79299`), e os ganchos do menu
+  (trapaças, multiplicadores, barra de vida) só onde o código que eles alteram tem os bytes
+  esperados. Fora isso o jogo abre sem eles, e o log e o menu dizem o motivo.
+- Para compilar: [MSYS2](https://www.msys2.org) e [Python 3](https://www.python.org) com Pillow
+  (`pip install pillow`, usado no ícone e na capa do jogo).
 
-## Como compilar e jogar
+## Compilar e jogar
 
-1. Instale o MSYS2 (`winget install MSYS2.MSYS2`) e, no shell **MSYS2 CLANG64**, os pacotes
+O desenvolvimento acontece na branch `gow3`; a `main` recebe as versões já testadas.
+
+1. Instale o MSYS2 (`winget install MSYS2.MSYS2`) e, no terminal **MSYS2 CLANG64**, os pacotes
    listados em [packaging/windows/README.md](packaging/windows/README.md).
-2. Clone o repositório com os submódulos e compile. O God of War III está na branch principal
-   (`main`): não é preciso trocar de branch.
+2. Clone o repositório com os submódulos e compile:
 
    ```bash
    git clone --recursive https://github.com/FelipePrado0/gow3_pc
    cd gow3_pc
+   git checkout gow3   # o trabalho mais recente; pule para compilar a main
    bash build.sh
    ```
 
@@ -74,80 +93,100 @@ para baixar: por enquanto o projeto é compilado a partir do código. O andament
    python launcher/gow3_launcher_win.py
    ```
 
-4. Em **Jogo e efeitos**, escolha a pasta do jogo. Em **Patches do jogo**, escolha a resolução
-   e os patches. Clique em **JOGAR**.
+4. Em **Game**, escolha a pasta do jogo. Ajuste **Display**, **Performance** e **Patches** se
+   quiser e clique em **PLAY**.
 
-Também dá para jogar sem o launcher:
+Para jogar com as configurações salvas sem abrir a janela do launcher (para um atalho ou a
+Steam):
+
+```powershell
+python launcher/gow3_launcher_win.py --play
+```
+
+Ou sem o launcher:
 
 ```powershell
 $env:GOW3_GAME_DIR = 'D:\caminho\CUSA01623'
 python run.py
 ```
 
-Os saves, o cache de shaders e o log ficam na pasta `user` do projeto.
+As configurações ficam em `gow3.ini` (o jogo e o menu do jogo) e em
+`%APPDATA%\gow3-launcher\settings.json` (o launcher). Saves, cache de shaders e `last_run.log`
+ficam na pasta `user` do projeto.
 
-### Controles no teclado
+### Teclado
+
+Padrão; mude na tela **Controls** do launcher.
 
 | Tecla | Botão |
 |---|---|
 | WASD | analógico esquerdo |
 | Setas | analógico direito (câmera) |
-| Espaço | Cross (X) |
-| Shift esquerdo | Circle |
-| E | Square |
-| Q | Triangle |
+| Espaço | Xis (Cross) |
+| Shift esquerdo | Círculo |
+| E | Quadrado |
+| Q | Triângulo |
 | 1 e 3 | L1 e R1 |
 | R e F | L2 e R2 |
 | Z e C | L3 e R3 |
 | I, K, J, L | direcional |
 | Enter | Options |
 | Tab | touchpad |
-| Insert | menu de configurações do port |
+| Insert | menu do port (R3+L2 no controle) |
 
-Na lista de saves: setas ou direcional escolhem, Enter ou Cross confirmam, Esc ou Circle cancelam.
+No menu: L1/R1 ou Q/E trocam de aba. Na lista de saves: setas ou direcional escolhem, Enter ou
+Xis confirmam, Esc ou Círculo cancelam.
 
 ## Testes
 
 ```bash
 python -m unittest discover -s tests
-ninja -C out/gpu mp3-test videodec-test services-test
-out/gpu/mp3-test.exe tests/data/sine.mp3
-out/gpu/videodec-test.exe tests/data/tiny.h264
-out/gpu/services-test.exe
+bash build.sh --test
+ninja -C out/gpu stat-multipliers-test perf-overlay-test warmup-inbox-test graphics-settings-test
+out/gpu/stat-multipliers-test.exe out/eboot.elf
+out/gpu/perf-overlay-test.exe
+out/gpu/warmup-inbox-test.exe
+out/gpu/graphics-settings-test.exe
 ```
 
-Para conferir se todas as funções do sistema que o jogo usa estão implementadas, sem abrir o
+Os testes em C++ são alvos do [gpu/CMakeLists.txt](gpu/CMakeLists.txt); os que conferem o
+código do jogo recebem o executável preparado (`out/eboot.elf`) como argumento.
+
+Para conferir se todas as funções de sistema que o jogo usa estão implementadas, sem abrir o
 jogo:
 
 ```bash
 out/gow3-probe.exe out/boot-linked.bin --app0 <pasta do jogo> --check-imports
 ```
 
-## Como o projeto funciona
+## Como funciona
 
 | Parte | Onde | O que faz |
 |---|---|---|
-| Preparação | `scripts/` | Lê o `eboot.bin`, aplica as relocações e junta a `libc` e a `libSceFios2` do próprio jogo numa imagem única |
-| Loader | `src/probe.c` | Carrega a imagem na memória e inicia o código original do jogo |
-| Runtime | `src/runtime_*.c` | Reimplementa as funções do sistema do PS4: memória, threads, arquivos, áudio, vídeo, controle, saves e serviços |
-| GPU | `gpu/` | Núcleo de vídeo do shadPS4, que traduz os comandos da GPU do PS4 para Vulkan |
+| Preparação | `scripts/` | Lê o `eboot.bin`, aplica as realocações e junta a `libc` e a `libSceFios2` do próprio jogo numa imagem |
+| Loader | `src/probe.c` | Carrega a imagem, instala os ganchos conferidos (trapaças, multiplicadores, barra de vida) e inicia o código original do jogo |
+| Runtime | `src/runtime_*.c` | Reimplementa as funções de sistema do PS4: memória, threads, arquivos, áudio, vídeo, controle, saves e serviços |
+| GPU | `gpu/shadps4/` | O núcleo de vídeo do shadPS4, que traduz os comandos da GPU do PS4 para Vulkan, com as otimizações deste port (cache de shaders em segundo plano, leituras adiadas) |
+| Menu do jogo | `gpu/shim/gow3_overlay.cpp` | Menu e contador de desempenho em Dear ImGui; configurações em `gpu/shim/gow3_settings.cpp` |
 | Patches | `patches/God_of_War_III_Remastered.xml`, `scripts/patches.py` | Aplicados na memória ao iniciar, sem alterar os arquivos do jogo |
-| Launcher | `launcher/gow3_launcher_win.py` | Configurações, patches e botão de jogar |
+| Launcher | `launcher/gow3_launcher_win.py` | Configurações, patches, mods, controles e o botão de jogar |
 
-Os upscalers temporais (FSR 3/4, DLSS, TAA) e os vetores de movimento herdados do port base
-ficam no código, desligados, até serem calibrados para o God of War III (ver o roadmap).
+Mais documentação: [mods](docs/MODS.md), [mapa do quadro e upscaler](docs/upscaler.md),
+[trabalho paralelo da GPU](docs/parallel_gpu.md) e o [roadmap](docs/gow3/ROADMAP.md).
 
 ## Créditos
 
-Construído sobre o [bbport](https://github.com/deadinside28/bloodborne_pc), port nativo do
-Bloodborne por deadinside28, sobre o [port para Windows](https://github.com/Supermedo/bloodborne_pc)
-por Supermedo (Mohammed Albarghouthi), e sobre o renderizador do
+Construído sobre o [bbport](https://github.com/deadinside28/bloodborne_pc), o port nativo de
+Bloodborne de deadinside28, sobre o [port para Windows](https://github.com/Supermedo/bloodborne_pc)
+de Supermedo (Mohammed Albarghouthi) e sobre o renderizador do
 [shadPS4](https://github.com/shadps4-emu/shadPS4).
 
-Patches do God of War III Remastered por kvicken e cuesta4 (a partir dos patches do PS3 de
+Patches de God of War III Remastered por kvicken e cuesta4 (a partir dos patches de PS3 de
 illusion0001), publicados para o shadPS4 em
-[shadps4-emu/ps4_cheats#145](https://github.com/shadps4-emu/ps4_cheats/pull/145) e adaptados
-para este executável.
+[shadps4-emu/ps4_cheats#145](https://github.com/shadps4-emu/ps4_cheats/pull/145) e adaptados a
+este executável. Trapaças adaptadas dos
+[cheats GoldHEN](https://github.com/GoldHEN/GoldHEN_Cheat_Repository) de Celogamez para este
+jogo.
 
 Também usados: [LibAtrac9](https://github.com/Thealexbarney/LibAtrac9),
 [FFmpeg](https://ffmpeg.org), [SDL3](https://github.com/libsdl-org/SDL),
@@ -155,10 +194,9 @@ Também usados: [LibAtrac9](https://github.com/Thealexbarney/LibAtrac9),
 [magic_enum](https://github.com/Neargye/magic_enum), [miniz](https://github.com/richgel999/miniz),
 [xbyak](https://github.com/herumi/xbyak),
 [Vulkan Memory Allocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator),
-[FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) e AMD FidelityFX SDK,
+[FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) e o AMD FidelityFX SDK,
 [MSYS2](https://www.msys2.org), [LLVM](https://llvm.org) e [Pillow](https://python-pillow.org).
 
 ## Licença
 
-GNU GPL v2 ou posterior ([LICENSE](LICENSE)). Os componentes de terceiros mantêm as suas
-próprias licenças.
+GNU GPL v2 ou posterior ([LICENSE](LICENSE)). Componentes de terceiros mantêm suas licenças.
