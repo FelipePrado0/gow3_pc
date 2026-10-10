@@ -17,8 +17,8 @@ God of War III do [fork do shadPS4 de cuesta4](https://github.com/cuesta4/shadPS
 > Santa Monica Studio. God of War é marca registrada da Sony Interactive Entertainment.
 
 Na máquina de teste (AMD Radeon RX 6700 XT, Ryzen 5 5600X, 32 GB), o jogo roda a 144 FPS de
-média (55 a 240) em 1080p com o motor a 240 FPS, e a 108 FPS de média em 4K com FSR 1. Ainda não
-há download pronto: por enquanto o projeto é compilado a partir do código. O andamento está em
+média (55 a 240) em 1080p com o motor a 240 FPS, e a 108 FPS de média em 4K com FSR 1. O
+andamento está em
 [docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.md).
 
 ## O que funciona
@@ -50,6 +50,51 @@ há download pronto: por enquanto o projeto é compilado a partir do código. O 
     CPU, RAM e VRAM, cada um opcional, com tamanho da fonte, canto, transparência e formato. Os
     números são o uso do próprio jogo, não do sistema inteiro.
 
+## Baixar e jogar
+
+**Você precisa de**
+- Windows 10 (1903 ou mais novo) ou Windows 11, 64 bits.
+- Uma placa de vídeo com Vulkan 1.3 e driver atualizado.
+- Sua própria cópia de God of War III Remastered: **CUSA01623 com a atualização 01.02**, numa
+  pasta que contenha `eboot.bin`, `sce_module` e `sce_sys`. Nenhum arquivo do jogo vem neste
+  download.
+
+**Passos**
+1. Baixe o `gow3-windows.zip` na
+   [página de releases](https://github.com/FelipePrado0/gow3_pc/releases/latest).
+2. Extraia numa pasta de sua escolha, por exemplo `C:\Jogos\gow3-windows`. Não abra direto de
+   dentro do zip.
+3. Abra o **`God of War III.exe`**. Se o Windows mostrar "O Windows protegeu o computador",
+   clique em **Mais informações** e depois em **Executar assim mesmo**: o programa não tem
+   assinatura digital.
+4. Clique em **Choose the game folder**. Isso leva à tela **Game**. Em **Game folder**, clique
+   em **Browse…** e escolha a pasta que tem o `eboot.bin`.
+5. De volta à **Home**, aparecem a capa e "CUSA01623 · version 01.02". Ajuste os **Quick
+   settings** se quiser: modo de tela, limite de FPS, resolução e FPS do motor.
+6. Clique em **PLAY**. A primeira partida demora um pouco mais, enquanto a imagem do jogo é
+   preparada. As próximas abrem rápido.
+
+Patches e correções já vêm incluídos e são aplicados sozinhos: correção de texturas, pular vídeos
+com X e 120 FPS vêm ligados. Mude resolução e FPS na **Home** ou em **Performance**.
+
+**Durante o jogo**
+- **Insert** no teclado, ou **R3 + L2** no controle, abre o menu do port: trapaças,
+  multiplicadores, imagem, desempenho e o contador de desempenho.
+- Os shaders salvos carregam em segundo plano. Um aviso pequeno "Loading shader cache" no canto
+  mostra o progresso.
+
+**Das próximas vezes**
+- O **`Play God of War III.exe`** abre o jogo direto, com as configurações salvas. Dá para criar
+  um atalho na área de trabalho ou adicionar à Steam em **Adicionar um jogo que não é da Steam**.
+- Saves, cache de shaders e log ficam na pasta `user`, ao lado do `God of War III.exe`. Guarde
+  essa pasta ao atualizar.
+- **Advanced → Check for updates** baixa e instala a versão nova. Saves e configurações são
+  mantidos.
+
+**Se algo der errado**
+- Tela preta ao abrir: **Advanced → Clear shader cache** e abra de novo.
+- O jogo não abre: veja a tela **Log**, ou envie o `user\last_run.log` junto com o relato.
+
 ## Requisitos
 
 - Windows 10 (1903 ou mais novo) ou Windows 11, 64 bits.
@@ -60,10 +105,10 @@ há download pronto: por enquanto o projeto é compilado a partir do código. O 
   `d85c8135d330c3b601bf5dc3f1dd86bd6119fb8a9fce372bed2c9785f9a79299`), e os ganchos do menu
   (trapaças, multiplicadores, barra de vida) só onde o código que eles alteram tem os bytes
   esperados. Fora isso o jogo abre sem eles, e o log e o menu dizem o motivo.
-- Para compilar: [MSYS2](https://www.msys2.org) e [Python 3](https://www.python.org) com Pillow
+- Para compilar a partir do código: [MSYS2](https://www.msys2.org) e [Python 3](https://www.python.org) com Pillow
   (`pip install pillow`, usado no ícone e na capa do jogo).
 
-## Compilar e jogar
+## Compilar a partir do código
 
 O desenvolvimento acontece na branch `gow3`; a `main` recebe as versões já testadas.
 

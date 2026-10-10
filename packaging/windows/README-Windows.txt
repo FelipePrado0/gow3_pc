@@ -1,51 +1,49 @@
-God of War III (gow3_pc) for Windows
-====================================
+God of War III Remastered for PC (gow3_pc)
+==========================================
 
-No game files are included. You need your own decrypted dump of God of War III Remastered
-CUSA01623 (the folder with eboot.bin, sce_module, sce_sys). Game version 01.02 is needed for the
-community patches (resolution, 120 FPS, texture fix); other versions run unpatched.
+No game files are included. You need your own copy of God of War III Remastered: CUSA01623 with
+the 01.02 update, as a folder that contains eboot.bin, sce_module and sce_sys.
 
 Requirements
-- Windows 10 (1903 or later) or Windows 11, 64-bit.
-- A Vulkan 1.3 graphics card with a current driver.
-- About 6 GB of free memory commit (RAM + page file), 10 GB for 1440p/4K.
+- Windows 10 (1903 or newer) or Windows 11, 64-bit.
+- A graphics card with Vulkan 1.3 and an up-to-date driver.
   Nothing else: Python and the libraries are inside this folder.
 
 Starting
-- God of War III.exe opens the launcher. On "Game & effects" pick your game folder, choose the
-  patches on "Game patches", press PLAY. The "Play" page checks the game version, saves and
-  graphics card.
-- Play God of War III.exe starts the game straight away with the settings saved in the
-  launcher, without opening it. Set things up once in God of War III.exe, then use
-  Play God of War III.exe (or a shortcut to it, or add it to Steam with "Add a Non-Steam Game").
-  If no game folder is chosen yet it opens the launcher. God of War III.exe --play does the
-  same. The log goes to user\last_run.log.
-- Advanced -> "Desktop shortcut" puts the game on the desktop.
-- Advanced -> "Launcher language": English, Russian, Arabic, Spanish, Portuguese, French,
-  German, Italian, Polish, Turkish, Chinese, Japanese, Korean (default: the Windows language).
-- In the game, Insert (or R3+L2 on a gamepad) opens the port's menu. Keyboard: WASD move,
-  arrows camera, Space Cross, Left Shift Circle, E Square, Q Triangle, 1/3 L1/R1, R/F L2/R2,
-  Z/C L3/R3, I/K/J/L d-pad, Enter Options, Tab touchpad.
+1. Extract this folder anywhere, for example C:\Games\gow3-windows (not inside the zip).
+2. Open "God of War III.exe". If Windows shows "Windows protected your PC", click More info,
+   then Run anyway: the program is not digitally signed.
+3. Click "Choose the game folder", then Browse... next to Game folder, and select the folder
+   with eboot.bin.
+4. Back on Home, adjust the quick settings if you like, then click PLAY. The first start takes
+   a little longer while the game image is prepared.
+
+Patches and fixes are included and applied automatically: texture fix, skip videos with X and
+120 FPS are on by default. Change the resolution and frame rate on Home or Performance.
+
+While playing
+- Insert on the keyboard, or R3 + L2 on the controller, opens the port's menu: cheats,
+  multipliers, image, performance and the performance overlay.
+- Saved shaders load in the background; a small note in the corner shows the progress.
+- Keyboard: WASD move, arrows camera, Space Cross, Left Shift Circle, E Square, Q Triangle,
+  1/3 L1/R1, R/F L2/R2, Z/C L3/R3, I/K/J/L d-pad, Enter Options, Tab touchpad. Change them on
+  the launcher's Controls page.
+
+Next time
+- "Play God of War III.exe" starts the game straight away with the saved settings. Make a
+  desktop shortcut to it (Advanced -> Desktop shortcut), or add it to Steam with "Add a
+  Non-Steam Game".
+- Advanced -> Check for updates downloads and installs a new version. Saves and settings are
+  kept.
 
 Data
-- Saves and shader caches: user\ next to God of War III.exe (the launcher can pick another
-  folder).
+- Saves, shader cache and the log: user\ next to God of War III.exe (keep it when updating).
 - Settings: gow3.ini next to God of War III.exe; launcher options in %APPDATA%\gow3-launcher.
 - Generated files (prepared game image, patches): out\.
 
 Problems
-- Black screen at start: Advanced -> "Clear shader cache", then start again (the first minutes
-  stutter while the cache is rebuilt).
-- Send user\last_run.log with any bug report.
+- Black screen at start: Advanced -> Clear shader cache, then start again.
+- The game does not open: check the Log page, and send user\last_run.log with your report.
 
-Mods and patches
-- Put each mod in its own folder under mods\ (with dvdroot_ps4\...); enable and order them on
-  "Mods & patches". The game files are never changed. Without Windows Developer Mode the port
-  links folders with junctions and files with hard links; when the game is on another drive,
-  the temporary mod view is made next to the game folder.
-- Third-party patches: shadPS4/GoldHEN XML files for the game version in patches\.
-
-Credits
-- bbport (the Linux port this is built on): https://github.com/deadinside28/bloodborne_pc
-- Windows port: https://github.com/Supermedo/bloodborne_pc
-- The full list of projects and patch authors is in README.md (Credits and licenses).
+This project is not affiliated with Sony Interactive Entertainment or Santa Monica Studio.
+God of War is a trademark of Sony Interactive Entertainment.

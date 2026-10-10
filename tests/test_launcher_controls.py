@@ -69,5 +69,12 @@ class ControlMapTest(unittest.TestCase):
         self.assertNotIn('GOW3_FRAMES_AHEAD', launcher.game_environment({**launcher.APP_DEFAULTS, 'frames_ahead': '2'}))
 
 
+class ReleaseVersionTest(unittest.TestCase):
+    def test_god_of_war_release_is_newer_than_the_inherited_tags(self):
+        self.assertEqual(launcher.VERSION, '2.0')
+        self.assertGreater(launcher.version_tuple(launcher.VERSION), launcher.version_tuple('windows-v1.5'))
+        self.assertGreater(launcher.version_tuple('windows-v2.1'), launcher.version_tuple(launcher.VERSION))
+
+
 if __name__ == '__main__':
     unittest.main()

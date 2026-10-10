@@ -3,7 +3,8 @@
 # with PyInstaller so players need no Python), gow3-probe.exe with the MSYS2 CLANG64 DLLs it needs,
 # the preparation scripts and run.py. Run from an MSYS2 CLANG64 shell after `bash build.sh`.
 # Freezing uses a Windows Python 3.10+ (python.org; WINPYTHON overrides) and a private venv in
-# out/pyenv with PyInstaller. FSR 4 assets in fsr4_shaders/ are included when present.
+# out/pyenv with PyInstaller. The temporal upscalers are off, so neither the FSR 4 assets nor the
+# DLSS runtime are packaged.
 set -euo pipefail
 cd -- "$(dirname -- "$0")/../.."
 source ./msys2-env.sh
@@ -53,17 +54,18 @@ ldd "$dest/bin/gow3-probe.exe" "$dest/bin/gow3-gpu-capabilities.exe" |
     done
 cp -r scripts patches "$dest/"
 cp run.py LICENSE README.md packaging/windows/README-Windows.txt "$dest/"
-if [[ -d fsr4_shaders ]]; then cp -r fsr4_shaders "$dest/"; fi
-# DLSS (NVIDIA RTX): the MSVC-built bridge and NVIDIA's runtime, next to gow3-probe.exe
-# (packaging/windows/build_dlss.sh). Without them the DLSS option stays unavailable.
-if [[ -f out/gow3_dlss.dll && -f out/nvngx_dlss.dll ]]; then
-    cp out/gow3_dlss.dll out/nvngx_dlss.dll "$dest/bin/"
-    mkdir -p "$dest/licenses" && cp out/NVIDIA-DLSS-LICENSE.txt "$dest/licenses/"
-    cp gpu/dlss_bridge/LICENSE.txt "$dest/licenses/gow3_dlss-LICENSE.txt"
-else
-    echo "DLSS bridge not built (packaging/windows/build_dlss.sh): no DLSS in this package" >&2
-fi
 find "$dest" -name __pycache__ -prune -exec rm -r {} +
+# No game files and nothing a player made (saves, shader caches built from the game's shaders,
+# settings, logs) may ship: stop when one is found.
+forbidden=$(find "$dest" \( -iname eboot.bin -o -iname sce_module -o -iname sce_sys -o -iname savedata \
+    -o -iname user -o -iname cache -o -iname '*.log' -o -iname gow3.ini -o -iname settings.json \
+    -o -iname mods.json -o -iname patches.json -o -iname fsr4_shaders -o -iname 'nvngx_dlss*.dll' \
+    -o -iname '*.spv' -o -iname '*.pkg' -o -iname '*.sprx' -o -iname '*.prx' \) -print)
+if [[ -n $forbidden ]]; then
+    echo "Package holds files that must not ship:" >&2
+    echo "$forbidden" >&2
+    exit 1
+fi
 mkdir -p dist
 rm -f dist/gow3-windows.zip
 (cd out/stage && powershell -NoProfile -Command \

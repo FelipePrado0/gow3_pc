@@ -17,8 +17,7 @@ fixes from [cuesta4's shadPS4 fork](https://github.com/cuesta4/shadPS4) (see [Cr
 
 On the test machine (AMD Radeon RX 6700 XT, Ryzen 5 5600X, 32 GB) the game runs at 144 FPS on
 average (55 to 240) at 1080p with the 240 FPS engine frame rate, and at 108 FPS on average at 4K
-with FSR 1. There is no ready-made download yet: for now the project is built from source.
-Progress is tracked (in Portuguese) in [docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.md).
+with FSR 1. Progress is tracked (in Portuguese) in [docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.md).
 
 ## What works
 
@@ -49,6 +48,51 @@ Progress is tracked (in Portuguese) in [docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.
     RAM and VRAM, each optional, with font size, corner, background opacity and layout. The
     numbers are the game's own use, not the whole system's.
 
+## Download and play
+
+**You need**
+- Windows 10 (1903 or newer) or Windows 11, 64-bit.
+- A graphics card with Vulkan 1.3 and an up-to-date driver.
+- Your own copy of God of War III Remastered: **CUSA01623 with the 01.02 update**, as a folder
+  that contains `eboot.bin`, `sce_module` and `sce_sys`. No game files are included in this
+  download.
+
+**Steps**
+1. Download `gow3-windows.zip` from the
+   [Releases page](https://github.com/FelipePrado0/gow3_pc/releases/latest).
+2. Extract it to a folder of your choice, for example `C:\Games\gow3-windows`. Do not run it from
+   inside the zip.
+3. Open **`God of War III.exe`**. If Windows shows "Windows protected your PC", click
+   **More info**, then **Run anyway**: the program is not digitally signed.
+4. Click **Choose the game folder**. It takes you to the **Game** page. Next to **Game folder**,
+   click **Browse…** and select the folder with `eboot.bin`.
+5. Back on **Home**, the cover art and "CUSA01623 · version 01.02" appear. Adjust **Quick
+   settings** if you like: display mode, frame rate limit, render resolution and engine frame
+   rate.
+6. Click **PLAY**. The first start takes a little longer while the game image is prepared. The
+   next starts are quick.
+
+Patches and fixes are included and applied automatically: texture fix, skip videos with X and
+120 FPS are on by default. Change the resolution and frame rate on **Home** or **Performance**.
+
+**While playing**
+- **Insert** on the keyboard, or **R3 + L2** on the controller, opens the port's menu: cheats,
+  multipliers, image, performance and the performance overlay.
+- Saved shaders load in the background. A small "Loading shader cache" note in the corner shows
+  the progress.
+
+**Next time**
+- **`Play God of War III.exe`** starts the game straight away with your saved settings. You can
+  make a desktop shortcut to it, or add it to Steam with **Add a Non-Steam Game**.
+- Your saves, shader cache and log are in the `user` folder next to `God of War III.exe`. Keep
+  that folder when you update.
+- **Advanced → Check for updates** downloads and installs a new version. Your saves and settings
+  are kept.
+
+**If something goes wrong**
+- Black screen at start: **Advanced → Clear shader cache**, then start again.
+- The game does not open: check the **Log** page, or send `user\last_run.log` with your report.
+
 ## Requirements
 
 - Windows 10 (1903 or newer) or Windows 11, 64-bit.
@@ -59,10 +103,10 @@ Progress is tracked (in Portuguese) in [docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.
   (sha256 `d85c8135d330c3b601bf5dc3f1dd86bd6119fb8a9fce372bed2c9785f9a79299`), and the in-game
   hooks (cheats, multipliers, health bar) only where the code they change has the expected
   bytes. Otherwise the game starts without them, and the log and the menu say why.
-- To build: [MSYS2](https://www.msys2.org) and [Python 3](https://www.python.org) with Pillow
+- To build from source: [MSYS2](https://www.msys2.org) and [Python 3](https://www.python.org) with Pillow
   (`pip install pillow`, used for the game's icon and cover art).
 
-## Building and playing
+## Building from source
 
 Development happens on the `gow3` branch; `main` receives tested merges.
 
