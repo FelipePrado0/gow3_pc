@@ -7,14 +7,17 @@ Port nativo de **God of War III Remastered** (PlayStation 4) para Windows 10 e 1
 O executável original do jogo roda direto no processador do PC (o PS4 usa a mesma arquitetura
 x86-64). Um runtime escrito para este jogo substitui as bibliotecas de sistema do PS4, e os
 gráficos são traduzidos para Vulkan. Não é um emulador genérico: o projeto atende um único jogo.
+É um fork do [port para Windows de Supermedo](https://github.com/Supermedo/bloodborne_pc) do
+[bloodborne_pc de deadinside28](https://github.com/deadinside28/bloodborne_pc), com correções de
+God of War III do [fork do shadPS4 de cuesta4](https://github.com/cuesta4/shadPS4) (veja os
+[Créditos](#créditos)).
 
 > **Nenhum arquivo do jogo está incluído.** É preciso um dump do seu próprio PS4 (CUSA01623,
 > versão 01.02). Este projeto não tem relação com a Sony Interactive Entertainment nem com o
 > Santa Monica Studio. God of War é marca registrada da Sony Interactive Entertainment.
 
-**Situação: alpha em desenvolvimento.** O jogo abre, toca as cutscenes, tem som, controle e
-save. Na máquina de teste (AMD Radeon RX 6700 XT, Ryzen 5 5600X), uma cena pesada de gameplay
-roda a cerca de 66 FPS em 1080p com o patch de 120 FPS, e os menus chegam a 240 FPS. Ainda não
+Na máquina de teste (AMD Radeon RX 6700 XT, Ryzen 5 5600X, 32 GB), o jogo roda a 144 FPS de
+média (55 a 240) em 1080p com o motor a 240 FPS, e a 108 FPS de média em 4K com FSR 1. Ainda não
 há download pronto: por enquanto o projeto é compilado a partir do código. O andamento está em
 [docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.md).
 
@@ -26,11 +29,12 @@ há download pronto: por enquanto o projeto é compilado a partir do código. O 
   configuráveis.
 - Salvar e carregar: a lista de saves aparece na tela, como no PS4. O autosave também funciona.
   O launcher faz backup dos saves antes de cada partida.
-- Patches da comunidade: resolução de renderização de 480p, 720p, 1440p, 1800p ou 4K; correção
-  de texturas corrompidas; FPS do motor de 120 ou 240; pular vídeos com o botão X.
+- Patches: resolução de renderização de 480p, 720p, 1440p, 1800p ou 4K, correção de texturas
+  corrompidas e pular vídeos com o botão X (comunidade); FPS do motor de 120 (kvicken) ou 240
+  (adaptado por Felipe Prado).
 - **Abertura imediata:** o cache de shaders salvo carrega em segundo plano enquanto você joga, e
   os shaders novos também são compilados em segundo plano, sem parar o jogo.
-- **Launcher** com as cores do jogo, em 13 idiomas: ajustes rápidos na tela inicial, tela,
+- **Launcher** com as cores do jogo, em inglês com traduções parciais: ajustes rápidos na tela inicial, tela,
   desempenho, pasta do jogo e backups de save, patches, mods (ordem, presets e conflitos),
   controles com ícones de botões PlayStation ou Xbox, atualizações e diagnóstico.
 - **Menu dentro do jogo** (Insert no teclado, R3+L2 no controle), com quatro abas:
@@ -45,19 +49,6 @@ há download pronto: por enquanto o projeto é compilado a partir do código. O 
   - **Overlay:** contador de desempenho com FPS, tempo de quadro, upscaler, GPU (nome e uso),
     CPU, RAM e VRAM, cada um opcional, com tamanho da fonte, canto, transparência e formato. Os
     números são o uso do próprio jogo, não do sistema inteiro.
-
-## Problemas conhecidos
-
-- **240 FPS** é experimental.
-- **Skip Intro** não está disponível: o patch da comunidade não bate com este executável.
-- Com um cache grande (cerca de 10 mil shaders), a carga em segundo plano leva por volta de 3
-  minutos em prioridade baixa; até terminar, uma área nova pode mostrar um objeto ou efeito um
-  instante depois.
-- Raramente uma partida para antes do primeiro quadro (no carregador do intro do jogo). Abrir
-  de novo resolve.
-- Ainda não há upscaling temporal (FSR 3/4, DLSS ou TAA): o código está no port, mas desligado
-  até ser calibrado para o God of War III.
-- Testado apenas no Windows 11 com AMD Radeon RX 6700 XT.
 
 ## Requisitos
 
@@ -176,17 +167,23 @@ Mais documentação: [mods](docs/MODS.md), [mapa do quadro e upscaler](docs/upsc
 
 ## Créditos
 
-Construído sobre o [bbport](https://github.com/deadinside28/bloodborne_pc), o port nativo de
-Bloodborne de deadinside28, sobre o [port para Windows](https://github.com/Supermedo/bloodborne_pc)
-de Supermedo (Mohammed Albarghouthi) e sobre o renderizador do
-[shadPS4](https://github.com/shadps4-emu/shadPS4).
+Este projeto é um fork do port para Windows de Supermedo, que parte do original de deadinside28:
 
-Patches de God of War III Remastered por kvicken e cuesta4 (a partir dos patches de PS3 de
-illusion0001), publicados para o shadPS4 em
+- **deadinside28**: [bloodborne_pc](https://github.com/deadinside28/bloodborne_pc), o port nativo
+  original.
+- **Supermedo** (Mohammed Albarghouthi): [bloodborne_pc para Windows](https://github.com/Supermedo/bloodborne_pc),
+  o fork de onde este projeto vem.
+- **cuesta4**: [fork do shadPS4 focado em God of War III Remastered](https://github.com/cuesta4/shadPS4)
+  (branch `eltutz`). Este port usa dele a regravação de blends da GNM, o estado de profundidade e
+  stencil e as correções de imagens que compartilham memória.
+- **Equipe do shadPS4**: o renderizador do [shadPS4](https://github.com/shadps4-emu/shadPS4).
+
+Patches: kvicken e cuesta4 (resolução, correção de texturas, 120 FPS e pular vídeos, a partir
+dos patches de PS3 de illusion0001), publicados para o shadPS4 em
 [shadps4-emu/ps4_cheats#145](https://github.com/shadps4-emu/ps4_cheats/pull/145) e adaptados a
-este executável. Trapaças adaptadas dos
-[cheats GoldHEN](https://github.com/GoldHEN/GoldHEN_Cheat_Repository) de Celogamez para este
-jogo.
+este executável. O patch de 240 FPS foi adaptado por Felipe Prado a partir do de 120 FPS.
+Trapaças: adaptadas dos [cheats GoldHEN](https://github.com/GoldHEN/GoldHEN_Cheat_Repository) de
+Celogamez.
 
 Também usados: [LibAtrac9](https://github.com/Thealexbarney/LibAtrac9),
 [FFmpeg](https://ffmpeg.org), [SDL3](https://github.com/libsdl-org/SDL),
