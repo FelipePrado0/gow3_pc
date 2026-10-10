@@ -42,6 +42,9 @@ struct Values {
     std::atomic<bool> red_orbs_supported{false};
     std::atomic<bool> cheats[5]{};
     std::atomic<uint32_t> cheats_supported{0};
+    /// Damage hook (src/actor_hook.h): enemy health bar, off by default.
+    std::atomic<bool> enemy_health_bar{false};
+    std::atomic<bool> actor_watch_supported{false};
     // FSR 4 checks (menu): the provider's auto exposure, the jitter sign it is given.
     std::atomic<bool> fsr4_auto_exposure{true};
     std::atomic<bool> fsr4_invert_jitter{false};

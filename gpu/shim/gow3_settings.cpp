@@ -60,6 +60,8 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.debug_view = std::clamp(i, 0, DebugViewCount - 1);
     } else if (key == "show_fps") {
         v.show_fps = i != 0;
+    } else if (key == "enemy_health_bar") {
+        v.enemy_health_bar = i != 0;
     } else if (key == "red_orb_multiplier") {
         v.red_orb_multiplier = Gow3Orbs::ClampMultiplier(f);
     } else if (key == "fsr4_auto_exposure") {
@@ -195,6 +197,7 @@ void Save() {
     std::fprintf(file, "cheat_health=%d\ncheat_magic=%d\ncheat_item=%d\ncheat_rage=%d\ncheat_orbs=%d\n",
                  int(v.cheats[0].load()), int(v.cheats[1].load()), int(v.cheats[2].load()),
                  int(v.cheats[3].load()), int(v.cheats[4].load()));
+    std::fprintf(file, "enemy_health_bar=%d\n", int(v.enemy_health_bar.load()));
     // Read by run.sh at start.
     std::fprintf(file, "live_resolution=%s\n", v.live_resolution < 0 ? "auto"
                                                   : v.live_resolution ? "1" : "0");

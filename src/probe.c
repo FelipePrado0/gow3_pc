@@ -8,6 +8,7 @@
 #include "runtime.h"
 #include "orb_hook.h"
 #include "cheat_hook.h"
+#include "actor_hook.h"
 #include "gpu/gow3gpu.h"
 #if !defined(__x86_64__) || !defined(__GNUC__)
 #error This prototype requires x86-64 GCC or Clang (including MinGW).
@@ -315,6 +316,8 @@ static int mapped(Segment *segments, uint64_t count, uint64_t address, uint64_t 
 extern ABI float gow3_orbs_gain(void *player, float requested);
 extern void gow3_orbs_status(int supported);
 extern uintptr_t gow3_cheat_flag(unsigned id);
+extern uintptr_t gow3_actor_slots_address(void);
+extern void gow3_actor_status(int supported);
 extern void gow3_cheat_status(unsigned id);
 
 static void install_cheats(const char *app0, Segment *segments, uint64_t count, uint64_t size) {
@@ -364,6 +367,36 @@ static void install_cheats(const char *app0, Segment *segments, uint64_t count, 
         gow3_cheat_status(id);
         printf("Cheats: %s ready (live toggle, initially disabled unless saved)\n", names[id]);
     }
+}
+
+/* Damage hook for the enemy health bar (src/actor_hook.h). Always
+ * installed when the code matches: it only records values; the overlay decides what to show. */
+static void install_actor_watch(const char *app0, Segment *segments, uint64_t count, uint64_t size) {
+    char path[4096], serial[32] = "", version[32] = "";
+    snprintf(path, sizeof(path), "%s/sce_sys/param.sfo", app0 ? app0 : ".");
+    sfo_value(path, "TITLE_ID", serial, sizeof(serial), NULL);
+    sfo_value(path, "APP_VER", version, sizeof(version), NULL);
+    const uint64_t at = GOW3_ACTOR_HOOK_OFFSET;
+    if (strcmp(serial, "CUSA01623") || strcmp(version, "01.02") || at > size ||
+        !mapped(segments, count, at, GOW3_ACTOR_HOOK_LENGTH) ||
+        !gow3_actor_signature_match(image + at, size - at)) {
+        printf("Health display: unavailable (game version or code signature mismatch)\n");
+        return;
+    }
+    unsigned char *stub = allocate(page_size);
+    const int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + at + 5);
+    if (delta < INT32_MIN || delta > INT32_MAX) {
+        printf("Health display: unavailable (hook outside relative-jump range)\n");
+        return;
+    }
+    gow3_actor_build_stub(stub, gow3_actor_slots_address(), (uintptr_t)(image + at + GOW3_ACTOR_HOOK_LENGTH));
+    protect(stub, page_size, 5);
+    const int32_t relative = (int32_t)delta;
+    image[at] = 0xe9;
+    memcpy(image + at + 1, &relative, 4);
+    memset(image + at + 5, 0x90, GOW3_ACTOR_HOOK_LENGTH - 5);
+    gow3_actor_status(1);
+    printf("Health display: damage hook ready (enemy health bar in the menu)\n");
 }
 
 static void install_orb_multiplier(const char *app0, Segment *segments, uint64_t count,
@@ -712,6 +745,7 @@ int main(int argc, char **argv) {
     if (patch_file) apply_patches(patch_file, segments, ns, relocs, nr);
     if (gpu_enabled) install_orb_multiplier(app0, segments, ns, size);
     if (gpu_enabled) install_cheats(app0, segments, ns, size);
+    if (gpu_enabled) install_actor_watch(app0, segments, ns, size);
 #ifdef _WIN32
     printf("Guest TCB loads redirected to the TEB TLS slot: %" PRIu64 "\n", patch_tcb_loads(segments, ns));
 #endif

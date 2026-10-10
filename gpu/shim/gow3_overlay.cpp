@@ -7,12 +7,17 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <mutex>
 #include <vector>
 
 #include <SDL3/SDL.h>
 #include "gow3_settings.h"
 #include "gow3_orbs.h"
+#include "gow3_actors.h"
+#include "../../src/actor_hook.h"
+
+extern Gow3ActorSlot gow3_actor_slots[2];
 #include "common/elf_info.h"
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
@@ -168,6 +173,13 @@ void Menu() {
                 frame_ms_avg);
     ImGui::Separator();
     Checkbox("Show FPS counter", s.show_fps);
+    ImGui::SeparatorText("Health display");
+    ImGui::BeginDisabled(!s.actor_watch_supported.load());
+    Checkbox("Enemy health bar (last enemy hit)", s.enemy_health_bar);
+    ImGui::EndDisabled();
+    if (!s.actor_watch_supported.load()) {
+        ImGui::TextDisabled("Unavailable: game version or code signature mismatch.");
+    }
     ImGui::SeparatorText("Cheats");
     const char* cheat_names[] = {"Max / infinite health", "Infinite magic", "Infinite item meter",
                                  "Infinite Rage of Sparta", "Max / infinite red orbs"};
@@ -214,6 +226,55 @@ void Menu() {
     ImGui::End();
     if (!keep_open) {
         SetOpen(false);
+    }
+}
+
+// Enemy health bar from the damage hook's records (gow3_actors.cpp).
+// Only the copied values are read, never the game's memory: an actor may be gone by now.
+void HealthDisplay() {
+    struct Seen {
+        uint32_t seq = 0;
+        std::chrono::steady_clock::time_point at{};
+    };
+    static Seen seen[2];
+    const auto& s = Gow3Settings::Get();
+    if (!s.actor_watch_supported.load()) {
+        return;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    Gow3ActorSlot slot[2];
+    for (int i = 0; i < 2; ++i) {
+        std::memcpy(&slot[i], const_cast<const Gow3ActorSlot*>(&gow3_actor_slots[i]), sizeof(slot[i]));
+        if (slot[i].seq != seen[i].seq) {
+            seen[i] = {slot[i].seq, now};
+        }
+    }
+    const auto recent = [&](int i, int seconds) {
+        return seen[i].seq != 0 && now - seen[i].at < std::chrono::seconds(seconds);
+    };
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImDrawList* draw = ImGui::GetForegroundDrawList();
+    const float scale = base_scale;
+    if (s.enemy_health_bar && recent(1, 4) && Gow3Actors::Valid(slot[1].health, slot[1].max_health)) {
+        // Minimal: a thin green bar centered on the screen's top edge; it shrinks toward the center
+        // so it stays symmetric, with the health in numbers below.
+        const ImVec2 display = ImGui::GetIO().DisplaySize;
+        const float width = 260.0f * scale, height = 5.0f * scale, center = display.x * 0.5f;
+        const float top = 36.0f * scale;
+        const float fraction = Gow3Actors::Fraction(slot[1].health, slot[1].max_health);
+        draw->AddRectFilled(ImVec2(center - width * 0.5f - scale, top - scale),
+                            ImVec2(center + width * 0.5f + scale, top + height + scale),
+                            IM_COL32(0, 0, 0, 140), 2 * scale);
+        const float half = width * 0.5f * fraction;
+        draw->AddRectFilled(ImVec2(center - half, top), ImVec2(center + half, top + height),
+                            IM_COL32(70, 190, 80, 220), 2 * scale);
+        char text[48];
+        std::snprintf(text, sizeof(text), "%.0f / %.0f", std::ceil(slot[1].health), slot[1].max_health);
+        const float font = ImGui::GetFontSize() * 0.9f;
+        const ImVec2 size = ImGui::GetFont()->CalcTextSizeA(font, FLT_MAX, 0.0f, text);
+        const ImVec2 at{center - size.x * 0.5f, top + height + 4.0f * scale};
+        draw->AddText(ImGui::GetFont(), font, ImVec2(at.x + scale, at.y + scale), IM_COL32(0, 0, 0, 160), text);
+        draw->AddText(ImGui::GetFont(), font, at, IM_COL32(225, 235, 220, 220), text);
     }
 }
 
@@ -531,7 +592,9 @@ void SetLoading(bool active, u32 done, u32 total) {
 }
 
 bool Visible() {
-    return initialized && (loading || menu_open || text_entry_active || choice_active || Gow3Settings::Get().show_fps);
+    const auto& s = Gow3Settings::Get();
+    return initialized && (loading || menu_open || text_entry_active || choice_active || s.show_fps ||
+                           (s.actor_watch_supported && s.enemy_health_bar));
 }
 
 bool CapturesInput() {
@@ -592,6 +655,9 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
     }
     if (Gow3Settings::Get().show_fps && !menu_open) {
         FpsCounter();
+    }
+    if (!loading && !menu_open) {
+        HealthDisplay();
     }
     if (text_entry_active) {
         TextEntryBox();
