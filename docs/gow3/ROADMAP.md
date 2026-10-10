@@ -129,6 +129,7 @@ Primeira execução real (60 s, 2026-10-08): o jogo inicia sem `STOP:` nem `Faul
 | Warmup paralelo | Loading do cache de 300 s para cerca de 70 s, mesmas pipelines (checkbox, ligada por padrão) | Validado no jogo |
 | Barra de vida do inimigo | Hook na rotina de dano; barra verde centralizada com a vida em números, opção no menu Insert | Validado no jogo |
 | Origem dos readbacks | Relatório por consumidor das esperas restantes (checkbox de diagnóstico) | Medido: 100% da espera é uma leitura da CPU por quadro, 11,6 ms |
+| Leitura sem esperar a GPU | O jogo usa a cópia do quadro anterior (exposição 1x1) e escreve ao lado dela sem esperar; checkbox ligada por padrão | Validado: 40,9 para 66,5 FPS na cena de referência |
 | Proteção de páginas | Teste permanente da regressão da permissão inválida | Teste ok |
 
 **Critérios da alpha (situação em 2026-10-08)**
@@ -148,9 +149,9 @@ Primeira execução real (60 s, 2026-10-08): o jogo inicia sem `STOP:` nem `Faul
 **Pendências conhecidas**
 
 - **Skip Intro** não foi portado: o código dele não bate com este eboot e ficou fora do XML.
-- **120 FPS:** o jogo limita o tempo de cada quadro a 1/FPS alvo. Abaixo de 120 FPS ele roda em câmera lenta (no PS4 acontece o mesmo abaixo de 60). Nas cenas pesadas a RX 6700 XT fica entre 52 e 65 FPS, então o patch só vale onde 120 se sustenta.
+- **120 FPS:** com o patch, o jogo roda em velocidade normal mesmo abaixo de 120 FPS (confirmado jogando em 2026-10-09, a cerca de 40 FPS). A afirmação anterior de câmera lenta abaixo de 120 estava errada.
 - **Inicialização:** com o cache cheio (5226 pipelines) o loading serial leva de 300 a 400 s. O warmup paralelo leva cerca de 70 s e vem ligado por padrão no launcher.
-- **Desempenho real:** a cena de referência roda a cerca de 40 FPS com o patch de 120 FPS; ainda há cerca de 11,5 ms por quadro esperando readbacks.
+- **Desempenho real:** a cena de referência roda a cerca de 66 FPS (58 a 70) com o patch de 120 FPS, sem espera de readback.
 - **Saves de teste:** existem 10 saves `SD-2610080631xx` criados antes da lista de saves; podem ser apagados.
 - **Predicação da GPU** (`IT_SET_PREDICATION`) continua sem implementação, como no shadPS4.
 - **Linux:** o `build.sh` do Linux recebeu os testes novos e o FFmpeg no runtime, mas não foi compilado.
