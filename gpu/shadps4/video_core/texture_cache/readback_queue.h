@@ -25,17 +25,19 @@ public:
         entries.push_back({address, size, tick, std::move(payload)});
         bytes += size;
     }
-    std::uint64_t RequiredTick(std::uint64_t address, std::uint64_t size) const {
+    /// `exact`: only copies sharing bytes with the range, not just a page (gow3: for consumers
+    /// that read or drop exactly those bytes, e.g. an image upload).
+    std::uint64_t RequiredTick(std::uint64_t address, std::uint64_t size, bool exact = false) const {
         std::uint64_t tick = 0;
         for (const auto& entry : entries) {
-            if (entry.valid && entry.watched && OverlapsPage(entry, address, size)) tick = entry.tick;
+            if (entry.valid && entry.watched && Overlaps(entry, address, size, exact)) tick = entry.tick;
         }
         return tick;
     }
     template <typename Callback>
-    void Cancel(std::uint64_t address, std::uint64_t size, Callback&& cancel) {
+    void Cancel(std::uint64_t address, std::uint64_t size, Callback&& cancel, bool exact = false) {
         for (auto& entry : entries) {
-            if (entry.valid && OverlapsPage(entry, address, size)) {
+            if (entry.valid && Overlaps(entry, address, size, exact)) {
                 cancel(entry);
                 entry.valid = false;
             }
@@ -75,6 +77,10 @@ private:
         const auto begin = entry.address & ~std::uint64_t{4095};
         const auto end = (entry.address + entry.size + 4095) & ~std::uint64_t{4095};
         return address < end && begin < address + size;
+    }
+    static bool Overlaps(const Entry& entry, std::uint64_t address, std::uint64_t size, bool exact) {
+        if (!exact) return OverlapsPage(entry, address, size);
+        return size && address < entry.address + entry.size && entry.address < address + size;
     }
     static constexpr std::uint64_t MaxBytes = 64ull << 20;
     std::deque<Entry> entries;

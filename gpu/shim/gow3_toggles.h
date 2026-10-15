@@ -72,6 +72,9 @@ enum : std::uint64_t {
     /// A texture/storage request for the top rows of a cached image (same address and layout)
     /// uses that image, instead of creating and uploading a new one (texture_cache.cpp).
     PartialHeightViews = 1ull << 58,
+    /// With stale readbacks: an image upload or free waits only for pending GPU-to-RAM copies
+    /// that share bytes with the image, not just a 4 KB page (texture_cache.cpp).
+    ExactReadbackWaits = 1ull << 59,
     // Bits 20-29 are used as raw debug toggles by the camera/object motion and the upscaler.
 };
 inline bool Disabled(std::uint64_t bit) {
