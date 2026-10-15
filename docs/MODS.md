@@ -4,19 +4,27 @@ O launcher tem a página **Mods & patches**: escolha da pasta, chave geral, ativ
 e setas de ordem de carga. As mudanças valem no próximo início. O mod mais abaixo na lista tem
 prioridade; quando dois mods trocam o mesmo arquivo, o log mostra qual venceu.
 
-A pasta padrão é `mods/` no diretório de dados. Cada mod fica na sua própria pasta:
+A pasta padrão é `mods/` no diretório de dados. Cada mod fica na sua própria pasta e espelha
+a árvore do jogo, que no God of War III tem os dados em `EXEC/` e numa pasta por idioma
+(`ENGLISH/`, `GERMAN/`, ...), não em `dvdroot_ps4/`:
 
 ```text
 mods/
   Nome do mod/
-    dvdroot_ps4/...
+    EXEC/WAD/PS4_LE/R_UI.WAD
+    ENGLISH/...
 ```
 
 Também são aceitos:
 
-- `Nome do mod/app0/dvdroot_ps4/...`;
+- `Nome do mod/app0/EXEC/...`;
 - uma pasta a mais por fora, como a de um arquivo extraído numa pasta com o nome dele:
-  `Nome do mod/Nome do mod v1.2/dvdroot_ps4/...` (readme e imagens ao lado são ignorados).
+  `Nome do mod/Nome do mod v1.2/EXEC/...` (readme e imagens ao lado são ignorados);
+- `dvdroot_ps4/` (a convenção do shadPS4/Bloodborne), e qualquer outra pasta de primeiro nível da
+  pasta do jogo escolhida, para outras regiões.
+
+Um exemplo completo, com as ferramentas que o geram, está em
+[examples/controller-prompts](../examples/controller-prompts/README.md).
 
 Maiúsculas e minúsculas nos nomes do mod não importam: um arquivo com outra caixa troca o
 arquivo do jogo de mesmo nome. O log mostra quantos arquivos o mod trocou e quantos acrescentou:

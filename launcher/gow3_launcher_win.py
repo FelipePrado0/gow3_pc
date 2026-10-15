@@ -13,6 +13,7 @@ so a packaged port needs no Python installation.
 """
 import contextlib
 import glob
+import importlib
 import json
 import os
 from pathlib import Path
@@ -47,6 +48,24 @@ import steam_shortcut  # noqa: E402  (scripts/)
 from patches import game_profile, game_sfo  # noqa: E402  (scripts/)
 from prepare import load_sfo  # noqa: E402  (scripts/)
 DATA_DIR = Path(os.environ.get('GOW3_DATA_DIR', PORT_DIR))
+
+
+def script_module(name):
+    """`scripts/<name>.py` as it is on disk. The frozen launcher bundles a copy of the scripts
+    it imports at build time and that copy wins over sys.path, so an updated script (which
+    PLAY already runs from disk) would not reach the launcher's pages without this."""
+    import importlib.util
+    path = PORT_DIR / 'scripts' / f'{name}.py'
+    if not FROZEN or not path.is_file():
+        return importlib.import_module(name)
+    key = f'ondisk_{name}'
+    if key not in sys.modules:
+        spec = importlib.util.spec_from_file_location(key, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        sys.modules[key] = module
+    return sys.modules[key]
+
 CONFIG_DIR = (Path(os.environ.get('APPDATA', Path.home())) if WINDOWS else
               Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config')) / 'gow3-launcher'
 CONFIG_FILE = CONFIG_DIR / 'settings.json'
@@ -1678,7 +1697,7 @@ class Launcher:
         if not hasattr(self, 'patches_frame'):
             return
         tk, ttk = self.tk, self.ttk
-        from mods import discover
+        discover = script_module('mods').discover
         from patches import external_patches
         for holder in (self.mods_frame, self.patches_frame):
             for widget in holder.winfo_children():
@@ -1738,7 +1757,7 @@ class Launcher:
             ttk.Checkbutton(self.patches_frame, text=key + (f'  —  {author}' if author else ''), variable=var).pack(anchor='w')
 
     def refresh_conflicts(self):
-        from mods import conflicts
+        conflicts = script_module('mods').conflicts
         if not getattr(self, 'conflict_label', None) or not self.conflict_label.winfo_exists():
             return
         root = Path(self.var('mods_dir', 'app').get() or DATA_DIR / 'mods')
@@ -1760,7 +1779,7 @@ class Launcher:
         self.preset_choice.configure(values=sorted(presets))
 
     def load_mod_preset(self):
-        from mods import apply_preset
+        apply_preset = script_module('mods').apply_preset
         preset = load_json(MOD_PRESETS, {}).get(self.preset_choice.get().strip())
         if not isinstance(preset, dict):
             return

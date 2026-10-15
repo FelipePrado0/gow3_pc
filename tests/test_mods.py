@@ -169,3 +169,61 @@ class ModTests(unittest.TestCase):
         self.assertEqual(mounted['content'], 'mod')
         self.assertFalse(Path(mounted['path']).exists())
         self.assertEqual((self.assets/'a.wad').read_bytes(), b'original')
+
+
+class GodOfWarLayout(unittest.TestCase):
+    """God of War III keeps its data in EXEC and one folder per language at the game root."""
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp())
+        self.game = self.root / 'CUSA01623'
+        for folder in ('EXEC', 'ENGLISH', 'GERMAN', 'sce_sys', 'sce_module'):
+            (self.game / folder).mkdir(parents=True)
+        (self.game / 'eboot.bin').write_bytes(b'original executable')
+        (self.game / 'EXEC' / 'ui.wad').write_bytes(b'original')
+        (self.game / 'ENGLISH' / 'text.wad').write_bytes(b'english')
+        self.moddir = self.root / 'mods'
+        self.moddir.mkdir()
+
+    def tearDown(self):
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def test_exec_and_language_folders(self):
+        mod = self.moddir / 'Xbox Prompts'
+        (mod / 'exec').mkdir(parents=True)
+        (mod / 'exec' / 'UI.WAD').write_bytes(b'xbox')
+        (mod / 'English').mkdir()
+        (mod / 'English' / 'text.wad').write_bytes(b'xbox text')
+        (mod / 'readme.txt').write_text('ignored')
+        self.assertEqual(mods.discover(self.moddir), ['Xbox Prompts'])
+        result = mods.build_overlay(self.game, self.root / 'out', [('Xbox Prompts', mod)])
+        self.assertEqual((result / 'EXEC' / 'ui.wad').read_bytes(), b'xbox')
+        self.assertEqual((result / 'ENGLISH' / 'text.wad').read_bytes(), b'xbox text')
+        self.assertEqual({p.name for p in (result / 'EXEC').iterdir()}, {'ui.wad'})
+        self.assertEqual((self.game / 'EXEC' / 'ui.wad').read_bytes(), b'original')
+        self.assertEqual((result / 'eboot.bin').read_bytes(), b'original executable')
+
+    def test_wrapper_folder_around_exec(self):
+        mod = self.moddir / 'Archive'
+        (mod / 'Archive v1.0' / 'EXEC').mkdir(parents=True)
+        (mod / 'Archive v1.0' / 'EXEC' / 'ui.wad').write_bytes(b'wrapped')
+        self.assertEqual(mods.discover(self.moddir), ['Archive'])
+        result = mods.build_overlay(self.game, self.root / 'out', [('Archive', mod)])
+        self.assertEqual((result / 'EXEC' / 'ui.wad').read_bytes(), b'wrapped')
+
+    def test_unknown_region_folder_learned_from_game(self):
+        (self.game / 'JAPANESE').mkdir()
+        (self.game / 'JAPANESE' / 'text.wad').write_bytes(b'jp')
+        mod = self.moddir / 'JP'
+        (mod / 'JAPANESE').mkdir(parents=True)
+        (mod / 'JAPANESE' / 'text.wad').write_bytes(b'jp mod')
+        result = mods.build_overlay(self.game, self.root / 'out', [('JP', mod)])
+        self.assertEqual((result / 'JAPANESE' / 'text.wad').read_bytes(), b'jp mod')
+
+    def test_system_folders_rejected(self):
+        mod = self.moddir / 'Bad'
+        (mod / 'EXEC').mkdir(parents=True)
+        (mod / 'sce_sys').mkdir()
+        (mod / 'sce_sys' / 'param.sfo').write_bytes(b'x')
+        with self.assertRaises(ValueError):
+            mods.build_overlay(self.game, self.root / 'out', [('Bad', mod)])
