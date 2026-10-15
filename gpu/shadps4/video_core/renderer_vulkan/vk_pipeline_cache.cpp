@@ -10,6 +10,7 @@
 #include <ranges>
 #include <string>
 #include <unordered_set>
+#include "gow3_overlay.h"
 #include "gow3_threads.h"
 
 #include "common/hash.h"
@@ -420,6 +421,7 @@ PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
 
 PipelineCache::~PipelineCache() {
     StopWarmUp();
+    StopDiskPrefetch();
     FinishCompilations();
 }
 
@@ -536,8 +538,21 @@ bool PipelineCache::QueueShader(Program& program, HwStage stage, SwStage l_stage
     if (queued) {
         program.pending = std::move(build);
         pending_programs.push_back(&program);
+        ++compiles_started;
     }
     return queued;
+}
+
+// gow3: the corner note on shader translations (Gow3Overlay), when anything changed. Runs at
+// the start of each lookup, so a compile started by the previous draw shows from the next one.
+void PipelineCache::ReportCompiles() {
+    const u32 pending = u32(pending_programs.size());
+    if (compiles_started == compiles_reported && pending == pending_reported) {
+        return;
+    }
+    Gow3Overlay::NoteShaderCompiles(pending, u32(compiles_started - compiles_reported));
+    compiles_reported = compiles_started;
+    pending_reported = pending;
 }
 
 void PipelineCache::PublishShaders(bool wait) {
@@ -585,7 +600,8 @@ void PipelineCache::PublishShaders(bool wait) {
             build->spec.info = &program->info;
             RegisterShaderMeta(program->info, build->spec.fetch_shader_data, build->spec,
                                perm_hash, build->permutation);
-            program->AddPermut(build->module, std::move(build->spec));
+            program->InsertPermut(build->module, std::move(build->spec), build->permutation);
+            disk_stats.compiled += DiskShadersActive();
             build->module = nullptr;
             program->pending.reset();
         }
@@ -611,7 +627,10 @@ void PipelineCache::PublishGraphics(bool wait) {
         }
         const auto key = it.key();
         build->pipeline->PublishStages(build->live_infos);
-        RegisterPipelineData(key, std::hash<GraphicsPipelineKey>{}(key), build->data);
+        const auto hash = std::hash<GraphicsPipelineKey>{}(key);
+        if (NewPipelineKey(fmt::format("g_{:#018x}", hash))) {
+            RegisterPipelineData(key, hash, build->data);
+        }
         graphics_pipelines.emplace(key, std::move(build->pipeline));
         ++num_new_pipelines;
         it = pending_graphics.erase(it);
@@ -707,6 +726,8 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
     PublishShaders();
     PublishGraphics();
     PumpWarmUp();
+    ReportDiskShaders();
+    ReportCompiles();
     used_prepared = nullptr;
     if (prepared) {
         if (const auto* pipeline = TryPreparedPipeline(*prepared)) {
@@ -770,7 +791,9 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
             instance, scheduler, desc_heap, profile, sel.graphics_key, *pipeline_cache, sel.infos,
             sel.runtime_infos, sel.fetch_shader, sel.modules, sdata, false);
 
-        RegisterPipelineData(sel.graphics_key, pipeline_hash, sdata);
+        if (NewPipelineKey(fmt::format("g_{:#018x}", pipeline_hash))) {
+            RegisterPipelineData(sel.graphics_key, pipeline_hash, sdata);
+        }
         ++num_new_pipelines;
 
         if (EmulatorSettings.IsShaderCollect()) {
@@ -790,6 +813,7 @@ const ComputePipeline* PipelineCache::GetComputePipeline() {
     PublishShaders();
     PublishGraphics();
     PumpWarmUp();
+    ReportCompiles();
     if (!RefreshComputeKey()) {
         return nullptr;
     }
@@ -803,7 +827,9 @@ const ComputePipeline* PipelineCache::GetComputePipeline() {
         it.value() = std::make_unique<ComputePipeline>(instance, scheduler, desc_heap, profile,
                                                        *pipeline_cache, compute_key, *sel.infos[0],
                                                        sel.modules[0], sdata, false);
-        RegisterPipelineData(compute_key, sdata);
+        if (NewPipelineKey(fmt::format("c_{:#018x}", compute_key.value))) {
+            RegisterPipelineData(compute_key, sdata);
+        }
         ++num_new_pipelines;
 
         if (EmulatorSettings.IsShaderCollect()) {
@@ -1215,6 +1241,9 @@ PipelineCache::Result PipelineCache::GetProgram(PipelineSelection& sel, HwStage 
     }
 
     auto it_pgm = program_cache.find(params.hash); // this thread is the only writer
+    if (it_pgm == program_cache.end() && DiskShadersActive() && LoadDiskProgram(params.hash)) {
+        it_pgm = program_cache.find(params.hash);
+    }
     const bool compile_async = AsyncCompilation() && hw_stage != HwStage::Compute &&
                                !sel.regs->stage_enable.hs_en &&
                                !EmulatorSettings.IsShaderCollect();
@@ -1242,6 +1271,7 @@ PipelineCache::Result PipelineCache::GetProgram(PipelineSelection& sel, HwStage 
         auto start = binding;
         const auto module =
             CompileModule(new_program->info, runtime_info, params.code, 0, binding);
+        ++compiles_started;
         auto spec = Shader::StageSpecialization(new_program->info, runtime_info, profile, start);
         const auto perm_hash = HashCombine(params.hash, 0);
 
@@ -1276,7 +1306,7 @@ PipelineCache::Result PipelineCache::GetProgram(PipelineSelection& sel, HwStage 
     info.RefreshFlatBuf();
     auto spec = Shader::StageSpecialization(info, runtime_info, profile, binding);
 
-    size_t perm_idx = program->modules.size();
+    size_t perm_idx = NewPermutationIndex(*program);
     u64 perm_hash = HashCombine(params.hash, perm_idx);
 
     vk::ShaderModule module{};
@@ -1301,13 +1331,18 @@ PipelineCache::Result PipelineCache::GetProgram(PipelineSelection& sel, HwStage 
         }
         auto new_info = Shader::Info(hw_stage, sw_stage, params);
         module = CompileModule(new_info, runtime_info, params.code, perm_idx, binding);
+        ++compiles_started;
 
         RegisterShaderMeta(info, spec.fetch_shader_data, spec, perm_hash, perm_idx);
+        disk_stats.compiled += DiskShadersActive();
         std::unique_lock lk{programs_mutex};
-        program->AddPermut(module, std::move(spec));
+        program->InsertPermut(module, std::move(spec), perm_idx);
     } else {
         info.AddBindings(binding);
         module = it->module;
+        if (!disk_modules_unused.empty() && disk_modules_unused.erase(module)) {
+            ++disk_stats.matched;
+        }
         perm_idx = std::distance(program->modules.begin(), it);
         perm_hash = HashCombine(params.hash, perm_idx);
     }

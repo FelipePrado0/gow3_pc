@@ -6,21 +6,26 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
+#include <cstring>
+#include <string>
 #include <deque>
 #include <mutex>
 #include <shared_mutex>
 #include <thread>
+#include <unordered_set>
 #include <unordered_map>
 #include <fstream>
 #include <map>
 #ifdef _WIN32
 #include <windows.h>
 #endif
+#include "common/hash.h"
 #include "common/serdes.h"
 #include "common/scope_exit.h"
 #include "video_core/renderer_vulkan/vk_pipeline_serialization.h"
 #include "common/thread.h"
 #include "gow3_overlay.h"
+#include "gow3_toggles.h"
 #include "core/emulator_settings.h"
 #include "shader_recompiler/frontend/fetch_shader.h"
 #include "shader_recompiler/info.h"
@@ -1005,9 +1010,267 @@ void PipelineCache::WarmUp(const std::function<void(u32, u32)>& progress) {
 }
 
 void PipelineCache::StartOnDemand() {
-    CheckCacheProfile();
-    Storage::DataBase::Instance().FinishPreload();
-    std::printf("Pipeline startup: on demand, no bulk warm-up\n");
+    const bool compatible = CheckCacheProfile();
+    auto& db = Storage::DataBase::Instance();
+    // Launcher: "Reuse compiled shaders from disk" (GOW3_DISK_SHADERS), on by default.
+    const bool disk_on = EmulatorSettingsImpl::Flag("GOW3_DISK_SHADERS", true) &&
+                         !Gow3Toggle::Disabled(Gow3Toggle::DiskShaders);
+    if (db.IsOpened() && db.ConcurrentReads() && !disk_on) {
+        // This session numbers permutations by first use again: the store is rebuilt at the
+        // next start with the bit on.
+        db.Save(Storage::BlobType::ShaderProfile, "disk_shaders", std::vector<u8>{0});
+    } else if (db.IsOpened() && db.ConcurrentReads()) {
+        std::vector<u8> marker;
+        if (compatible) {
+            db.Load(Storage::BlobType::ShaderProfile, "disk_shaders", marker);
+        }
+        if (marker != std::vector<u8>{1}) {
+            // Earlier on-demand sessions numbered permutations by first use and overwrote the
+            // files by name, so a name may hold another session's shader: rebuilt once.
+            db.Clear();
+            std::vector<u8> profile_data(sizeof(profile));
+            std::memcpy(profile_data.data(), &profile, sizeof(profile));
+            db.Save(Storage::BlobType::ShaderProfile, "profile", std::move(profile_data));
+            db.Save(Storage::BlobType::ShaderProfile, "disk_shaders", std::vector<u8>{1});
+            std::printf("Pipeline startup: shader store rebuilt for on-demand reads\n");
+        } else {
+            IndexDiskShaders();
+            // Launcher: "Read the shader cache into memory at start" (GOW3_SHADER_PREFETCH).
+            if (EmulatorSettingsImpl::Flag("GOW3_SHADER_PREFETCH", true)) {
+                StartDiskPrefetch();
+            }
+        }
+        disk_shaders = true;
+    }
+    db.FinishPreload();
+    std::printf("Pipeline startup: on demand, no bulk warm-up (%zu saved programs)\n",
+                disk_permutations.size());
+}
+
+bool PipelineCache::DiskShadersActive() const {
+    return disk_shaders && !Gow3Toggle::Disabled(Gow3Toggle::DiskShaders);
+}
+
+void PipelineCache::IndexDiskShaders() {
+    auto& db = Storage::DataBase::Instance();
+    for (const auto& name : db.ListBlobs(Storage::BlobType::ShaderBinary)) {
+        const auto sep = name.rfind('_');
+        if (sep == std::string::npos) {
+            continue;
+        }
+        const u64 hash = std::strtoull(name.substr(0, sep).c_str(), nullptr, 16);
+        const auto idx = std::strtoul(name.c_str() + sep + 1, nullptr, 10);
+        if (hash && idx < 64) {
+            disk_permutations[hash].push_back(u32(idx));
+        }
+    }
+    for (auto& [hash, indices] : disk_permutations) {
+        std::ranges::sort(indices);
+    }
+    for (auto& name : db.ListBlobs(Storage::BlobType::PipelineKey)) {
+        disk_pipeline_keys.insert(std::move(name));
+    }
+}
+
+// gow3: the saved files of one program, read off the GPU thread (DiskPrefetch) or on it.
+struct DiskBlob {
+    u32 idx;
+    std::vector<u8> meta;
+    std::vector<u32> spv;
+};
+
+static std::vector<DiskBlob> ReadDiskProgram(u64 hash, const std::vector<u32>& indices) {
+    auto& db = Storage::DataBase::Instance();
+    std::vector<DiskBlob> blobs;
+    for (const u32 idx : indices) {
+        DiskBlob blob{idx};
+        db.Load(Storage::BlobType::ShaderMeta, fmt::format("{:#018x}", HashCombine(hash, u64{idx})),
+                blob.meta);
+        db.Load(Storage::BlobType::ShaderBinary, fmt::format("{:#018x}_{}", hash, idx), blob.spv);
+        if (!blob.meta.empty() && !blob.spv.empty()) {
+            blobs.push_back(std::move(blob));
+        }
+    }
+    return blobs;
+}
+
+// gow3: one low-priority thread reads every saved program into memory at startup (a few MB),
+// so the GPU thread only deserializes and creates the modules. A program the GPU thread needs
+// first is claimed and read there instead.
+struct PipelineCache::DiskPrefetch {
+    std::mutex mutex;
+    std::unordered_map<u64, std::vector<DiskBlob>> ready;
+    std::unordered_set<u64> claimed;
+    std::jthread thread;
+};
+
+void PipelineCache::StartDiskPrefetch() {
+    std::vector<std::pair<u64, std::vector<u32>>> work(disk_permutations.begin(),
+                                                       disk_permutations.end());
+    if (work.empty()) {
+        return;
+    }
+    disk_prefetch = new DiskPrefetch;
+    disk_prefetch->thread = std::jthread{[prefetch = disk_prefetch, work = std::move(work)](
+                                             std::stop_token stop) {
+        Common::SetCurrentThreadName("gow3:ShaderPrefetch");
+        Common::SetCurrentThreadPriority(Common::ThreadPriority::Low);
+        const auto started = std::chrono::steady_clock::now();
+        const u32 total = u32(work.size());
+        u32 done = 0;
+        u64 programs = 0, bytes = 0;
+        for (const auto& [hash, indices] : work) {
+            if (stop.stop_requested()) {
+                Gow3Overlay::SetShaderPrefetch(0, 0);
+                return;
+            }
+            Gow3Overlay::SetShaderPrefetch(done++, total);
+            {
+                std::scoped_lock lock{prefetch->mutex};
+                if (prefetch->claimed.contains(hash)) {
+                    continue;
+                }
+            }
+            auto blobs = ReadDiskProgram(hash, indices);
+            for (const auto& blob : blobs) {
+                bytes += blob.meta.size() + blob.spv.size() * sizeof(u32);
+            }
+            std::scoped_lock lock{prefetch->mutex};
+            if (!prefetch->claimed.contains(hash)) {
+                prefetch->ready.emplace(hash, std::move(blobs));
+                ++programs;
+            }
+        }
+        Gow3Overlay::SetShaderPrefetch(total, total);
+        std::printf("Disk shaders: prefetch read %llu programs (%.1f MB) in %.0f ms\n",
+                    static_cast<unsigned long long>(programs), bytes / 1048576.0,
+                    std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() -
+                                                              started)
+                        .count());
+    }};
+}
+
+void PipelineCache::StopDiskPrefetch() {
+    delete disk_prefetch; // the jthread member asks the thread to stop and joins it
+    disk_prefetch = nullptr;
+}
+
+// gow3: GPU thread, once per program: every saved permutation at its saved index, so names and
+// pipeline keys stay those of the store. Rejected metas (other versions, motion vertex
+// shaders) leave their slot empty for the next compile (NewPermutationIndex).
+bool PipelineCache::LoadDiskProgram(u64 hash) {
+    const auto found = disk_permutations.find(hash);
+    if (found == disk_permutations.end()) {
+        return false;
+    }
+    const auto started = std::chrono::steady_clock::now();
+    std::optional<std::vector<DiskBlob>> blobs;
+    if (disk_prefetch) {
+        std::scoped_lock lock{disk_prefetch->mutex};
+        if (const auto it = disk_prefetch->ready.find(hash); it != disk_prefetch->ready.end()) {
+            blobs = std::move(it->second);
+            disk_prefetch->ready.erase(it);
+        } else {
+            disk_prefetch->claimed.insert(hash);
+        }
+    }
+    if (!blobs) {
+        blobs = ReadDiskProgram(hash, found->second);
+    }
+    auto program = std::make_unique<Program>();
+    bool have_info = false;
+    size_t inserted = 0;
+    for (auto& blob : *blobs) {
+        Serialization::Archive meta_ar{std::move(blob.meta)};
+        Shader::Info info{};
+        Shader::StageSpecialization spec{};
+        std::optional<Shader::Gcn::FetchShaderData> fetch;
+        size_t perm_idx{};
+        if (!LoadShaderMeta(meta_ar, info, fetch, spec, perm_idx) || perm_idx != blob.idx ||
+            info.pgm_hash != hash) {
+            continue;
+        }
+        const auto module = CompileSPV(blob.spv, instance.GetDevice());
+        if (!module) {
+            continue;
+        }
+        if (!have_info) {
+            program->info = std::move(info);
+            have_info = true;
+        }
+        spec.info = &program->info;
+        program->InsertPermut(module, std::move(spec), blob.idx);
+        disk_modules_unused.insert(module);
+        ++inserted;
+        ++disk_stats.permutations;
+    }
+    if (inserted) {
+        program->modules.resize(std::max<size_t>(program->modules.size(), found->second.back() + 1));
+        program->info_template = std::make_unique<Shader::Info>(program->info);
+        std::unique_lock lock{programs_mutex};
+        program_cache.emplace(hash, std::move(program));
+        ++disk_stats.programs;
+    } else {
+        for (const auto& module : program->modules) {
+            if (module.module) {
+                instance.GetDevice().destroyShaderModule(module.module);
+            }
+        }
+    }
+    disk_permutations.erase(found);
+    disk_stats.load_ns += u64(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                  std::chrono::steady_clock::now() - started)
+                                  .count());
+    return inserted != 0;
+}
+
+size_t PipelineCache::NewPermutationIndex(const Program& program) const {
+    if (DiskShadersActive()) {
+        const auto hole = std::ranges::find(program.modules, vk::ShaderModule{}, &Program::Module::module);
+        if (hole != program.modules.end()) {
+            return std::distance(program.modules.begin(), hole);
+        }
+    }
+    return program.modules.size();
+}
+
+bool PipelineCache::NewPipelineKey(const std::string& name) {
+    if (!DiskShadersActive()) {
+        return true;
+    }
+    if (!disk_pipeline_keys.insert(name).second) {
+        ++disk_stats.keys_skipped;
+        return false;
+    }
+    ++disk_stats.keys_written;
+    return true;
+}
+
+void PipelineCache::ReportDiskShaders() {
+    if (disk_shaders && !disk_store_untrusted && Gow3Toggle::Disabled(Gow3Toggle::DiskShaders)) {
+        // Switched off live: later permutations follow first-use order again (see StartOnDemand).
+        Storage::DataBase::Instance().Save(Storage::BlobType::ShaderProfile, "disk_shaders",
+                                           std::vector<u8>{0});
+        disk_store_untrusted = true;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (!disk_shaders || now - disk_report < std::chrono::seconds(5)) {
+        return;
+    }
+    disk_report = now;
+    const auto& s = disk_stats;
+    if (std::memcmp(&s, &disk_reported, sizeof(s)) == 0) {
+        return;
+    }
+    disk_reported = s;
+    std::printf("Disk shaders: %llu programs, %llu permutations read (%.1f ms GPU thread); "
+                "%llu used, %llu compiled; pipeline keys %llu written, %llu already saved\n",
+                static_cast<unsigned long long>(s.programs),
+                static_cast<unsigned long long>(s.permutations), s.load_ns / 1e6,
+                static_cast<unsigned long long>(s.matched),
+                static_cast<unsigned long long>(s.compiled),
+                static_cast<unsigned long long>(s.keys_written),
+                static_cast<unsigned long long>(s.keys_skipped));
 }
 
 // gow3: one cached shader stage read by the background warm-up, shared by every cached

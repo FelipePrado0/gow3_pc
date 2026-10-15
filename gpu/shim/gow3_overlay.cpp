@@ -67,6 +67,11 @@ bool r3_down = false, l2_down = false;
 std::atomic<bool> loading{false};
 std::atomic<u32> loading_done{0}, loading_total{0};
 std::atomic<u32> background_done{0}, background_total{0};
+std::atomic<u32> prefetch_done{0}, prefetch_total{0};
+std::atomic<s64> prefetch_until{0}; // "ready" stays this long after the last program
+// Shader translations: in progress, and started since the note last appeared.
+std::atomic<u32> compile_pending{0}, compile_count{0};
+std::atomic<s64> compile_until{0};
 // A short message in a corner (saved screenshot), shown until notice_until.
 std::mutex notice_mutex;
 std::string notice_text;
@@ -838,24 +843,70 @@ bool NoticeActive() {
     return notice_until.load(std::memory_order_relaxed) > NowMs();
 }
 
-void Notice() {
+// Lower-right notes stack upward from `bottom`: the screenshot notice, then the shader notes.
+template <typename Body>
+void CornerNote(const char* id, float& bottom, float alpha, Body&& body) {
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const float pad = 12.0f * base_scale;
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x - pad, bottom),
+                            ImGuiCond_Always, ImVec2(1.0f, 1.0f));
+    ImGui::SetNextWindowBgAlpha(alpha);
+    ImGui::Begin(id, nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+                     ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
+                     ImGuiWindowFlags_NoFocusOnAppearing);
+    body();
+    bottom -= ImGui::GetWindowHeight() + pad / 2;
+    ImGui::End();
+}
+
+void Notice(float& bottom) {
     std::string text;
     {
         std::scoped_lock lock{notice_mutex};
         text = notice_text;
     }
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    const float pad = 12.0f * base_scale;
-    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x - pad,
-                                   viewport->WorkPos.y + viewport->WorkSize.y - pad),
-                            ImGuiCond_Always, ImVec2(1.0f, 1.0f));
-    ImGui::SetNextWindowBgAlpha(0.6f);
-    ImGui::Begin("##notice", nullptr,
-                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
-                     ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
-                     ImGuiWindowFlags_NoFocusOnAppearing);
-    ImGui::TextUnformatted(text.c_str());
-    ImGui::End();
+    CornerNote("##notice", bottom, 0.6f, [&] { ImGui::TextUnformatted(text.c_str()); });
+}
+
+// Launcher: "Shader notes in the corner" (GOW3_SHADER_NOTES), on by default.
+const bool shader_notes = [] {
+    const char* env = std::getenv("GOW3_SHADER_NOTES");
+    return !env || *env != '0';
+}();
+
+bool PrefetchActive() {
+    const u32 total = prefetch_total;
+    return shader_notes && total && (prefetch_done < total || prefetch_until > NowMs());
+}
+
+void ShaderPrefetch(float& bottom) {
+    const u32 done = prefetch_done, total = std::max(prefetch_total.load(), 1u);
+    CornerNote("##shader_prefetch", bottom, 0.35f, [&] {
+        if (done >= total) {
+            ImGui::TextDisabled("Shader cache ready (%u)", total);
+            return;
+        }
+        ImGui::TextDisabled("Reading shader cache %u%% (%u/%u)", u32(u64(done) * 100 / total), done,
+                            total);
+        ImGui::ProgressBar(float(done) / float(total),
+                           ImVec2(ImGui::GetContentRegionAvail().x, 4.0f * base_scale), "");
+    });
+}
+
+bool CompileNoteActive() {
+    return shader_notes && (compile_pending || compile_until > NowMs());
+}
+
+void ShaderCompiles(float& bottom) {
+    const u32 pending = compile_pending, count = compile_count;
+    CornerNote("##shader_compiles", bottom, 0.35f, [&] {
+        if (pending) {
+            ImGui::TextDisabled("Compiling shaders (%u left)", pending);
+        } else {
+            ImGui::TextDisabled("Compiled %u new shader%s", count, count == 1 ? "" : "s");
+        }
+    });
 }
 
 } // namespace
@@ -1151,6 +1202,24 @@ void SetBackgroundLoading(u32 done, u32 total) {
     background_total = total;
 }
 
+void SetShaderPrefetch(u32 done, u32 total) {
+    if (total && done >= total) {
+        prefetch_until = NowMs() + 2000;
+    }
+    prefetch_done = done;
+    prefetch_total = total;
+}
+
+void NoteShaderCompiles(u32 pending, u32 started) {
+    const s64 now = NowMs();
+    if (!compile_pending && compile_until <= now) {
+        compile_count = 0; // a new burst
+    }
+    compile_count += started;
+    compile_pending = pending;
+    compile_until = now + 2000;
+}
+
 void SetLoading(bool active, u32 done, u32 total) {
     loading_done = done;
     loading_total = total;
@@ -1159,7 +1228,8 @@ void SetLoading(bool active, u32 done, u32 total) {
 
 bool Visible() {
     const auto& s = Gow3Settings::Get();
-    return initialized && (loading || background_total || menu_open || text_entry_active || choice_active ||
+    return initialized && (loading || background_total || PrefetchActive() || CompileNoteActive() ||
+                           menu_open || text_entry_active || choice_active ||
                            choice_retiring || s.show_fps || NoticeActive() ||
                            (s.actor_watch_supported && s.enemy_health_bar));
 }
@@ -1229,8 +1299,16 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
     if (Gow3Settings::Get().show_fps && !menu_open) {
         FpsCounter();
     }
+    float corner = ImGui::GetMainViewport()->WorkPos.y + ImGui::GetMainViewport()->WorkSize.y -
+                   12.0f * base_scale;
     if (NoticeActive()) {
-        Notice();
+        Notice(corner);
+    }
+    if (PrefetchActive() && !loading && !menu_open) {
+        ShaderPrefetch(corner);
+    }
+    if (CompileNoteActive() && !loading && !menu_open) {
+        ShaderCompiles(corner);
     }
     if (!loading && !menu_open) {
         HealthDisplay();

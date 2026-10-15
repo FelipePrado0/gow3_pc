@@ -4,7 +4,10 @@
 #pragma once
 
 #include <functional>
+#include <chrono>
+#include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <shared_mutex>
 #include <variant>
 #include <boost/container/static_vector.hpp>
@@ -243,6 +246,34 @@ private:
     PipelineSelection sel{}; ///< GPU thread selection state
     ComputePipelineKey compute_key{};
     u32 num_new_pipelines{}; // new pipelines added to the cache since the game start
+    /// gow3 (Gow3Toggle::DiskShaders): with on-demand startup, a program missing from
+    /// program_cache is first read from the store at its saved permutation indices, instead of
+    /// being translated again (pop-in) and rewritten (antivirus scans every file).
+    bool disk_shaders = false;
+    bool disk_store_untrusted = false; ///< the bit went off live: marker reset to 0
+    std::unordered_map<u64, std::vector<u32>> disk_permutations; ///< pgm hash -> saved indices
+    std::unordered_set<std::string> disk_pipeline_keys;          ///< "g_0x..."/"c_0x..." saved
+    std::unordered_set<VkShaderModule> disk_modules_unused;      ///< loaded, not used yet
+    struct DiskShaderStats {
+        u64 programs, permutations, matched, compiled, keys_skipped, keys_written, load_ns;
+    } disk_stats{}, disk_reported{};
+    std::chrono::steady_clock::time_point disk_report{};
+    [[nodiscard]] bool DiskShadersActive() const;
+    void IndexDiskShaders();
+    struct DiskPrefetch;
+    DiskPrefetch* disk_prefetch = nullptr; ///< owned; deleted by StopDiskPrefetch
+    void StartDiskPrefetch();
+    void StopDiskPrefetch();
+    bool LoadDiskProgram(u64 hash);
+    /// Index for a new permutation: a slot the store left empty, else the next one.
+    [[nodiscard]] size_t NewPermutationIndex(const Program& program) const;
+    /// False when this pipeline key is already in the store (nothing to write).
+    bool NewPipelineKey(const std::string& name);
+    void ReportDiskShaders();
+    /// gow3: shader translations started (async and on the GPU thread), for the corner note.
+    u64 compiles_started = 0, compiles_reported = 0;
+    u32 pending_reported = 0;
+    void ReportCompiles();
 
     // Only if Config::collectShadersForDebug()
     tsl::robin_map<vk::ShaderModule,
