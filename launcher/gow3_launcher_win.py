@@ -1381,6 +1381,13 @@ class Launcher:
                      'Заметка в правом нижнем углу показывает чтение кэша шейдеров при запуске и компиляцию новых '
                      'шейдеров, чтобы было видно причину короткого рывка. Выключите, чтобы экран оставался чистым.'),
                    restart=True)
+        clear = self.ttk.Button(f, text=_('Delete shader cache', 'Удалить кэш шейдеров'), command=self.clear_cache)
+        self.row(f, _('Shader cache', 'Кэш шейдеров'), clear,
+                 _('Deletes the saved shaders and pipelines of this saves folder. Use it if graphics look '
+                   'wrong after an update or the cache grew too big; the next start compiles everything again.',
+                   'Удаляет сохранённые шейдеры и конвейеры этой папки сохранений. Пригодится, если после '
+                   'обновления графика выглядит неправильно или кэш стал слишком большим; следующий запуск всё'
+                   ' скомпилирует заново.'))
         self.check(f, 'parallel_warmup', 'app', _('Fast shader cache loading (parallel)'),
                    _('Loading screen only: builds the cached pipelines on several CPU threads.'))
         self.section(f, _('GPU data'))
@@ -2287,12 +2294,30 @@ class Launcher:
         threading.Thread(target=work, daemon=True).start()
 
     def clear_cache(self):
-        """Shader and pipeline caches; they are rebuilt while playing."""
+        """Shader and pipeline caches (<saves folder>/cache), after asking; the game rebuilds them."""
         if self.process:
+            self.messagebox.showwarning(APP_NAME, _('Close the game before deleting the shader cache.',
+                                                    'Закройте игру перед удалением кэша шейдеров.'))
             return
         import shutil
         cache = Path(self.app['user_dir'] or DATA_DIR / 'user') / 'cache'
+        size = sum(p.stat().st_size for p in cache.rglob('*') if p.is_file()) if cache.is_dir() else 0
+        if not size:
+            self.messagebox.showinfo(APP_NAME, _('The shader cache is already empty.', 'Кэш шейдеров уже пуст.'))
+            return
+        question = _('Delete the shader cache ({} MB in {})? The game compiles the shaders again, so the '
+                     'next start stutters for a few minutes.',
+                     'Удалить кэш шейдеров ({} МБ в {})? Игра скомпилирует шейдеры заново, поэтому '
+                     'следующий запуск несколько минут будет подтормаживать.')
+        if not self.messagebox.askyesno(APP_NAME, question.format(round(size / 2**20), cache)):
+            return
         shutil.rmtree(cache, ignore_errors=True)
+        if cache.exists():  # files still open elsewhere (an antivirus scan, a second game)
+            self.messagebox.showerror(APP_NAME, _(
+                'Could not delete all of the shader cache; another program may be using it: {}',
+                'Не удалось удалить весь кэш шейдеров; возможно, его использует другая программа: {}'
+            ).format(cache))
+            return
         self.messagebox.showinfo(APP_NAME, _('Shader cache cleared. The next start stutters for a few minutes while '
                                                  'it is rebuilt.', 'Кэш шейдеров очищен. Следующий запуск несколько '
                                                  'минут будет подтормаживать, пока кэш собирается заново.'))

@@ -924,6 +924,13 @@ EXTRA = {
         'A background thread reads the saved shaders into memory while the game starts; a note in the lower right corner shows the progress. Loading a shader then does not hold up a frame. Needs the option above. Switch it off on a slow hard drive or with little free RAM if the first minute stutters more or the game starts slower.': 'Uma thread em segundo plano lê os shaders salvos para a memória enquanto o jogo inicia; uma nota no canto inferior direito mostra o progresso. Assim, carregar um shader não segura um quadro. Precisa da opção acima. Desative em um HD lento ou com pouca RAM livre se o primeiro minuto travar mais ou o jogo demorar mais para abrir.',
         'Show shader notes in the corner': 'Mostrar notas de shaders no canto',
         'A note in the lower right corner shows the shader cache being read at start and the shaders being compiled, so a short stutter has a visible reason. Switch it off to keep the screen clean.': 'Uma nota no canto inferior direito mostra a leitura do cache de shaders ao iniciar e os shaders sendo compilados, para que uma travada curta tenha um motivo visível. Desative para manter a tela limpa.',
+        'Shader cache': 'Cache de shaders',
+        'Delete shader cache': 'Apagar cache de shaders',
+        'Deletes the saved shaders and pipelines of this saves folder. Use it if graphics look wrong after an update or the cache grew too big; the next start compiles everything again.': 'Apaga os shaders e pipelines salvos desta pasta de saves. Use se os gráficos ficarem errados depois de uma atualização ou se o cache ficar grande demais; a próxima inicialização compila tudo de novo.',
+        'Close the game before deleting the shader cache.': 'Feche o jogo antes de apagar o cache de shaders.',
+        'The shader cache is already empty.': 'O cache de shaders já está vazio.',
+        'Delete the shader cache ({} MB in {})? The game compiles the shaders again, so the next start stutters for a few minutes.': 'Apagar o cache de shaders ({} MB em {})? O jogo compila os shaders de novo, então a próxima inicialização trava por alguns minutos.',
+        'Could not delete all of the shader cache; another program may be using it: {}': 'Não foi possível apagar todo o cache de shaders; outro programa pode estar usando: {}',
     },
     'es': {
         'Show Discord Rich Presence': 'Mostrar Discord Rich Presence',
@@ -1153,6 +1160,13 @@ EXTRA = {
         'A background thread reads the saved shaders into memory while the game starts; a note in the lower right corner shows the progress. Loading a shader then does not hold up a frame. Needs the option above. Switch it off on a slow hard drive or with little free RAM if the first minute stutters more or the game starts slower.': 'Un hilo en segundo plano lee los shaders guardados en memoria mientras el juego inicia; una nota en la esquina inferior derecha muestra el progreso. Así, cargar un shader no retiene un fotograma. Necesita la opción de arriba. Desactívalo en un disco duro lento o con poca RAM libre si el primer minuto se traba más o el juego tarda más en abrir.',
         'Show shader notes in the corner': 'Mostrar notas de shaders en la esquina',
         'A note in the lower right corner shows the shader cache being read at start and the shaders being compiled, so a short stutter has a visible reason. Switch it off to keep the screen clean.': 'Una nota en la esquina inferior derecha muestra la lectura de la caché de shaders al iniciar y los shaders que se están compilando, para que un tirón corto tenga un motivo visible. Desactívalo para mantener la pantalla limpia.',
+        'Shader cache': 'Caché de shaders',
+        'Delete shader cache': 'Borrar caché de shaders',
+        'Deletes the saved shaders and pipelines of this saves folder. Use it if graphics look wrong after an update or the cache grew too big; the next start compiles everything again.': 'Borra los shaders y pipelines guardados de esta carpeta de partidas. Úsalo si los gráficos se ven mal después de una actualización o si la caché creció demasiado; el próximo inicio lo compila todo de nuevo.',
+        'Close the game before deleting the shader cache.': 'Cierra el juego antes de borrar la caché de shaders.',
+        'The shader cache is already empty.': 'La caché de shaders ya está vacía.',
+        'Delete the shader cache ({} MB in {})? The game compiles the shaders again, so the next start stutters for a few minutes.': '¿Borrar la caché de shaders ({} MB en {})? El juego compila los shaders de nuevo, así que el próximo inicio se traba unos minutos.',
+        'Could not delete all of the shader cache; another program may be using it: {}': 'No se pudo borrar toda la caché de shaders; puede que otro programa la esté usando: {}',
     },
 }
 
