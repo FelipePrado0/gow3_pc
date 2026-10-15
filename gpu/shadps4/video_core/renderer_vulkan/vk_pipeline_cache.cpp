@@ -422,6 +422,7 @@ PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
 PipelineCache::~PipelineCache() {
     StopWarmUp();
     StopDiskPrefetch();
+    StopBinaryConversion();
     FinishCompilations();
 }
 

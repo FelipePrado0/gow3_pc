@@ -78,6 +78,9 @@ enum : std::uint64_t {
     /// On-demand pipeline startup reads saved shader permutations from the store instead of
     /// translating them again, and skips rewriting saved pipeline keys (vk_pipeline_cache.cpp).
     DiskShaders = 1ull << 60,
+    /// Pipeline binaries are stored once each in pipeline-binaries/shared, the per-pipeline
+    /// files hold their keys only; old files are converted at start (vk_pipeline_serialization).
+    SharedBinaries = 1ull << 61,
     // Bits 20-29 are used as raw debug toggles by the camera/object motion and the upscaler.
 };
 inline bool Disabled(std::uint64_t bit) {

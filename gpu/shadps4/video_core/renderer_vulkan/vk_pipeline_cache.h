@@ -264,6 +264,10 @@ private:
     DiskPrefetch* disk_prefetch = nullptr; ///< owned; deleted by StopDiskPrefetch
     void StartDiskPrefetch();
     void StopDiskPrefetch();
+    struct BinaryConversion;
+    BinaryConversion* binary_conversion = nullptr; ///< owned; deleted by StopBinaryConversion
+    void StartBinaryConversion();
+    void StopBinaryConversion();
     bool LoadDiskProgram(u64 hash);
     /// Index for a new permutation: a slot the store left empty, else the next one.
     [[nodiscard]] size_t NewPermutationIndex(const Program& program) const;

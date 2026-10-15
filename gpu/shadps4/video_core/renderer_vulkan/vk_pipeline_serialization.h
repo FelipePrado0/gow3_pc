@@ -4,6 +4,9 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
+#include <utility>
+#include <vector>
 #include <optional>
 #include <span>
 
@@ -18,6 +21,7 @@ using Key = std::vector<u8>;
 struct Binary {
     Key key;
     std::vector<u8> data;
+    u64 content = 0; ///< version 2 files: XXH3 of `data`, which names its shared file
 };
 constexpr size_t MaxFileSize = 64 * 1024 * 1024;
 constexpr u32 MaxBinaries = 32;
@@ -29,6 +33,20 @@ std::optional<std::vector<Binary>> Decode(std::span<const u8> bytes, const Key& 
 bool Save(const std::filesystem::path& file, std::span<const u8> bytes);
 std::optional<std::vector<Binary>> Load(const std::filesystem::path& file, const Key& global,
                                         const Key& pipeline, u64 graphics_hash);
+/// gow3: version 2, the binary keys and content hashes only; the data is in SharedPath files
+/// (StoreShared). The driver reuses a binary key for different data, so files are named by content.
+std::vector<u8> EncodeShared(const Key& global, const Key& pipeline, u64 graphics_hash,
+                             const std::vector<Binary>& binaries);
+std::filesystem::path SharedPath(const std::filesystem::path& directory, const Key& global,
+                                 const Key& binary, u64 content);
+bool StoreShared(const std::filesystem::path& file, const Key& global, const Key& pipeline,
+                 u64 graphics_hash, const std::vector<Binary>& binaries);
+/// StoreShared, or the version 1 file with Gow3Toggle::SharedBinaries off.
+bool Store(const std::filesystem::path& file, const Key& global, const Key& pipeline,
+           u64 graphics_hash, const std::vector<Binary>& binaries);
+/// Rewrites every version 1 file of `directory` as version 2: {files, bytes freed}.
+std::pair<u64, s64> ConvertToShared(const std::filesystem::path& directory,
+                                    const std::function<bool()>& stop = {});
 } // namespace PipelineBinaryCache
 
 vk::ResultValue<vk::UniquePipeline> CreateCachedGraphicsPipeline(

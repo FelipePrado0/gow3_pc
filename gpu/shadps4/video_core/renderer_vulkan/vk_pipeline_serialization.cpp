@@ -19,6 +19,8 @@
 #ifdef _WIN32
 #include <windows.h>
 #endif
+#include "common/elf_info.h"
+#include "common/path_util.h"
 #include "common/hash.h"
 #include "common/serdes.h"
 #include "common/scope_exit.h"
@@ -61,8 +63,11 @@ namespace PipelineBinaryCache {
 bool ValidKey(const Key& key) {
     return !key.empty() && key.size() <= VK_MAX_PIPELINE_BINARY_KEY_SIZE_KHR;
 }
-std::vector<u8> Encode(const Key& global, const Key& pipeline, u64 graphics_hash,
-                       const std::vector<Binary>& binaries) {
+namespace {
+// Version 1 holds the driver binaries; version 2 (gow3) their keys and content hashes, each
+// binary being stored once in shared/ (StoreShared): one ~2 MB binary was in thousands of files.
+std::vector<u8> EncodeVersion(const Key& global, const Key& pipeline, u64 graphics_hash,
+                              const std::vector<Binary>& binaries, u32 version) {
     if (!ValidKey(global) || !ValidKey(pipeline) || binaries.empty() ||
         binaries.size() > MaxBinaries) {
         return {};
@@ -77,26 +82,37 @@ std::vector<u8> Encode(const Key& global, const Key& pipeline, u64 graphics_hash
         bytes.insert(bytes.end(), data.begin(), data.end());
     };
     append(u32{0x31425047}); // GPB1, little-endian Windows/Linux cache format.
-    append(u32{1});
+    append(version);
     append(graphics_hash);
     blob(global);
     blob(pipeline);
     append(u32(binaries.size()));
     for (const auto& binary : binaries) {
-        if (!ValidKey(binary.key) || binary.data.empty() || binary.data.size() > MaxFileSize ||
-            bytes.size() + binary.key.size() + binary.data.size() + 16 > MaxFileSize) {
+        const size_t data = version == 1 ? binary.data.size() : 0;
+        if (!ValidKey(binary.key) || (version == 1 && binary.data.empty()) ||
+            data > MaxFileSize || bytes.size() + binary.key.size() + data + 16 > MaxFileSize) {
             return {};
         }
         blob(binary.key);
-        blob(binary.data);
+        if (version == 1) {
+            blob(binary.data);
+        } else {
+            append(u64{XXH3_64bits(binary.data.data(), binary.data.size())});
+        }
     }
     append(u64{XXH3_64bits(bytes.data(), bytes.size())});
     return bytes;
 }
-std::optional<std::vector<Binary>> Decode(std::span<const u8> bytes, const Key& global,
-                                          const Key& pipeline, u64 graphics_hash) {
-    if (bytes.size() < 8 || bytes.size() > MaxFileSize || !ValidKey(global) ||
-        !ValidKey(pipeline)) {
+
+struct Parsed {
+    u32 version;
+    u64 graphics_hash;
+    Key global, pipeline;
+    std::vector<Binary> binaries; ///< version 2: keys only
+};
+
+std::optional<Parsed> Parse(std::span<const u8> bytes) {
+    if (bytes.size() < 8 || bytes.size() > MaxFileSize) {
         return std::nullopt;
     }
     u64 checksum;
@@ -123,22 +139,72 @@ std::optional<std::vector<Binary>> Decode(std::span<const u8> bytes, const Key& 
         offset += size;
         return true;
     };
-    u32 magic, version, count;
-    u64 stored_hash;
-    Key stored_global, stored_pipeline;
-    if (!read(magic) || magic != 0x31425047 || !read(version) || version != 1 ||
-        !read(stored_hash) || stored_hash != graphics_hash || !blob(stored_global, 32) ||
-        stored_global != global || !blob(stored_pipeline, 32) || stored_pipeline != pipeline ||
-        !read(count) || !count || count > MaxBinaries) {
+    Parsed parsed{};
+    u32 magic, count;
+    if (!read(magic) || magic != 0x31425047 || !read(parsed.version) ||
+        (parsed.version != 1 && parsed.version != 2) || !read(parsed.graphics_hash) ||
+        !blob(parsed.global, 32) || !blob(parsed.pipeline, 32) || !read(count) || !count ||
+        count > MaxBinaries) {
         return std::nullopt;
     }
-    std::vector<Binary> binaries(count);
-    for (auto& binary : binaries) {
-        if (!blob(binary.key, 32) || !blob(binary.data, MaxFileSize)) {
+    parsed.binaries.resize(count);
+    for (auto& binary : parsed.binaries) {
+        if (!blob(binary.key, 32) || (parsed.version == 1 && !blob(binary.data, MaxFileSize)) ||
+            (parsed.version == 2 && !read(binary.content))) {
             return std::nullopt;
         }
     }
-    return offset == bytes.size() ? std::optional{std::move(binaries)} : std::nullopt;
+    return offset == bytes.size() ? std::optional{std::move(parsed)} : std::nullopt;
+}
+
+std::optional<std::vector<u8>> ReadFile(const std::filesystem::path& file) {
+    std::ifstream stream(file, std::ios::binary | std::ios::ate);
+    if (!stream) {
+        return std::nullopt;
+    }
+    const auto size = stream.tellg();
+    if (size <= 0 || size > std::streamoff(MaxFileSize)) {
+        return std::nullopt;
+    }
+    std::vector<u8> bytes(static_cast<size_t>(size));
+    stream.seekg(0);
+    if (!stream.read(reinterpret_cast<char*>(bytes.data()), bytes.size())) {
+        return std::nullopt;
+    }
+    return bytes;
+}
+} // namespace
+
+std::atomic<u64> shared_written{}, shared_reused{}, shared_bytes{};
+
+std::vector<u8> Encode(const Key& global, const Key& pipeline, u64 graphics_hash,
+                       const std::vector<Binary>& binaries) {
+    return EncodeVersion(global, pipeline, graphics_hash, binaries, 1);
+}
+std::vector<u8> EncodeShared(const Key& global, const Key& pipeline, u64 graphics_hash,
+                             const std::vector<Binary>& binaries) {
+    return EncodeVersion(global, pipeline, graphics_hash, binaries, 2);
+}
+std::optional<std::vector<Binary>> Decode(std::span<const u8> bytes, const Key& global,
+                                          const Key& pipeline, u64 graphics_hash) {
+    if (!ValidKey(global) || !ValidKey(pipeline)) {
+        return std::nullopt;
+    }
+    auto parsed = Parse(bytes);
+    if (!parsed || parsed->graphics_hash != graphics_hash || parsed->global != global ||
+        parsed->pipeline != pipeline) {
+        return std::nullopt;
+    }
+    return std::move(parsed->binaries);
+}
+std::filesystem::path SharedPath(const std::filesystem::path& directory, const Key& global,
+                                 const Key& binary, u64 content) {
+    Key name = global;
+    name.insert(name.end(), binary.begin(), binary.end());
+    const auto* bytes = reinterpret_cast<const u8*>(&content);
+    name.insert(name.end(), bytes, bytes + sizeof(content));
+    return directory / "shared" /
+           fmt::format("{:016x}.bin", XXH3_64bits(name.data(), name.size()));
 }
 bool Save(const std::filesystem::path& file, std::span<const u8> bytes) {
     if (bytes.empty() || bytes.size() > MaxFileSize) {
@@ -181,20 +247,85 @@ bool Save(const std::filesystem::path& file, std::span<const u8> bytes) {
 }
 std::optional<std::vector<Binary>> Load(const std::filesystem::path& file, const Key& global,
                                         const Key& pipeline, u64 graphics_hash) {
-    std::ifstream stream(file, std::ios::binary | std::ios::ate);
-    if (!stream) {
+    const auto bytes = ReadFile(file);
+    auto binaries = bytes ? Decode(*bytes, global, pipeline, graphics_hash) : std::nullopt;
+    if (!binaries) {
         return std::nullopt;
     }
-    const auto size = stream.tellg();
-    if (size <= 0 || size > std::streamoff(MaxFileSize)) {
-        return std::nullopt;
+    // Version 2: each binary from its shared file, which holds it under its own key.
+    for (auto& binary : *binaries) {
+        if (!binary.data.empty()) {
+            continue;
+        }
+        auto shared = Load(SharedPath(file.parent_path(), global, binary.key, binary.content),
+                           global, binary.key, 0);
+        if (!shared || shared->size() != 1 || (*shared)[0].key != binary.key ||
+            (*shared)[0].data.empty() ||
+            XXH3_64bits((*shared)[0].data.data(), (*shared)[0].data.size()) != binary.content) {
+            return std::nullopt;
+        }
+        binary.data = std::move((*shared)[0].data);
     }
-    std::vector<u8> bytes(static_cast<size_t>(size));
-    stream.seekg(0);
-    if (!stream.read(reinterpret_cast<char*>(bytes.data()), bytes.size())) {
-        return std::nullopt;
+    return binaries;
+}
+// gow3: each binary is written once to shared/ (kept when it already reads back the same),
+// then the pipeline file with the keys only.
+bool StoreShared(const std::filesystem::path& file, const Key& global, const Key& pipeline,
+                 u64 graphics_hash, const std::vector<Binary>& binaries) {
+    for (const auto& binary : binaries) {
+        const auto shared =
+            SharedPath(file.parent_path(), global, binary.key,
+                       XXH3_64bits(binary.data.data(), binary.data.size()));
+        if (const auto existing = Load(shared, global, binary.key, 0);
+            existing && existing->size() == 1 && (*existing)[0].data == binary.data) {
+            ++shared_reused;
+            continue;
+        }
+        const auto encoded = Encode(global, binary.key, 0, {binary});
+        if (!Save(shared, encoded)) {
+            return false;
+        }
+        ++shared_written;
+        shared_bytes += encoded.size();
     }
-    return Decode(bytes, global, pipeline, graphics_hash);
+    return Save(file, EncodeShared(global, pipeline, graphics_hash, binaries));
+}
+bool Store(const std::filesystem::path& file, const Key& global, const Key& pipeline,
+           u64 graphics_hash, const std::vector<Binary>& binaries) {
+    if (Gow3Toggle::Disabled(Gow3Toggle::SharedBinaries)) {
+        return Save(file, Encode(global, pipeline, graphics_hash, binaries));
+    }
+    return StoreShared(file, global, pipeline, graphics_hash, binaries);
+}
+std::pair<u64, s64> ConvertToShared(const std::filesystem::path& directory,
+                                    const std::function<bool()>& stop) {
+    u64 files = 0;
+    s64 freed = 0;
+    std::error_code error;
+    for (std::filesystem::directory_iterator it(directory, error), end; !error && it != end;
+         it.increment(error)) {
+        if (stop && stop()) {
+            break;
+        }
+        std::error_code status;
+        if (it->path().extension() != ".bin" || !it->is_regular_file(status)) {
+            continue;
+        }
+        const auto bytes = ReadFile(it->path());
+        auto parsed = bytes ? Parse(*bytes) : std::nullopt;
+        if (!parsed || parsed->version != 1) {
+            continue;
+        }
+        const u64 shared_before = shared_bytes;
+        if (!StoreShared(it->path(), parsed->global, parsed->pipeline, parsed->graphics_hash,
+                         parsed->binaries)) {
+            continue;
+        }
+        ++files;
+        freed += s64(bytes->size()) - s64(std::filesystem::file_size(it->path(), status)) -
+                 s64(shared_bytes - shared_before);
+    }
+    return {files, freed};
 }
 } // namespace PipelineBinaryCache
 
@@ -267,6 +398,9 @@ void ReportPipelineBinaryCache() {
                 static_cast<unsigned long long>(binary_errors.load()),
                 binary_restore_ns.load() / 1e6 / std::max(u64{1}, binary_restore_calls.load()),
                 binary_compile_ns.load() / 1e6 / std::max(u64{1}, binary_compile_calls.load()));
+    std::printf("Pipeline binaries: %llu shared binaries written, %llu already shared\n",
+                static_cast<unsigned long long>(PipelineBinaryCache::shared_written.load()),
+                static_cast<unsigned long long>(PipelineBinaryCache::shared_reused.load()));
 }
 
 vk::ResultValue<vk::UniquePipeline> CreateCachedGraphicsPipeline(
@@ -341,7 +475,7 @@ vk::ResultValue<vk::UniquePipeline> CreateCachedGraphicsPipeline(
         if (!binaries) {
             binaries = LoadLegacyBinary(directory, name, global, pipeline_id);
             if (binaries) {
-                Save(file, Encode(global, pipeline_id, 0, *binaries));
+                Store(file, global, pipeline_id, 0, *binaries);
             }
         }
         binary_load_ns += ElapsedNs(load_started);
@@ -451,8 +585,7 @@ vk::ResultValue<vk::UniquePipeline> CreateCachedGraphicsPipeline(
             binary.data.resize(size);
             binaries.push_back(std::move(binary));
         }
-        const auto encoded = Encode(global, pipeline_id, 0, binaries);
-        if (Save(file, encoded)) {
+        if (Store(file, global, pipeline_id, 0, binaries)) {
             ++binary_saved;
         } else {
             ++binary_errors;
@@ -1043,6 +1176,7 @@ void PipelineCache::StartOnDemand() {
         disk_shaders = true;
     }
     db.FinishPreload();
+    StartBinaryConversion();
     std::printf("Pipeline startup: on demand, no bulk warm-up (%zu saved programs)\n",
                 disk_permutations.size());
 }
@@ -1148,6 +1282,42 @@ void PipelineCache::StartDiskPrefetch() {
                                                               started)
                         .count());
     }};
+}
+
+// gow3 (Gow3Toggle::SharedBinaries): files written before shared storage (or with the bit off)
+// are rewritten once, on a lowest-priority thread, so the folder shrinks without a cache loss.
+struct PipelineCache::BinaryConversion {
+    std::jthread thread;
+};
+
+void PipelineCache::StartBinaryConversion() {
+    if (Gow3Toggle::Disabled(Gow3Toggle::SharedBinaries) ||
+        !instance.GetPipelineBinaryGlobalKey().keySize ||
+        !EmulatorSettings.IsPipelineCacheEnabled()) {
+        return;
+    }
+    const auto directory = Common::FS::GetUserPath(Common::FS::PathType::CacheDir) /
+                           Common::ElfInfo::Instance().GameSerial() / "pipeline-binaries";
+    binary_conversion = new BinaryConversion;
+    binary_conversion->thread = std::jthread{[directory](std::stop_token stop) {
+        Common::SetCurrentThreadName("gow3:BinaryConvert");
+        Common::SetCurrentThreadPriority(Common::ThreadPriority::Low);
+        const auto started = std::chrono::steady_clock::now();
+        const auto [files, freed] = PipelineBinaryCache::ConvertToShared(
+            directory, [&stop] { return stop.stop_requested(); });
+        if (files) {
+            std::printf("Pipeline binaries: %llu files moved to shared storage, %.0f MB freed "
+                        "in %.1f s\n",
+                        static_cast<unsigned long long>(files), freed / 1048576.0,
+                        std::chrono::duration<double>(std::chrono::steady_clock::now() - started)
+                            .count());
+        }
+    }};
+}
+
+void PipelineCache::StopBinaryConversion() {
+    delete binary_conversion; // the jthread member asks the thread to stop and joins it
+    binary_conversion = nullptr;
 }
 
 void PipelineCache::StopDiskPrefetch() {
