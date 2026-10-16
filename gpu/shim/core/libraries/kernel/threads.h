@@ -6,9 +6,8 @@
 #include <cstdio>
 #include <functional>
 #include <memory>
-#include <stop_token>
 #include <system_error>
-#include <thread>
+#include "common/polyfill_thread.h"
 #include "common/types.h"
 
 extern "C" void runtime_thread_attach_host(const char* name);

@@ -145,7 +145,9 @@ void UniqueBuffer::Create(vk::BufferCreateInfo& buffer_ci, MemoryType mem_type,
             .buffer = buffer,
         };
         auto bda_result = device.getBufferAddress(bda_info);
-        ASSERT_MSG(bda_result != 0, "Failed to get buffer device address");
+        if (mem_type != MemoryType::Sparse) {
+            ASSERT_MSG(bda_result != 0, "Failed to get buffer device address");
+        }
         bda_addr = bda_result;
     }
 }

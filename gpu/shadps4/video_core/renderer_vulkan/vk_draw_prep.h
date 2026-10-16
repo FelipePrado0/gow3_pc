@@ -21,7 +21,7 @@
 #include <memory>
 #include <mutex>
 #include <span>
-#include <thread>
+#include "common/polyfill_thread.h"
 #include <vector>
 
 #include "common/types.h"

@@ -1,0 +1,87 @@
+# macOS package: built on macOS 15 Intel (x86-64) so it runs natively on Intel Macs
+# and under Rosetta 2 on Apple Silicon Macs (M1/M2/M3/M4).
+# Run on push/PR, or manually (Actions > macOS zip > Run workflow):
+#   - no tag: build and test only (the zip is kept as a workflow artifact).
+#   - tag of an existing release (e.g. windows-v2.3.0): the zip is attached to it.
+#   - new tag (e.g. macos-v2.3.1-test1): test build, published as a pre-release on that commit.
+name: macOS zip
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release to attach the zip to; a new tag makes a test pre-release. Empty builds only.
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: macos-zip-${{ inputs.tag || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15-intel
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_UPGRADE: "1"
+        run: |
+          brew install pkg-config cmake ninja molten-vk vulkan-headers vulkan-loader \
+                       sdl3 ffmpeg boost fmt robin-map xxhash zydis glslang
+
+      - name: Build and test
+        run: |
+          bash build.sh --test
+
+      - name: Python unit tests
+        run: |
+          python3 -m unittest discover -s tests -p 'test_*.py'
+
+      - name: Package
+        run: |
+          bash packaging/macos/package.sh
+
+      - name: Verify package
+        run: |
+          unzip -l dist/gow3-macos.zip
+          file out/stage/gow3-macos/bin/gow3-probe
+          file out/stage/gow3-macos/bin/gpu/libgow3gpu.dylib
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: gow3-macos.zip
+          path: dist/gow3-macos.zip*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: inputs.tag != ''
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: gow3-macos.zip
+          path: dist
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --prerelease --target "$GITHUB_SHA" --title "macOS test build $TAG" \
+              --notes "macOS test build from \`${GITHUB_SHA::7}\`. Download \`gow3-macos.zip\`, extract it and run \`bash run.sh\`. Works natively on Intel x86-64 Macs and under Rosetta 2 on Apple Silicon Macs (M1/M2/M3/M4). Not a final release: please report in the linked issue whether it opens and runs."
+          fi
+          gh release upload "$TAG" dist/gow3-macos.zip dist/gow3-macos.zip.sha256 --clobber

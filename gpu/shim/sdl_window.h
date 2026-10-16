@@ -47,6 +47,9 @@ private:
     void UpdateTextTitle();
     SDL_Window* window{};
     WindowSystemInfo window_info{};
+#ifdef __APPLE__
+    void* metal_view = nullptr;
+#endif
 };
 
 } // namespace Frontend

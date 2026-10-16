@@ -24,7 +24,7 @@
 #endif
 
 #ifdef __linux__
-#include <thread>
+#include "common/polyfill_thread.h"
 #include <fcntl.h>
 #include <linux/userfaultfd.h>
 #include <poll.h>

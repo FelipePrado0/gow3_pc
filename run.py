@@ -16,6 +16,7 @@ import sys
 import time
 
 WINDOWS = sys.platform == 'win32'
+MACOS = sys.platform == 'darwin'
 EXE_SUFFIX = '.exe' if WINDOWS else ''
 if WINDOWS:
     import ctypes
@@ -95,7 +96,7 @@ def run_script(name, *args, capture=False, check=True):
 def launch_prefix(env):
     """Linux integrations chosen in the launcher: MangoHud is its Vulkan layer (an environment
     variable), GameMode a command that starts the game."""
-    if WINDOWS:
+    if WINDOWS or MACOS:
         return []
     if env.get('GOW3_MANGOHUD') == '1':
         env.setdefault('MANGOHUD', '1')
@@ -128,7 +129,7 @@ def glyph_mounts(env, probe, game, out):
         pad = ''
         if choice == 'auto':
             pad = subprocess.run([str(probe), '--gamepad'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                 text=True, timeout=15, creationflags=no_console()).stdout
+                                 text=True, timeout=15, env=env, creationflags=no_console()).stdout
         style, faces, name = glyphs.resolve(choice, pad)
         mounts = glyphs.build(game, out, style, faces, env.get('GOW3_PAD_MAP', ''))
     except Exception as error:  # noqa: BLE001  (icons only: whatever fails, the game still starts)
@@ -191,10 +192,55 @@ def main():
         clang64 = Path(env.get('MSYS2_ROOT', r'C:\msys64')) / 'clang64' / 'bin'
         if clang64.is_dir():
             env['PATH'] = f'{clang64}{os.pathsep}{env.get("PATH", "")}'
+    elif MACOS:
+        dyld_paths = []
+        lib_dir = probe.parent / 'lib'
+        if lib_dir.is_dir():
+            dyld_paths.append(str(lib_dir))
+        is_arm64_probe = False
+        try:
+            with open(probe, 'rb') as f:
+                f.seek(4)
+                if int.from_bytes(f.read(4), 'little') == 0x0100000C:
+                    is_arm64_probe = True
+        except Exception:
+            pass
+        if is_arm64_probe:
+            for prefix in (Path('/opt/homebrew'),):
+                if (prefix / 'lib').is_dir():
+                    dyld_paths.append(str(prefix / 'lib'))
+        else:
+            for prefix in (Path('/usr/local'), Path('/usr/local/opt/vulkan-loader')):
+                if (prefix / 'lib').is_dir():
+                    dyld_paths.append(str(prefix / 'lib'))
+        if vulkan_sdk := env.get('VULKAN_SDK'):
+            if (Path(vulkan_sdk) / 'lib').is_dir():
+                dyld_paths.append(str(Path(vulkan_sdk) / 'lib'))
+        if dyld_paths:
+            current_dyld = env.get('DYLD_FALLBACK_LIBRARY_PATH', '')
+            env['DYLD_FALLBACK_LIBRARY_PATH'] = ':'.join(dyld_paths + ([current_dyld] if current_dyld else []))
+            current_lib = env.get('DYLD_LIBRARY_PATH', '')
+            env['DYLD_LIBRARY_PATH'] = ':'.join(dyld_paths + ([current_lib] if current_lib else []))
+        if not env.get('VK_DRIVER_FILES') and not env.get('VK_ICD_FILENAMES'):
+            if (lib_dir / 'MoltenVK_icd.json').is_file():
+                env['VK_DRIVER_FILES'] = str(lib_dir / 'MoltenVK_icd.json')
+            else:
+                candidates = (
+                    Path('/opt/homebrew/share/vulkan/icd.d/MoltenVK_icd.json'),
+                    Path('/opt/homebrew/etc/vulkan/icd.d/MoltenVK_icd.json'),
+                ) if is_arm64_probe else (
+                    Path('/usr/local/share/vulkan/icd.d/MoltenVK_icd.json'),
+                    Path('/usr/local/etc/vulkan/icd.d/MoltenVK_icd.json'),
+                    Path(env.get('VULKAN_SDK', '/nonexistent')) / 'share/vulkan/icd.d/MoltenVK_icd.json',
+                )
+                for candidate in candidates:
+                    if candidate.is_file():
+                        env['VK_DRIVER_FILES'] = str(candidate)
+                        break
     # Instruction sets this CPU lacks (MOVBE, BMI1, LZCNT): the ISA rewrite covers them; exit 20
     # is a set nothing covers.
     features = subprocess.run([str(probe), '--cpu-features'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                              text=True, creationflags=no_console())
+                              text=True, env=env, creationflags=no_console())
     if features.returncode == 20:
         print(features.stdout, end='', flush=True)
         sys.exit(20)
@@ -328,7 +374,7 @@ def main():
                    '--user', str(user_dir),
                    '--timeout', env.get('GOW3_TIMEOUT', '0'), *isa_args, *glyph_args, *args]
         # No stdin: an inherited pipe (shells such as Git Bash) cost the game its console output.
-        process = subprocess.Popen(command, stdin=subprocess.DEVNULL, creationflags=no_console())
+        process = subprocess.Popen(command, stdin=subprocess.DEVNULL, env=env, creationflags=no_console())
         presence = None
         try:
             try:

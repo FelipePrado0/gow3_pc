@@ -8,7 +8,7 @@
 #include "common/types.h"
 
 #include <functional>
-#include <thread>
+#include "common/polyfill_thread.h"
 #include <vector>
 
 namespace Storage {

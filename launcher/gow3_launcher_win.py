@@ -34,9 +34,10 @@ import webbrowser
 import zipfile
 
 WINDOWS = sys.platform == 'win32'
+MACOS = sys.platform == 'darwin'
 import ctypes  # GDI on Windows, fontconfig elsewhere
 # Windows without a cursor of their own show the X root window's, which XWayland leaves blank.
-ARROW = '' if WINDOWS else 'left_ptr'
+ARROW = '' if (WINDOWS or MACOS) else 'left_ptr'
 if WINDOWS:
     # AMD hybrid laptops: this layer hides the NVIDIA GPU from Vulkan and the game stays black (#263).
     os.environ.setdefault('VK_LOADER_LAYERS_DISABLE', 'VK_LAYER_AMD_switchable_graphics')
@@ -49,8 +50,12 @@ import steam_shortcut  # noqa: E402  (scripts/)
 from patches import game_profile, game_sfo  # noqa: E402  (scripts/)
 from prepare import load_sfo  # noqa: E402  (scripts/)
 DATA_DIR = Path(os.environ.get('GOW3_DATA_DIR', PORT_DIR))
-CONFIG_DIR = (Path(os.environ.get('APPDATA', Path.home())) if WINDOWS else
-              Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config')) / 'gow3-launcher'
+if WINDOWS:
+    CONFIG_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'gow3-launcher'
+elif MACOS:
+    CONFIG_DIR = Path.home() / 'Library' / 'Application Support' / 'gow3-launcher'
+else:
+    CONFIG_DIR = Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config') / 'gow3-launcher'
 CONFIG_FILE = CONFIG_DIR / 'settings.json'
 MOD_PRESETS = DATA_DIR / 'mods_presets.json'
 APP_NAME = 'God of War III'
@@ -193,19 +198,19 @@ def monitor_under_pointer(root):
 
 
 def pick_fonts(families):
-    """Windows fonts first, then the DejaVu family that most Linux desktops ship."""
+    """Windows fonts first, then macOS, then the DejaVu/Noto family that most Linux desktops ship."""
     global UI_FONT, MONO_FONT, SERIF_FONT
     available = set(families)
     pick = lambda names: next((name for name in names if name in available), names[-1])
-    UI_FONT = pick(('Segoe UI', 'Noto Sans', 'DejaVu Sans'))
-    MONO_FONT = pick(('Consolas', 'Noto Sans Mono', 'DejaVu Sans Mono'))
-    SERIF_FONT = pick(('Georgia', 'Noto Serif', 'DejaVu Serif'))
+    UI_FONT = pick(('Segoe UI', '.AppleSystemUIFont', 'Helvetica Neue', 'Noto Sans', 'DejaVu Sans'))
+    MONO_FONT = pick(('Consolas', 'Menlo', 'Monaco', 'Noto Sans Mono', 'DejaVu Sans Mono'))
+    SERIF_FONT = pick(('Georgia', 'Times New Roman', 'Noto Serif', 'DejaVu Serif'))
 
 
 def host_environment():
     """The environment of the user's session for programs outside the bundle (xdg-open)."""
     env = dict(os.environ)
-    for name in ('LD_LIBRARY_PATH', 'PYTHONHOME', 'PYTHONPATH', 'TCL_LIBRARY', 'TK_LIBRARY'):
+    for name in ('LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH', 'PYTHONHOME', 'PYTHONPATH', 'TCL_LIBRARY', 'TK_LIBRARY'):
         env.pop(name, None)
     return env
 
@@ -213,6 +218,9 @@ def host_environment():
 def open_url(url):
     if WINDOWS:
         webbrowser.open(url)
+    elif MACOS:
+        subprocess.Popen(['open', url], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     else:
         subprocess.Popen(['xdg-open', url], env=host_environment(), stdin=subprocess.DEVNULL,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -2201,6 +2209,9 @@ class Launcher:
             path.mkdir(parents=True, exist_ok=True)
         if WINDOWS:
             os.startfile(str(path))
+        elif MACOS:
+            subprocess.Popen(['open', str(path)], stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:
             subprocess.Popen(['xdg-open', str(path)], env=host_environment(), stdin=subprocess.DEVNULL,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

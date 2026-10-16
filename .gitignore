@@ -23,3 +23,5 @@ perf.data
 mods.json
 patches.json
 !launcher/gow3.png
+.vscode/
+bin/

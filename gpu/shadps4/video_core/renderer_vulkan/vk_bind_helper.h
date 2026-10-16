@@ -8,7 +8,7 @@
 
 #include <atomic>
 #include <chrono>
-#include <thread>
+#include "common/polyfill_thread.h"
 #include <x86intrin.h>
 
 #include "common/thread.h"

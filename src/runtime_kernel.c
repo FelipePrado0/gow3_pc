@@ -152,7 +152,7 @@ static ABI __attribute__((noreturn)) void hard_exit(int status) {
 static ABI __attribute__((noreturn)) void raise_exception(uint32_t code,uint64_t argument) {
     fprintf(stderr,"STOP: guest raised debug exception code=0x%x argument=0x%llx\n",code,(unsigned long long)argument);
     runtime_report();
-    exit(23);
+    _exit(23);
 }
 /* The process was started without arguments other than its own name. */
 static const char *guest_argv[]={"eboot.bin",NULL};

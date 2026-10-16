@@ -12,8 +12,11 @@ from test_launcher_controls import launcher, sfo_bytes
 
 class LauncherGameFilesTests(unittest.TestCase):
     def setUp(self):
-        import tkinter as tk
-        from tkinter import filedialog, messagebox, ttk
+        try:
+            import tkinter as tk
+            from tkinter import filedialog, messagebox, ttk
+        except ImportError as error:
+            self.skipTest(f'Tk unavailable: {error}')
 
         try:
             self.root = tk.Tk()

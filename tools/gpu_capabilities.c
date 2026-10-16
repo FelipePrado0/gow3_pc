@@ -73,10 +73,16 @@ int main(int argc, char **argv) {
         .pApplicationName = "gow3 scene scaling probe",
         .apiVersion = VK_API_VERSION_1_3,
     };
-    const VkInstanceCreateInfo create = {
+    VkInstanceCreateInfo create = {
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pApplicationInfo = &app,
     };
+#if defined(__APPLE__) && defined(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME)
+    const char *exts[] = { VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME };
+    create.enabledExtensionCount = 1;
+    create.ppEnabledExtensionNames = exts;
+    create.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
     VkInstance instance = VK_NULL_HANDLE;
     if (vkCreateInstance(&create, NULL, &instance) != VK_SUCCESS) {
         fputs("GPU scene scaling: cannot create Vulkan instance\n", stderr);

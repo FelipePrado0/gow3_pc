@@ -8,6 +8,9 @@
  * (gpu/shim/gow3_toggles.h uses the same buffer type). */
 typedef gow3_jmp_buf sigjmp_buf;
 #define sigsetjmp(buffer, save) gow3_setjmp(buffer)
+#elif defined(__APPLE__)
+#include "compat_mac.h"
+#include <setjmp.h>
 #else
 #include <setjmp.h>
 #endif

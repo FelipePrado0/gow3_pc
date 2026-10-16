@@ -205,6 +205,10 @@ std::vector<const char*> GetInstanceExtensions(Frontend::WindowSystemType window
         extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
 
+#if defined(__APPLE__) && defined(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME)
+    extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+#endif
+
     // Sanitize extension list
     std::erase_if(extensions, [&](const char* extension) -> bool {
         const auto it =
@@ -261,14 +265,20 @@ vk::UniqueInstance CreateInstance(Frontend::WindowSystemType window_type, bool e
 
 #if defined(__APPLE__)
     // Initialize the environment with the path to the included ICD, so that the loader will
-    // find it.
-    static const auto icd_path = [] {
+    // find it if VK_DRIVER_FILES is not already set.
+    if (!std::getenv("VK_DRIVER_FILES")) {
         char path[PATH_MAX];
         u32 length = PATH_MAX;
         _NSGetExecutablePath(path, &length);
-        return std::filesystem::path(path).parent_path();
-    }();
-    setenv("VK_DRIVER_FILES", icd_path.c_str(), true);
+        auto parent = std::filesystem::path(path).parent_path();
+        if (std::filesystem::exists(parent / "lib" / "MoltenVK_icd.json")) {
+            setenv("VK_DRIVER_FILES", (parent / "lib" / "MoltenVK_icd.json").c_str(), 1);
+        } else if (std::filesystem::exists(parent / "MoltenVK_icd.json")) {
+            setenv("VK_DRIVER_FILES", (parent / "MoltenVK_icd.json").c_str(), 1);
+        } else {
+            setenv("VK_DRIVER_FILES", parent.c_str(), 1);
+        }
+    }
 #endif
 
     static vk::detail::DynamicLoader dl;
@@ -404,8 +414,14 @@ vk::UniqueInstance CreateInstance(Frontend::WindowSystemType window_type, bool e
         },
     };
 
+    vk::InstanceCreateFlags instance_flags{};
+#if defined(__APPLE__)
+    instance_flags |= vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR;
+#endif
+
     vk::StructureChain<vk::InstanceCreateInfo, vk::LayerSettingsCreateInfoEXT> instance_ci_chain = {
         vk::InstanceCreateInfo{
+            .flags = instance_flags,
             .pApplicationInfo = &application_info,
             .enabledLayerCount = static_cast<u32>(layers.size()),
             .ppEnabledLayerNames = layers.data(),

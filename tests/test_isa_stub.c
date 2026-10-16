@@ -10,7 +10,11 @@
 #else
 #include <signal.h>
 #include <sys/mman.h>
+#ifdef __APPLE__
+#include <sys/ucontext.h>
+#else
 #include <ucontext.h>
+#endif
 #endif
 #include "isa_rewrite.h"
 
@@ -269,6 +273,23 @@ static void trap_handler(int sig, siginfo_t *info, void *context) {
     (void)sig;
     (void)info;
     ucontext_t *uc = context;
+#ifdef __APPLE__
+    struct __darwin_x86_thread_state64 *s = &uc->uc_mcontext->__ss;
+    IsaRegs regs;
+    regs.gpr[0] = s->__rax; regs.gpr[1] = s->__rcx; regs.gpr[2] = s->__rdx; regs.gpr[3] = s->__rbx;
+    regs.gpr[4] = s->__rsp; regs.gpr[5] = s->__rbp; regs.gpr[6] = s->__rsi; regs.gpr[7] = s->__rdi;
+    regs.gpr[8] = s->__r8;  regs.gpr[9] = s->__r9;  regs.gpr[10]= s->__r10; regs.gpr[11]= s->__r11;
+    regs.gpr[12]= s->__r12; regs.gpr[13]= s->__r13; regs.gpr[14]= s->__r14; regs.gpr[15]= s->__r15;
+    regs.rflags = s->__rflags;
+    uintptr_t rip;
+    if (!isa_rewrite_trap(trap_table, (uintptr_t)s->__rip - 1, &regs, &rip)) abort();
+    s->__rax = regs.gpr[0]; s->__rcx = regs.gpr[1]; s->__rdx = regs.gpr[2]; s->__rbx = regs.gpr[3];
+    s->__rsp = regs.gpr[4]; s->__rbp = regs.gpr[5]; s->__rsi = regs.gpr[6]; s->__rdi = regs.gpr[7];
+    s->__r8  = regs.gpr[8]; s->__r9  = regs.gpr[9]; s->__r10 = regs.gpr[10]; s->__r11 = regs.gpr[11];
+    s->__r12 = regs.gpr[12]; s->__r13 = regs.gpr[13]; s->__r14 = regs.gpr[14]; s->__r15 = regs.gpr[15];
+    s->__rflags = regs.rflags;
+    s->__rip = rip;
+#else
     greg_t *g = uc->uc_mcontext.gregs;
     static const int index[16] = {REG_RAX, REG_RCX, REG_RDX, REG_RBX, REG_RSP, REG_RBP, REG_RSI, REG_RDI,
                                   REG_R8,  REG_R9,  REG_R10, REG_R11, REG_R12, REG_R13, REG_R14, REG_R15};
@@ -280,6 +301,7 @@ static void trap_handler(int sig, siginfo_t *info, void *context) {
     for (int i = 0; i < 16; i++) g[index[i]] = (greg_t)regs.gpr[i];
     g[REG_EFL] = (greg_t)regs.rflags;
     g[REG_RIP] = (greg_t)rip;
+#endif
 }
 
 static void install_trap_handler(void) {

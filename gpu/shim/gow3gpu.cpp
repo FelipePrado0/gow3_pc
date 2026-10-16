@@ -232,6 +232,15 @@ extern "C" int gow3gpu_init(const Gow3GpuConfig* config) {
     Core::Emulator::FillElfInfo(*config);
     const std::string title = config->title ? config->title : "God of War III";
     const s32 width = config->width, height = config->height;
+#ifdef __APPLE__
+    // macOS Cocoa invariant: NSApplication and NSWindow MUST be created on the main thread (thread 0).
+    auto* window = new Frontend::WindowSDL(width, height, title.c_str());
+    {
+        std::scoped_lock lock{g_window_mutex};
+        g_window = window;
+        g_window_ready = true;
+    }
+#else
     g_window_thread = std::thread([title, width, height] {
         Common::SetCurrentThreadName("gow3:window");
         auto* window = new Frontend::WindowSDL(width, height, title.c_str());
@@ -254,11 +263,23 @@ extern "C" int gow3gpu_init(const Gow3GpuConfig* config) {
         std::unique_lock lock{g_window_mutex};
         g_window_cv.wait(lock, [] { return g_window_ready; });
     }
+#endif
     Core::Loader::SymbolsResolver resolver;
     // GnmDriver creates the presenter that the VideoOut present thread uses.
     Libraries::GnmDriver::RegisterLib(&resolver);
     Libraries::VideoOut::RegisterLib(&resolver);
     return 0;
+}
+
+extern "C" void gow3gpu_run_event_loop(void) {
+    if (!g_window) return;
+    while (g_window->PollEvents()) {
+        SDL_Delay(2);
+    }
+    LOG_INFO(Frontend, "Window closed by user");
+    runtime_report();
+    std::fflush(stdout);
+    std::_Exit(0);
 }
 
 namespace Libraries::Kernel { void StartKernelService(); }

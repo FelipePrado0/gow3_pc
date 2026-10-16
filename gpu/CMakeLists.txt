@@ -2,6 +2,9 @@
 # drivers, adapted to the native_probe runtime through shims in shim/.
 cmake_minimum_required(VERSION 3.24)
 project(gow3gpu LANGUAGES C CXX)
+if (POLICY CMP0167)
+    cmake_policy(SET CMP0167 OLD)
+endif()
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -10,6 +13,16 @@ if (NOT CMAKE_BUILD_TYPE)
 endif()
 # Frame pointers keep the loader's thread dumps (watchdog, SIGUSR2 sampling) walkable.
 add_compile_options(-fno-omit-frame-pointer)
+
+# Apple Clang in Xcode 16 and earlier requires -fexperimental-library for std::jthread and <stop_token>.
+if (APPLE)
+    include(CheckCXXCompilerFlag)
+    check_cxx_compiler_flag("-fexperimental-library" CXX_SUPPORTS_EXPERIMENTAL_LIBRARY)
+    if (CXX_SUPPORTS_EXPERIMENTAL_LIBRARY)
+        add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fexperimental-library>)
+        add_link_options(-fexperimental-library)
+    endif()
+endif()
 
 # gow3: link-time optimization (GOW3_LTO, default on) and profile-guided optimization
 # (GOW3_PGO: off, generate = instrumented build writing into GOW3_PGO_DIR, use = build with that
@@ -55,7 +68,17 @@ find_package(tsl-robin-map REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG QUIET)
 if (NOT VulkanMemoryAllocator_FOUND)
     # MSYS2 ships the header (include/vma/vk_mem_alloc.h) without a CMake package.
-    find_path(VMA_INCLUDE_DIR vk_mem_alloc.h PATH_SUFFIXES vma REQUIRED)
+    find_path(VMA_INCLUDE_DIR vk_mem_alloc.h PATH_SUFFIXES vma)
+    if (NOT VMA_INCLUDE_DIR)
+        include(FetchContent)
+        FetchContent_Declare(
+            vma_header
+            URL https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/v3.1.0/include/vk_mem_alloc.h
+            DOWNLOAD_NO_EXTRACT TRUE
+        )
+        FetchContent_MakeAvailable(vma_header)
+        set(VMA_INCLUDE_DIR ${vma_header_SOURCE_DIR})
+    endif()
     add_library(VulkanMemoryAllocator INTERFACE)
     add_library(GPUOpen::VulkanMemoryAllocator ALIAS VulkanMemoryAllocator)
     target_include_directories(VulkanMemoryAllocator INTERFACE ${VMA_INCLUDE_DIR})
@@ -63,7 +86,7 @@ endif()
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(XXHASH REQUIRED IMPORTED_TARGET libxxhash)
 pkg_check_modules(SDL3 REQUIRED IMPORTED_TARGET sdl3)
-if (NOT WIN32)
+if (NOT WIN32 AND NOT APPLE)
     pkg_check_modules(X11 REQUIRED IMPORTED_TARGET x11)
 endif()
 find_package(miniz QUIET)
@@ -170,7 +193,9 @@ target_include_directories(gow3gpu PRIVATE shim shadps4 ${SHADER_INCLUDE} third_
 target_compile_definitions(gow3gpu PRIVATE BOOST_ASIO_STANDALONE NDEBUG)
 target_compile_options(gow3gpu PRIVATE -Wno-deprecated-declarations -Wno-missing-field-initializers)
 # Runtime symbols (runtime_memory_*, runtime_process_*) resolve against gow3-probe.
-if (NOT WIN32)
+if (APPLE)
+    target_link_options(gow3gpu PRIVATE -Wl,-undefined,dynamic_lookup -L/opt/homebrew/lib -L/usr/local/lib -Wl,-rpath,@loader_path/../lib -Wl,-rpath,@executable_path/lib)
+elseif (NOT WIN32)
     target_link_options(gow3gpu PRIVATE -Wl,--allow-shlib-undefined)
 endif()
 target_link_libraries(gow3gpu PRIVATE ffx-vulkan::portable ffx-vulkan::fsr4-v07-vulkan)
@@ -183,6 +208,55 @@ if (WIN32)
     target_compile_definitions(gow3gpu PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
     target_compile_options(gow3gpu PRIVATE -include ${CMAKE_CURRENT_SOURCE_DIR}/shim/gow3_win_compat.h)
     target_link_libraries(gow3gpu PUBLIC Vulkan::Vulkan ws2_32 bcrypt ntdll synchronization winmm pdh)
+elseif (APPLE)
+    target_compile_options(gow3gpu PRIVATE -include ${CMAKE_CURRENT_SOURCE_DIR}/shim/gow3_mac_compat.h)
+    find_library(METAL_LIB Metal REQUIRED)
+    find_library(FOUNDATION_LIB Foundation REQUIRED)
+    find_library(QUARTZCORE_LIB QuartzCore REQUIRED)
+    set(BIN_LIB "${CMAKE_CURRENT_SOURCE_DIR}/../bin/lib")
+    if (EXISTS "${BIN_LIB}/libfmt.dylib")
+        target_link_directories(gow3gpu BEFORE PUBLIC "${BIN_LIB}")
+        if (TARGET fmt::fmt)
+            set_target_properties(fmt::fmt PROPERTIES IMPORTED_LOCATION "${BIN_LIB}/libfmt.dylib")
+        endif()
+        if (TARGET Zydis::Zydis)
+            set_target_properties(Zydis::Zydis PROPERTIES IMPORTED_LOCATION "${BIN_LIB}/libZydis.dylib")
+        endif()
+        if (TARGET Vulkan::Vulkan)
+            set_target_properties(Vulkan::Vulkan PROPERTIES IMPORTED_LOCATION "${BIN_LIB}/libvulkan.dylib")
+        endif()
+        if (TARGET PkgConfig::SDL3)
+            set_target_properties(PkgConfig::SDL3 PROPERTIES IMPORTED_LOCATION "${BIN_LIB}/libSDL3.dylib")
+            set_property(TARGET PkgConfig::SDL3 PROPERTY INTERFACE_LINK_LIBRARIES "")
+        endif()
+        if (TARGET PkgConfig::XXHASH)
+            set_target_properties(PkgConfig::XXHASH PROPERTIES IMPORTED_LOCATION "${BIN_LIB}/libxxhash.dylib")
+            set_property(TARGET PkgConfig::XXHASH PROPERTY INTERFACE_LINK_LIBRARIES "")
+        endif()
+        if (TARGET Zycore::Zycore)
+            set_target_properties(Zycore::Zycore PROPERTIES IMPORTED_LOCATION "${BIN_LIB}/libZycore.dylib")
+            set_property(TARGET Zycore::Zycore PROPERTY INTERFACE_LINK_LIBRARIES "")
+        endif()
+        if (TARGET PkgConfig::FFMPEG)
+            set_property(TARGET PkgConfig::FFMPEG PROPERTY INTERFACE_LINK_LIBRARIES "")
+        endif()
+        target_link_libraries(gow3gpu PUBLIC
+            "${BIN_LIB}/libfmt.dylib"
+            "${BIN_LIB}/libZydis.dylib"
+            "${BIN_LIB}/libZycore.dylib"
+            "${BIN_LIB}/libvulkan.dylib"
+            "${BIN_LIB}/libSDL3.dylib"
+            "${BIN_LIB}/libxxhash.dylib"
+            "${BIN_LIB}/libavformat.dylib"
+            "${BIN_LIB}/libavcodec.dylib"
+            "${BIN_LIB}/libavutil.dylib"
+            "${BIN_LIB}/libswscale.dylib"
+            "${BIN_LIB}/libswresample.dylib"
+            ${METAL_LIB} ${FOUNDATION_LIB} ${QUARTZCORE_LIB}
+        )
+    else()
+        target_link_libraries(gow3gpu PUBLIC Vulkan::Vulkan ${METAL_LIB} ${FOUNDATION_LIB} ${QUARTZCORE_LIB})
+    endif()
 else()
     target_link_libraries(gow3gpu PUBLIC PkgConfig::X11)
 endif()

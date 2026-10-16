@@ -19,7 +19,7 @@
 #include <chrono>
 #include <cstring>
 #include <memory>
-#include <thread>
+#include "common/polyfill_thread.h"
 #include <x86intrin.h>
 
 #include "common/assert.h"

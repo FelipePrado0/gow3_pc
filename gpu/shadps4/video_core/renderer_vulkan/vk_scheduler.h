@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 #include <mutex>
-#include <thread>
+#include "common/polyfill_thread.h"
 #include <queue>
 
 #include "gow3_toggles.h"

@@ -2,6 +2,11 @@
 #include <cpuid.h>
 #include <stdio.h>
 
+#ifdef __APPLE__
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#endif
+
 CpuFeatureWords cpu_feature_words(void) {
     CpuFeatureWords words = {0, 0, 0};
     unsigned a = 0, b = 0, c = 0, d = 0;
@@ -9,6 +14,18 @@ CpuFeatureWords cpu_feature_words(void) {
     if (__get_cpuid_count(7, 0, &a, &b, &c, &d)) words.leaf7_ebx = b;
     if (__get_cpuid(0x80000001, &a, &b, &c, &d)) words.ext1_ecx = c;
     (void)a; (void)d;
+#ifdef __APPLE__
+    int translated = 0;
+    size_t size = sizeof(translated);
+    if (sysctlbyname("sysctl.proc_translated", &translated, &size, NULL, 0) == 0 && translated) {
+        /* Rosetta 2 on Apple Silicon translates and executes AVX, SSE4.2, POPCNT, MOVBE, BMI1, LZCNT.
+         * CPUID masks the AVX bit by default in Rosetta, so enable the feature flags here. */
+        words.leaf1_ecx |= (1u << 20) /* SSE4.2 */ | (1u << 22) /* MOVBE */ |
+                           (1u << 23) /* POPCNT */ | (1u << 28) /* AVX */ | (1u << 29) /* F16C */;
+        words.leaf7_ebx |= (1u << 3);  /* BMI1 */
+        words.ext1_ecx  |= (1u << 5);  /* LZCNT */
+    }
+#endif
     return words;
 }
 

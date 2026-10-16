@@ -16,7 +16,7 @@
 
 #include <condition_variable>
 #include <mutex>
-#include <thread>
+#include "common/polyfill_thread.h"
 #include <unordered_set>
 #include <boost/container/small_vector.hpp>
 #include <queue>

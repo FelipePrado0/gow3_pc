@@ -6,8 +6,8 @@
 
 **English** | [Português (Brasil)](https://github.com/FelipePrado0/gow3_pc/blob/main/README.pt-BR.md) | [Español](https://github.com/FelipePrado0/gow3_pc/blob/main/README.es.md)
 
-A PC port of **God of War III Remastered** (PlayStation 4) for Windows 10/11 and Linux
-(experimental AppImage).
+A PC port of **God of War III Remastered** (PlayStation 4) for Windows 10/11, Linux
+(experimental AppImage), and macOS (Apple Silicon via Rosetta 2 or Intel x86-64).
 
 > **No game files are included.** You need a dump from your own PS4 (tested: CUSA01623 and
 > CUSA01715, versions 01.00 and 01.02).
@@ -20,6 +20,7 @@ A PC port of **God of War III Remastered** (PlayStation 4) for Windows 10/11 and
   - [Contents](#contents)
   - [Download and play](#download-and-play)
   - [Linux (AppImage, experimental)](#linux-appimage-experimental)
+  - [macOS](#macos)
   - [What works](#what-works)
   - [Feature availability](#feature-availability)
   - [Settings](#settings)
@@ -31,10 +32,11 @@ A PC port of **God of War III Remastered** (PlayStation 4) for Windows 10/11 and
   - [Building from source](#building-from-source)
     - [Windows](#windows)
     - [Linux (Ubuntu 24.04)](#linux-ubuntu-2404)
+    - [macOS (Apple Silicon & Intel)](#macos-apple-silicon--intel)
   - [Tests](#tests)
     - [Python](#python)
     - [Windows C++ tests (MSYS2 CLANG64)](#windows-c-tests-msys2-clang64)
-    - [Linux C/C++ tests](#linux-cc-tests)
+    - [Linux and macOS C/C++ tests](#linux-and-macos-cc-tests)
     - [Checks using a prepared game](#checks-using-a-prepared-game)
   - [How it works](#how-it-works)
   - [Credits](#credits)
@@ -129,6 +131,32 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
   the launcher and the game window show their icon in the dock; **Advanced → Linux** turns it off and
   removes the entry. When another tool (Gear Lever, AppImageLauncher…) already made an entry that
   starts the same file, it makes none and removes its own, so there are no duplicates.
+
+## macOS
+
+macOS support runs natively on Intel Macs and under Rosetta 2 on Apple Silicon (M1/M2/M3/M4). Vulkan translation is handled through MoltenVK onto Apple's Metal graphics framework.
+
+**Requirements:**
+- macOS 13 (Ventura) or newer (macOS 14 Sonoma or macOS 15 Sequoia recommended).
+- Apple Silicon Mac with Rosetta 2 installed (`softwareupdate --install-rosetta`), or an Intel x86-64 Mac.
+- **Installation & Running:**
+  - **Playing on Apple Silicon (M1/M2/M3/M4 via Rosetta 2):**
+    Download the prebuilt `gow3-macos.zip` from [Releases](https://github.com/FelipePrado0/gow3_pc/releases/latest) (or GitHub Actions). Extract it and launch with:
+    ```bash
+    bash run.sh
+    ```
+    macOS will run the x86-64 loader under Rosetta 2 automatically with Metal-backed Vulkan.
+  - **Building from source (Intel x86-64 Macs):**
+    Install dependencies using Homebrew:
+    ```bash
+    brew install pkg-config cmake ninja molten-vk vulkan-headers vulkan-loader sdl3 ffmpeg boost fmt robin-map xxhash zydis glslang
+    bash build.sh
+    ```
+- Your own game dump (CUSA01623 or CUSA01715).
+
+**Configuration and Files:**
+- **Saves & Settings:** The launcher stores configuration in `~/Library/Application Support/gow3-launcher`.
+- **Game Data:** Saves, shader caches, and logs are kept in `out/` and `user/` in the project directory (or custom `GOW3_DATA_DIR`).
 
 ## What works
 
@@ -381,13 +409,33 @@ can require a newer glibc; public release builds use Ubuntu 24.04. From the repo
 `out/venv/bin/python launcher/gow3_launcher_win.py --play` for saved launcher settings, or
 `GOW3_GAME_DIR=/path/to/CUSA01623 out/venv/bin/python run.py` for a direct launch.
 
+### macOS (Apple Silicon & Intel)
+
+1. Install build tools and dependencies via Homebrew:
+   ```bash
+   brew install pkg-config cmake ninja molten-vk vulkan-headers vulkan-loader sdl3 ffmpeg python
+   python3 -m pip install --break-system-packages pillow iced-x86==1.21.0
+   ```
+2. Clone the repository with submodules and build:
+   ```bash
+   git clone --recursive https://github.com/FelipePrado0/gow3_pc
+   cd gow3_pc
+   bash build.sh
+   ```
+3. Start the launcher or the game:
+   ```bash
+   python3 launcher/gow3_launcher_win.py
+   # Or directly from the terminal:
+   GOW3_GAME_DIR=/path/to/CUSA01623 bash run.sh
+   ```
+
 ## Tests
 
 Run these from the repository root after the build. The first C++ checks below do not need a game dump.
 
 ### Python
 
-On Windows, use PowerShell. On Linux, replace `python` with `out/venv/bin/python`.
+On Windows, use PowerShell. On Linux, replace `python` with `out/venv/bin/python`. On macOS, use `python3`.
 
 ```powershell
 python -m unittest discover -s tests -p "test_*.py"
@@ -403,7 +451,7 @@ out/gpu/warmup-inbox-test.exe
 out/gpu/graphics-settings-test.exe
 ```
 
-### Linux C/C++ tests
+### Linux and macOS C/C++ tests
 
 ```bash
 bash build.sh --test
@@ -413,7 +461,7 @@ out/gpu/warmup-inbox-test
 out/gpu/graphics-settings-test
 ```
 
-`bash build.sh --test` runs the additional C runtime tests on Linux only. On Windows the build exits before that block; use the Ninja targets above.
+`bash build.sh --test` runs the runtime, gamepad, audio, video decoding, and ISA emulation checks on Linux and macOS. On Windows the build exits before that block; use the Ninja targets above.
 
 ### Checks using a prepared game
 
