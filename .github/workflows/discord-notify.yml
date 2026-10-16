@@ -1,0 +1,41 @@
+name: Discord notify
+
+on:
+  # _target para receber os secrets também em PRs vindas de fork; o código da PR nunca é executado aqui
+  pull_request_target:
+    types: [opened, reopened, closed]
+  issues:
+    types: [opened, reopened, closed]
+
+permissions: {}
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enviar para o Discord
+        env:
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          MERGED: ${{ github.event.pull_request.merged }}
+          NUM: ${{ github.event.pull_request.number || github.event.issue.number }}
+          TITLE: ${{ github.event.pull_request.title || github.event.issue.title }}
+          URL: ${{ github.event.pull_request.html_url || github.event.issue.html_url }}
+          WHO: ${{ github.event.sender.login }}
+          OPEN_PR: ${{ secrets.DISCORD_OPEN_PR }}
+          CLOSED_PR: ${{ secrets.DISCORD_CLOSED_PR }}
+          OPEN_ISSUES: ${{ secrets.DISCORD_OPEN_ISSUES }}
+          CLOSED_ISSUES: ${{ secrets.DISCORD_CLOSED_ISSUES }}
+        run: |
+          case "$EVENT:$ACTION" in
+            pull_request_target:closed)
+              hook=$CLOSED_PR
+              if [ "$MERGED" = "true" ]; then msg="🟣 PR #$NUM mergeada por $WHO"; else msg="🔴 PR #$NUM fechada por $WHO"; fi ;;
+            pull_request_target:*) hook=$OPEN_PR;       msg="🟢 PR #$NUM $ACTION por $WHO" ;;
+            issues:closed)         hook=$CLOSED_ISSUES; msg="✅ Issue #$NUM fechada por $WHO" ;;
+            issues:*)              hook=$OPEN_ISSUES;   msg="🟡 Issue #$NUM $ACTION por $WHO" ;;
+          esac
+          msg=${msg/opened/aberta}
+          # allowed_mentions vazio: título com @everyone não pinga ninguém
+          jq -n --arg c "$msg: **$TITLE**"$'\n'"$URL" '{content: $c, allowed_mentions: {parse: []}}' \
+            | curl -fsS -H 'Content-Type: application/json' -d @- "$hook"

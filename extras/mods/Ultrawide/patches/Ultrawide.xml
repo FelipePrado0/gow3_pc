@@ -1,0 +1,235 @@
+<?xml version="1.0"?>
+<!-- Ultrawide mod for God of War III Remastered (gow3_pc): "Resolution Patch - <width>x<height>" entries that
+     set the render resolution and widen the field of view (Hor+). Written by tools/make_ultrawide_patch.py.
+     The Address attributes are addresses in the eboot.bin with sha256 6e72330e...; the signatures
+     (Pattern/At) are what finds the sites. -->
+<Patch>
+    <TitleID>
+        <ID>CUSA01623</ID>
+        <ID>CUSA01715</ID>
+    </TitleID>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 2560x1080" Note="Ultrawide 2560x1080 (2.370:1), Hor+. Sets the game output resolution and the display aspect ratio, widens the horizontal field of view so the 16:9 vertical view is kept (no zoom) and sets the Video Arena to 2.75 GiB. Requires setting DMEM to 3072 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0b3b" Value="000a0000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>
+            <Line Type="bytes" Address="0x005f0b43" Value="38040000" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="4"/>
+            <Line Type="bytes" Address="0x005f0b4c" Value="000a" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="13"/>
+            <Line Type="bytes" Address="0x005f0b53" Value="3804" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="20"/>
+            <Line Type="bytes" Address="0x005643f3" Value="38040000" Pattern="c7 04 24 38 04 00 00 48 8d 3d ?? ?? ?? ?? 41 b9 80 07 00 00" At="3"/>
+            <Line Type="bytes" Address="0x00564400" Value="000a0000" Pattern="41 b9 80 07 00 00 4c 89 f9 4d 89 e0 e8 ?? ?? ?? ??" At="2"/>
+            <Line Type="bytes" Address="0x005ff769" Value="000a0000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="6"/>
+            <Line Type="bytes" Address="0x005ff76f" Value="38040000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="12"/>
+            <Line Type="bytes" Address="0x007c46b4" Value="000a0000" Pattern="ff ff ff ff 01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x007c46b8" Value="38040000" Pattern="01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x0056bb82" Value="38040000" Pattern="e8 ?? ?? ?? ?? 4c 89 24 24 ba 01 00 00 00 41 b8 38 04 00 00" At="16"/>
+            <Line Type="bytes" Address="0x0060953d" Value="38040000" Pattern="83 39 00 74 19 48 8b 78 38 ba 38 04 00 00 48 89 de" At="10"/>
+            <Line Type="bytes" Address="0x007f2a3c" Value="00050000" Pattern="00 00 00 00 0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a40" Value="1c020000" Pattern="0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00 00 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007cd918" Value="000000b0" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8"/>
+            <Line Type="bytes" Address="0x005f0c77" Value="26b4174026b41740" Pattern="48 b8 39 8e e3 3f 39 8e e3 3f 49 89 45 00 b9 00 00 01 00" At="2"/>
+            <Line Type="bytes" Address="0x005c04e1" Value="abaaaa3f" Pattern="c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 55 48 89 e5 41 57 41 56 41 55 41 54 53 48 81 ec 18 01 00 00" At="1"/>
+            <Line Type="bytes" Address="0x005cc01f" Value="e9{rel:first0:0}0f1f00" Pattern="c4 c1 78 29 47 10 c4 c1 78 29 07 c5 fa 10 89 d8 00 00 00" At="11"/>
+            <Line Type="bytes" Address="0x005c0d51" Value="c5fa1089d8000000e9{rel:second0:0}" Pattern="0f 47 c1 c3 66 90 c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 c3" At="7"/>
+            <Line Type="bytes" Address="0x005c0d61" Value="c5f2590d{rel:K:0}e9{rel:back0:0}" Pattern="c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 00 90 66 66 66 66" At="1"/>
+            <Line Type="bytes" Address="0x005cbd89" Value="e9{rel:first1:0}0f1f00" Pattern="f6 80 91 00 00 00 40 74 51 c5 fa 10 80 d8 00 00 00" At="9"/>
+            <Line Type="bytes" Address="0x005c3431" Value="c5fa1080d8000000e9{rel:second1:0}" Pattern="c3 0f 1f 44 00 00 c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 c3" At="7"/>
+            <Line Type="bytes" Address="0x005c3441" Value="c5fa5905{rel:K:0}e9{rel:back1:0}" Pattern="c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 8b 57 08" At="1"/>
+            <Line Type="bytes" Address="0x005ccaa9" Value="e9{rel:first2:0}0f1f00" Pattern="74 4c c5 fa 10 80 d8 00 00 00 c4 c1 7a 5e 0c 24" At="2"/>
+            <Line Type="bytes" Address="0x005c3e61" Value="c5fa1080d8000000e9{rel:second2:0}" Pattern="eb 1b 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 ff c0" At="2"/>
+            <Line Type="bytes" Address="0x005c6401" Value="c5fa5905{rel:K:0}e9{rel:back2:0}" Pattern="5b 41 5e 41 5f 5d e9 ?? ?? ?? ?? 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 55 48 89 e5 41 57 41 56 53 50 41 89 f6 48 89 fb" At="11"/>
+            <Line Type="bytes" Address="0x005cc20f" Value="e9{rel:first3:0}0f1f00" Pattern="e8 ?? ?? ?? ?? c5 fa 5e 85 2c ff ff ff c5 f9 70 c0 00" At="5"/>
+            <Line Type="bytes" Address="0x005c6461" Value="c5fa5e852cffffffe9{rel:second3:0}" Pattern="c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 00 00 00 00 31 c0" At="1"/>
+            <Line Type="bytes" Address="0x005c9a61" Value="c5fa5905{rel:K:0}e9{rel:back3:0}" Pattern="eb 12 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 4d 8b 3f" At="2"/>
+        </PatchList>
+        <Target Name="K" Address="0x005c04e1" Line="16"/>
+        <Target Name="first0" Address="0x005c0d51" Line="18"/>
+        <Target Name="second0" Address="0x005c0d61" Line="19"/>
+        <Target Name="back0" Address="0x005cc027" Pattern="c4 c1 78 29 47 10 c4 c1 78 29 07 c5 fa 10 89 d8 00 00 00" At="19"/>
+        <Target Name="first1" Address="0x005c3431" Line="21"/>
+        <Target Name="second1" Address="0x005c3441" Line="22"/>
+        <Target Name="back1" Address="0x005cbd91" Pattern="f6 80 91 00 00 00 40 74 51 c5 fa 10 80 d8 00 00 00" At="17"/>
+        <Target Name="first2" Address="0x005c3e61" Line="24"/>
+        <Target Name="second2" Address="0x005c6401" Line="25"/>
+        <Target Name="back2" Address="0x005ccab1" Pattern="74 4c c5 fa 10 80 d8 00 00 00 c4 c1 7a 5e 0c 24" At="10"/>
+        <Target Name="first3" Address="0x005c6461" Line="27"/>
+        <Target Name="second3" Address="0x005c9a61" Line="28"/>
+        <Target Name="back3" Address="0x005cc217" Pattern="e8 ?? ?? ?? ?? c5 fa 5e 85 2c ff ff ff c5 f9 70 c0 00" At="13"/>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 3440x1440" Note="Ultrawide 3440x1440 (2.389:1), Hor+. Sets the game output resolution and the display aspect ratio, widens the horizontal field of view so the 16:9 vertical view is kept (no zoom) and sets the Video Arena to 3.25 GiB. Requires setting DMEM to 4608 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0b3b" Value="700d0000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>
+            <Line Type="bytes" Address="0x005f0b43" Value="a0050000" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="4"/>
+            <Line Type="bytes" Address="0x005f0b4c" Value="700d" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="13"/>
+            <Line Type="bytes" Address="0x005f0b53" Value="a005" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="20"/>
+            <Line Type="bytes" Address="0x005643f3" Value="a0050000" Pattern="c7 04 24 38 04 00 00 48 8d 3d ?? ?? ?? ?? 41 b9 80 07 00 00" At="3"/>
+            <Line Type="bytes" Address="0x00564400" Value="700d0000" Pattern="41 b9 80 07 00 00 4c 89 f9 4d 89 e0 e8 ?? ?? ?? ??" At="2"/>
+            <Line Type="bytes" Address="0x005ff769" Value="700d0000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="6"/>
+            <Line Type="bytes" Address="0x005ff76f" Value="a0050000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="12"/>
+            <Line Type="bytes" Address="0x007c46b4" Value="700d0000" Pattern="ff ff ff ff 01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x007c46b8" Value="a0050000" Pattern="01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x0056bb82" Value="a0050000" Pattern="e8 ?? ?? ?? ?? 4c 89 24 24 ba 01 00 00 00 41 b8 38 04 00 00" At="16"/>
+            <Line Type="bytes" Address="0x0060953d" Value="a0050000" Pattern="83 39 00 74 19 48 8b 78 38 ba 38 04 00 00 48 89 de" At="10"/>
+            <Line Type="bytes" Address="0x007f2a3c" Value="b8060000" Pattern="00 00 00 00 0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a40" Value="d0020000" Pattern="0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00 00 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007cd918" Value="000000d0" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8"/>
+            <Line Type="bytes" Address="0x005f0c77" Value="8ee318408ee31840" Pattern="48 b8 39 8e e3 3f 39 8e e3 3f 49 89 45 00 b9 00 00 01 00" At="2"/>
+            <Line Type="bytes" Address="0x005c04e1" Value="0000ac3f" Pattern="c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 55 48 89 e5 41 57 41 56 41 55 41 54 53 48 81 ec 18 01 00 00" At="1"/>
+            <Line Type="bytes" Address="0x005cc01f" Value="e9{rel:first0:0}0f1f00" Pattern="c4 c1 78 29 47 10 c4 c1 78 29 07 c5 fa 10 89 d8 00 00 00" At="11"/>
+            <Line Type="bytes" Address="0x005c0d51" Value="c5fa1089d8000000e9{rel:second0:0}" Pattern="0f 47 c1 c3 66 90 c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 c3" At="7"/>
+            <Line Type="bytes" Address="0x005c0d61" Value="c5f2590d{rel:K:0}e9{rel:back0:0}" Pattern="c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 00 90 66 66 66 66" At="1"/>
+            <Line Type="bytes" Address="0x005cbd89" Value="e9{rel:first1:0}0f1f00" Pattern="f6 80 91 00 00 00 40 74 51 c5 fa 10 80 d8 00 00 00" At="9"/>
+            <Line Type="bytes" Address="0x005c3431" Value="c5fa1080d8000000e9{rel:second1:0}" Pattern="c3 0f 1f 44 00 00 c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 c3" At="7"/>
+            <Line Type="bytes" Address="0x005c3441" Value="c5fa5905{rel:K:0}e9{rel:back1:0}" Pattern="c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 8b 57 08" At="1"/>
+            <Line Type="bytes" Address="0x005ccaa9" Value="e9{rel:first2:0}0f1f00" Pattern="74 4c c5 fa 10 80 d8 00 00 00 c4 c1 7a 5e 0c 24" At="2"/>
+            <Line Type="bytes" Address="0x005c3e61" Value="c5fa1080d8000000e9{rel:second2:0}" Pattern="eb 1b 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 ff c0" At="2"/>
+            <Line Type="bytes" Address="0x005c6401" Value="c5fa5905{rel:K:0}e9{rel:back2:0}" Pattern="5b 41 5e 41 5f 5d e9 ?? ?? ?? ?? 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 55 48 89 e5 41 57 41 56 53 50 41 89 f6 48 89 fb" At="11"/>
+            <Line Type="bytes" Address="0x005cc20f" Value="e9{rel:first3:0}0f1f00" Pattern="e8 ?? ?? ?? ?? c5 fa 5e 85 2c ff ff ff c5 f9 70 c0 00" At="5"/>
+            <Line Type="bytes" Address="0x005c6461" Value="c5fa5e852cffffffe9{rel:second3:0}" Pattern="c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 00 00 00 00 31 c0" At="1"/>
+            <Line Type="bytes" Address="0x005c9a61" Value="c5fa5905{rel:K:0}e9{rel:back3:0}" Pattern="eb 12 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 4d 8b 3f" At="2"/>
+        </PatchList>
+        <Target Name="K" Address="0x005c04e1" Line="16"/>
+        <Target Name="first0" Address="0x005c0d51" Line="18"/>
+        <Target Name="second0" Address="0x005c0d61" Line="19"/>
+        <Target Name="back0" Address="0x005cc027" Pattern="c4 c1 78 29 47 10 c4 c1 78 29 07 c5 fa 10 89 d8 00 00 00" At="19"/>
+        <Target Name="first1" Address="0x005c3431" Line="21"/>
+        <Target Name="second1" Address="0x005c3441" Line="22"/>
+        <Target Name="back1" Address="0x005cbd91" Pattern="f6 80 91 00 00 00 40 74 51 c5 fa 10 80 d8 00 00 00" At="17"/>
+        <Target Name="first2" Address="0x005c3e61" Line="24"/>
+        <Target Name="second2" Address="0x005c6401" Line="25"/>
+        <Target Name="back2" Address="0x005ccab1" Pattern="74 4c c5 fa 10 80 d8 00 00 00 c4 c1 7a 5e 0c 24" At="10"/>
+        <Target Name="first3" Address="0x005c6461" Line="27"/>
+        <Target Name="second3" Address="0x005c9a61" Line="28"/>
+        <Target Name="back3" Address="0x005cc217" Pattern="e8 ?? ?? ?? ?? c5 fa 5e 85 2c ff ff ff c5 f9 70 c0 00" At="13"/>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 3840x1600" Note="Ultrawide 3840x1600 (2.400:1), Hor+. Sets the game output resolution and the display aspect ratio, widens the horizontal field of view so the 16:9 vertical view is kept (no zoom) and sets the Video Arena to 3.75 GiB. Requires setting DMEM to 6144 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0b3b" Value="000f0000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>
+            <Line Type="bytes" Address="0x005f0b43" Value="40060000" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="4"/>
+            <Line Type="bytes" Address="0x005f0b4c" Value="000f" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="13"/>
+            <Line Type="bytes" Address="0x005f0b53" Value="4006" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="20"/>
+            <Line Type="bytes" Address="0x005643f3" Value="40060000" Pattern="c7 04 24 38 04 00 00 48 8d 3d ?? ?? ?? ?? 41 b9 80 07 00 00" At="3"/>
+            <Line Type="bytes" Address="0x00564400" Value="000f0000" Pattern="41 b9 80 07 00 00 4c 89 f9 4d 89 e0 e8 ?? ?? ?? ??" At="2"/>
+            <Line Type="bytes" Address="0x005ff769" Value="000f0000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="6"/>
+            <Line Type="bytes" Address="0x005ff76f" Value="40060000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="12"/>
+            <Line Type="bytes" Address="0x007c46b4" Value="000f0000" Pattern="ff ff ff ff 01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x007c46b8" Value="40060000" Pattern="01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x0056bb82" Value="40060000" Pattern="e8 ?? ?? ?? ?? 4c 89 24 24 ba 01 00 00 00 41 b8 38 04 00 00" At="16"/>
+            <Line Type="bytes" Address="0x0060953d" Value="40060000" Pattern="83 39 00 74 19 48 8b 78 38 ba 38 04 00 00 48 89 de" At="10"/>
+            <Line Type="bytes" Address="0x007f2a3c" Value="80070000" Pattern="00 00 00 00 0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a40" Value="20030000" Pattern="0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00 00 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007cd918" Value="000000f0" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8"/>
+            <Line Type="bytes" Address="0x005f0c77" Value="9a9919409a991940" Pattern="48 b8 39 8e e3 3f 39 8e e3 3f 49 89 45 00 b9 00 00 01 00" At="2"/>
+            <Line Type="bytes" Address="0x005c04e1" Value="cdccac3f" Pattern="c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 55 48 89 e5 41 57 41 56 41 55 41 54 53 48 81 ec 18 01 00 00" At="1"/>
+            <Line Type="bytes" Address="0x005cc01f" Value="e9{rel:first0:0}0f1f00" Pattern="c4 c1 78 29 47 10 c4 c1 78 29 07 c5 fa 10 89 d8 00 00 00" At="11"/>
+            <Line Type="bytes" Address="0x005c0d51" Value="c5fa1089d8000000e9{rel:second0:0}" Pattern="0f 47 c1 c3 66 90 c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 c3" At="7"/>
+            <Line Type="bytes" Address="0x005c0d61" Value="c5f2590d{rel:K:0}e9{rel:back0:0}" Pattern="c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 00 90 66 66 66 66" At="1"/>
+            <Line Type="bytes" Address="0x005cbd89" Value="e9{rel:first1:0}0f1f00" Pattern="f6 80 91 00 00 00 40 74 51 c5 fa 10 80 d8 00 00 00" At="9"/>
+            <Line Type="bytes" Address="0x005c3431" Value="c5fa1080d8000000e9{rel:second1:0}" Pattern="c3 0f 1f 44 00 00 c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 c3" At="7"/>
+            <Line Type="bytes" Address="0x005c3441" Value="c5fa5905{rel:K:0}e9{rel:back1:0}" Pattern="c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 8b 57 08" At="1"/>
+            <Line Type="bytes" Address="0x005ccaa9" Value="e9{rel:first2:0}0f1f00" Pattern="74 4c c5 fa 10 80 d8 00 00 00 c4 c1 7a 5e 0c 24" At="2"/>
+            <Line Type="bytes" Address="0x005c3e61" Value="c5fa1080d8000000e9{rel:second2:0}" Pattern="eb 1b 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 ff c0" At="2"/>
+            <Line Type="bytes" Address="0x005c6401" Value="c5fa5905{rel:K:0}e9{rel:back2:0}" Pattern="5b 41 5e 41 5f 5d e9 ?? ?? ?? ?? 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 55 48 89 e5 41 57 41 56 53 50 41 89 f6 48 89 fb" At="11"/>
+            <Line Type="bytes" Address="0x005cc20f" Value="e9{rel:first3:0}0f1f00" Pattern="e8 ?? ?? ?? ?? c5 fa 5e 85 2c ff ff ff c5 f9 70 c0 00" At="5"/>
+            <Line Type="bytes" Address="0x005c6461" Value="c5fa5e852cffffffe9{rel:second3:0}" Pattern="c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 00 00 00 00 31 c0" At="1"/>
+            <Line Type="bytes" Address="0x005c9a61" Value="c5fa5905{rel:K:0}e9{rel:back3:0}" Pattern="eb 12 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 4d 8b 3f" At="2"/>
+        </PatchList>
+        <Target Name="K" Address="0x005c04e1" Line="16"/>
+        <Target Name="first0" Address="0x005c0d51" Line="18"/>
+        <Target Name="second0" Address="0x005c0d61" Line="19"/>
+        <Target Name="back0" Address="0x005cc027" Pattern="c4 c1 78 29 47 10 c4 c1 78 29 07 c5 fa 10 89 d8 00 00 00" At="19"/>
+        <Target Name="first1" Address="0x005c3431" Line="21"/>
+        <Target Name="second1" Address="0x005c3441" Line="22"/>
+        <Target Name="back1" Address="0x005cbd91" Pattern="f6 80 91 00 00 00 40 74 51 c5 fa 10 80 d8 00 00 00" At="17"/>
+        <Target Name="first2" Address="0x005c3e61" Line="24"/>
+        <Target Name="second2" Address="0x005c6401" Line="25"/>
+        <Target Name="back2" Address="0x005ccab1" Pattern="74 4c c5 fa 10 80 d8 00 00 00 c4 c1 7a 5e 0c 24" At="10"/>
+        <Target Name="first3" Address="0x005c6461" Line="27"/>
+        <Target Name="second3" Address="0x005c9a61" Line="28"/>
+        <Target Name="back3" Address="0x005cc217" Pattern="e8 ?? ?? ?? ?? c5 fa 5e 85 2c ff ff ff c5 f9 70 c0 00" At="13"/>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 5120x1440" Note="Ultrawide 5120x1440 (3.556:1), Hor+. Sets the game output resolution and the display aspect ratio, widens the horizontal field of view so the 16:9 vertical view is kept (no zoom) and sets the Video Arena to 3.75 GiB. Requires setting DMEM to 6144 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix. Tested in game by players (issue #180)." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0b3b" Value="00140000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>
+            <Line Type="bytes" Address="0x005f0b43" Value="a0050000" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="4"/>
+            <Line Type="bytes" Address="0x005f0b4c" Value="0014" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="13"/>
+            <Line Type="bytes" Address="0x005f0b53" Value="a005" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="20"/>
+            <Line Type="bytes" Address="0x005643f3" Value="a0050000" Pattern="c7 04 24 38 04 00 00 48 8d 3d ?? ?? ?? ?? 41 b9 80 07 00 00" At="3"/>
+            <Line Type="bytes" Address="0x00564400" Value="00140000" Pattern="41 b9 80 07 00 00 4c 89 f9 4d 89 e0 e8 ?? ?? ?? ??" At="2"/>
+            <Line Type="bytes" Address="0x005ff769" Value="00140000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="6"/>
+            <Line Type="bytes" Address="0x005ff76f" Value="a0050000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="12"/>
+            <Line Type="bytes" Address="0x007c46b4" Value="00140000" Pattern="ff ff ff ff 01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x007c46b8" Value="a0050000" Pattern="01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x0056bb82" Value="a0050000" Pattern="e8 ?? ?? ?? ?? 4c 89 24 24 ba 01 00 00 00 41 b8 38 04 00 00" At="16"/>
+            <Line Type="bytes" Address="0x0060953d" Value="a0050000" Pattern="83 39 00 74 19 48 8b 78 38 ba 38 04 00 00 48 89 de" At="10"/>
+            <Line Type="bytes" Address="0x007f2a3c" Value="000a0000" Pattern="00 00 00 00 0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a40" Value="d0020000" Pattern="0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00 00 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007cd918" Value="000000f0" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8"/>
+            <Line Type="bytes" Address="0x005f0c77" Value="398e6340398e6340" Pattern="48 b8 39 8e e3 3f 39 8e e3 3f 49 89 45 00 b9 00 00 01 00" At="2"/>
+            <Line Type="bytes" Address="0x005c04e1" Value="00000040" Pattern="c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 55 48 89 e5 41 57 41 56 41 55 41 54 53 48 81 ec 18 01 00 00" At="1"/>
+            <Line Type="bytes" Address="0x005cc01f" Value="e9{rel:first0:0}0f1f00" Pattern="c4 c1 78 29 47 10 c4 c1 78 29 07 c5 fa 10 89 d8 00 00 00" At="11"/>
+            <Line Type="bytes" Address="0x005c0d51" Value="c5fa1089d8000000e9{rel:second0:0}" Pattern="0f 47 c1 c3 66 90 c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 c3" At="7"/>
+            <Line Type="bytes" Address="0x005c0d61" Value="c5f2590d{rel:K:0}e9{rel:back0:0}" Pattern="c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 00 90 66 66 66 66" At="1"/>
+            <Line Type="bytes" Address="0x005cbd89" Value="e9{rel:first1:0}0f1f00" Pattern="f6 80 91 00 00 00 40 74 51 c5 fa 10 80 d8 00 00 00" At="9"/>
+            <Line Type="bytes" Address="0x005c3431" Value="c5fa1080d8000000e9{rel:second1:0}" Pattern="c3 0f 1f 44 00 00 c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 c3" At="7"/>
+            <Line Type="bytes" Address="0x005c3441" Value="c5fa5905{rel:K:0}e9{rel:back1:0}" Pattern="c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 8b 57 08" At="1"/>
+            <Line Type="bytes" Address="0x005ccaa9" Value="e9{rel:first2:0}0f1f00" Pattern="74 4c c5 fa 10 80 d8 00 00 00 c4 c1 7a 5e 0c 24" At="2"/>
+            <Line Type="bytes" Address="0x005c3e61" Value="c5fa1080d8000000e9{rel:second2:0}" Pattern="eb 1b 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 ff c0" At="2"/>
+            <Line Type="bytes" Address="0x005c6401" Value="c5fa5905{rel:K:0}e9{rel:back2:0}" Pattern="5b 41 5e 41 5f 5d e9 ?? ?? ?? ?? 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 55 48 89 e5 41 57 41 56 53 50 41 89 f6 48 89 fb" At="11"/>
+            <Line Type="bytes" Address="0x005cc20f" Value="e9{rel:first3:0}0f1f00" Pattern="e8 ?? ?? ?? ?? c5 fa 5e 85 2c ff ff ff c5 f9 70 c0 00" At="5"/>
+            <Line Type="bytes" Address="0x005c6461" Value="c5fa5e852cffffffe9{rel:second3:0}" Pattern="c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 00 00 00 00 31 c0" At="1"/>
+            <Line Type="bytes" Address="0x005c9a61" Value="c5fa5905{rel:K:0}e9{rel:back3:0}" Pattern="eb 12 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 4d 8b 3f" At="2"/>
+        </PatchList>
+        <Target Name="K" Address="0x005c04e1" Line="16"/>
+        <Target Name="first0" Address="0x005c0d51" Line="18"/>
+        <Target Name="second0" Address="0x005c0d61" Line="19"/>
+        <Target Name="back0" Address="0x005cc027" Pattern="c4 c1 78 29 47 10 c4 c1 78 29 07 c5 fa 10 89 d8 00 00 00" At="19"/>
+        <Target Name="first1" Address="0x005c3431" Line="21"/>
+        <Target Name="second1" Address="0x005c3441" Line="22"/>
+        <Target Name="back1" Address="0x005cbd91" Pattern="f6 80 91 00 00 00 40 74 51 c5 fa 10 80 d8 00 00 00" At="17"/>
+        <Target Name="first2" Address="0x005c3e61" Line="24"/>
+        <Target Name="second2" Address="0x005c6401" Line="25"/>
+        <Target Name="back2" Address="0x005ccab1" Pattern="74 4c c5 fa 10 80 d8 00 00 00 c4 c1 7a 5e 0c 24" At="10"/>
+        <Target Name="first3" Address="0x005c6461" Line="27"/>
+        <Target Name="second3" Address="0x005c9a61" Line="28"/>
+        <Target Name="back3" Address="0x005cc217" Pattern="e8 ?? ?? ?? ?? c5 fa 5e 85 2c ff ff ff c5 f9 70 c0 00" At="13"/>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 1920x1200" Note="1920x1200 (1.600:1). Sets the game output resolution and the display aspect ratio; the horizontal field of view is the game's own, so this taller picture shows more at the top and bottom and sets the Video Arena to 2.75 GiB. Requires setting DMEM to 3072 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix. Tested in game by players (issue #180)." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0b3b" Value="80070000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>
+            <Line Type="bytes" Address="0x005f0b43" Value="b0040000" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="4"/>
+            <Line Type="bytes" Address="0x005f0b4c" Value="8007" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="13"/>
+            <Line Type="bytes" Address="0x005f0b53" Value="b004" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="20"/>
+            <Line Type="bytes" Address="0x005643f3" Value="b0040000" Pattern="c7 04 24 38 04 00 00 48 8d 3d ?? ?? ?? ?? 41 b9 80 07 00 00" At="3"/>
+            <Line Type="bytes" Address="0x00564400" Value="80070000" Pattern="41 b9 80 07 00 00 4c 89 f9 4d 89 e0 e8 ?? ?? ?? ??" At="2"/>
+            <Line Type="bytes" Address="0x005ff769" Value="80070000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="6"/>
+            <Line Type="bytes" Address="0x005ff76f" Value="b0040000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="12"/>
+            <Line Type="bytes" Address="0x007c46b4" Value="80070000" Pattern="ff ff ff ff 01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x007c46b8" Value="b0040000" Pattern="01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x0056bb82" Value="b0040000" Pattern="e8 ?? ?? ?? ?? 4c 89 24 24 ba 01 00 00 00 41 b8 38 04 00 00" At="16"/>
+            <Line Type="bytes" Address="0x0060953d" Value="b0040000" Pattern="83 39 00 74 19 48 8b 78 38 ba 38 04 00 00 48 89 de" At="10"/>
+            <Line Type="bytes" Address="0x007f2a3c" Value="c0030000" Pattern="00 00 00 00 0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a40" Value="58020000" Pattern="0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00 00 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007cd918" Value="000000b0" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8"/>
+            <Line Type="bytes" Address="0x005f0c77" Value="cdcccc3fcdcccc3f" Pattern="48 b8 39 8e e3 3f 39 8e e3 3f 49 89 45 00 b9 00 00 01 00" At="2"/>
+        </PatchList>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 2560x1600" Note="2560x1600 (1.600:1). Sets the game output resolution and the display aspect ratio; the horizontal field of view is the game's own, so this taller picture shows more at the top and bottom and sets the Video Arena to 3.25 GiB. Requires setting DMEM to 4608 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix. Tested in game by players (issue #180)." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0b3b" Value="000a0000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>
+            <Line Type="bytes" Address="0x005f0b43" Value="40060000" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="4"/>
+            <Line Type="bytes" Address="0x005f0b4c" Value="000a" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="13"/>
+            <Line Type="bytes" Address="0x005f0b53" Value="4006" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="20"/>
+            <Line Type="bytes" Address="0x005643f3" Value="40060000" Pattern="c7 04 24 38 04 00 00 48 8d 3d ?? ?? ?? ?? 41 b9 80 07 00 00" At="3"/>
+            <Line Type="bytes" Address="0x00564400" Value="000a0000" Pattern="41 b9 80 07 00 00 4c 89 f9 4d 89 e0 e8 ?? ?? ?? ??" At="2"/>
+            <Line Type="bytes" Address="0x005ff769" Value="000a0000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="6"/>
+            <Line Type="bytes" Address="0x005ff76f" Value="40060000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="12"/>
+            <Line Type="bytes" Address="0x007c46b4" Value="000a0000" Pattern="ff ff ff ff 01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x007c46b8" Value="40060000" Pattern="01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x0056bb82" Value="40060000" Pattern="e8 ?? ?? ?? ?? 4c 89 24 24 ba 01 00 00 00 41 b8 38 04 00 00" At="16"/>
+            <Line Type="bytes" Address="0x0060953d" Value="40060000" Pattern="83 39 00 74 19 48 8b 78 38 ba 38 04 00 00 48 89 de" At="10"/>
+            <Line Type="bytes" Address="0x007f2a3c" Value="00050000" Pattern="00 00 00 00 0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a40" Value="20030000" Pattern="0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00 00 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007cd918" Value="000000d0" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8"/>
+            <Line Type="bytes" Address="0x005f0c77" Value="cdcccc3fcdcccc3f" Pattern="48 b8 39 8e e3 3f 39 8e e3 3f 49 89 45 00 b9 00 00 01 00" At="2"/>
+        </PatchList>
+    </Metadata>
+</Patch>

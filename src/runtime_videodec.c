@@ -2,6 +2,7 @@
  * Structures, sizes and the resource estimate follow shadPS4's videodec (GPL-2.0-or-later);
  * pictures larger than the game's frame buffer are an error code instead of an overflow. */
 #include "runtime.h"
+#include "gpu/gow3gpu.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -123,6 +124,7 @@ static int32_t picture(Decoder *d, FrameBuffer *buffer, PictureInfo *info) {
     info->codec.avc.colour_primaries=(uint8_t)d->frame->color_primaries;
     info->codec.avc.crop_right=pitch-width;
     info->codec.avc.crop_bottom=rows-height;
+    gow3gpu_movie_picture();
     return 0;
 }
 static int32_t receive(Decoder *d, FrameBuffer *buffer, PictureInfo *info) {

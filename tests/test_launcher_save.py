@@ -190,7 +190,8 @@ class EverySettingSavesTest(LauncherOverTemporaryFiles):
         original = launcher.Launcher.choice
 
         def spy(app, parent, key, store, options, width=30, var=None):
-            self.options[key or 'upscale_mode'] = [value for value, _text in options]
+            pairs = options() if callable(options) else options  # a function: the list changes with the mods
+            self.options[key or 'upscale_mode'] = [value for value, _text in pairs]
             return original(app, parent, key, store, options, width, var)
         self.patches = [mock.patch.object(launcher.Launcher, 'choice', spy),
                         mock.patch.object(launcher.Launcher, 'check_update', lambda app, manual=False: None)]

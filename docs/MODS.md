@@ -21,8 +21,7 @@ Também são aceitos:
 Maiúsculas e minúsculas nos nomes do mod não importam: um arquivo com outra caixa troca o
 arquivo do jogo de mesmo nome. O log mostra quantos arquivos o mod trocou e quantos acrescentou:
 `Mods: 12 game files replaced, 0 added`. Se o mod deveria trocar arquivos e aparece
-`0 game files replaced`, confira os caminhos dentro dele. Arquivos ZIP/7z precisam ser extraídos
-antes. Dois mods que trocam o mesmo arquivo não são mesclados: o último vence inteiro.
+`0 game files replaced`, confira os caminhos dentro dele. Um mod em **ZIP** pode ser largado direto na pasta de mods: ao abrir o launcher ou iniciar o jogo ele é extraído numa pasta com o nome do zip (uma pasta de mesmo nome que você criou não é substituída, e caminhos perigosos ou links no zip são recusados). Arquivos 7z/RAR precisam ser extraídos antes. Dois mods que trocam o mesmo arquivo não são mesclados: o último vence inteiro.
 
 Uma pasta `<pasta do jogo>-mods/dvdroot_ps4/...` ao lado da pasta do jogo (convenção do shadPS4)
 entra antes dos mods da lista. A chave geral também a desliga.
@@ -51,6 +50,35 @@ Ordem e desativações ficam em `mods.json` no diretório de dados:
 Pastas novas entram ativadas, no fim da lista, em ordem alfabética. `GOW3_MODS_CONFIG` muda o
 caminho desse arquivo.
 
+## Mods com patches de jogo / Mods with game patches
+
+Uma pasta de mod também pode trazer **patches de código** (para o `eboot.bin`): arquivos XML na pasta
+`patches/` do mod, no mesmo formato dos patches embutidos (`patches/God_of_War_III_Remastered.xml`),
+com assinaturas (`Pattern`/`At`) que acham cada ponto em qualquer build. Um mod pode ter só patches, sem
+`dvdroot_ps4`:
+
+```text
+mods/
+  Nome do mod/
+    patches/
+      meu-patch.xml
+```
+
+Os patches do mod valem enquanto o mod está ativado (a chave geral também os desliga) e entram junto com os
+embutidos. Um patch com o mesmo nome de um embutido o substitui; arquivos de outros jogos (`TitleID`) ou que
+não abrem são ignorados, com aviso no log. `isEnabled="true"` liga o patch com o mod.
+
+**Resoluções:** um patch chamado `Resolution Patch - <largura>x<altura>` vira uma opção de **Render
+resolution** no launcher e no menu do jogo (tecla Insert), depois das embutidas. Vale a mesma regra das
+resoluções embutidas (a nota pede memória com `Requires setting DMEM to N MB`). Se o mod é desativado, a
+resolução volta a `native`. O exemplo é o mod [Ultrawide](ultrawide.md) (`extras/mods/Ultrawide`); as mesmas
+resoluções agora também são embutidas, então o mod só faz diferença em versões antigas.
+
+*English:* a mod can be dropped into the mods folder as a **.zip** (it is unpacked into a folder with the zip's name when the launcher or the game starts; `tools/zip_mod.py` packs a mod folder). A mod folder can also carry **game patches**: XML files in its `patches/` folder, in the format of
+the built-in patches (signatures, `Pattern`/`At`). They apply while the mod is enabled, together with the
+built-in ones (a patch with the same name replaces it). A patch named `Resolution Patch - <width>x<height>`
+becomes a **Render resolution** choice in the launcher and the in-game menu (Insert). See the
+[Ultrawide mod](ultrawide.md).
 # Patches de terceiros (XML do shadPS4)
 
 Pasta `patches/` no diretório de dados (no launcher, grupo **Third-party patches**, onde também

@@ -29,6 +29,7 @@
 #include "core/memory.h"
 #include "core/signals.h"
 #include "sdl_window.h"
+#include "video_core/renderer_vulkan/movie_bars.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
 
 extern "C" {
@@ -352,6 +353,10 @@ ScreenshotRequests ConsumeScreenshotRequests() {
 
 extern "C" int gow3gpu_vibration_percent(void) {
     return Gow3Settings::Get().vibration.load(std::memory_order_relaxed);
+}
+
+extern "C" void gow3gpu_movie_picture(void) {
+    Vulkan::MovieBars::Cutscenes().NotePicture(Vulkan::MovieBars::NowMs());
 }
 
 extern "C" int gow3gpu_overlay_captures_input(void) {

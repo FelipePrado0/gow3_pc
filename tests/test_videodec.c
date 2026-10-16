@@ -6,6 +6,9 @@
 #include <stdio.h>
 
 uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *nid) { (void)table; (void)count; (void)nid; return 0; }
+/* Each picture handed to the game tells the presenter a cutscene is on screen (its bars). */
+static int reported;
+void gow3gpu_movie_picture(void) { ++reported; }
 
 static unsigned char frame_buffer[1<<16];
 static int pictures, first_luma_sum, seen;
@@ -65,6 +68,7 @@ int main(int argc, char **argv) {
         check_picture(&picture);
     }
     assert(pictures==6 && seen==0x3f && first_luma_sum>0);
+    assert(reported==6);
 
     /* Errors are codes, not crashes. */
     InputData empty={sizeof(InputData),stream,0,0,0,0};
@@ -78,6 +82,7 @@ int main(int argc, char **argv) {
     int32_t r=videodec_decode(&ctrl,&whole,&small,&picture);
     assert(r==0 || r==ERR_FRAME_BUFFER_SIZE);
     assert(!(r==0 && picture.is_valid));
+    assert(reported==6); /* a picture that did not fit was not handed out */
 
     assert(videodec_delete(&ctrl)==0 && !ctrl.handle);
     assert(videodec_delete(&ctrl)==ERR_HANDLE);

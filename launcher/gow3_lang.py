@@ -258,7 +258,7 @@ TRANSLATIONS = {
         'Desempenho', 'Pipeline de GPU em dois estágios',
         '20–30% mais rápido; desligue se o jogo ficar instável.', 'Automático (8+ threads)',
         'Ligado', 'Desligado (mais estável)', 'Leituras da GPU',
-        'Com que precisão os dados escritos pela GPU voltam para o jogo.', 'Relaxed (padrão)',
+        'Com que precisão os dados escritos pela GPU voltam para o jogo.', 'Flexível (padrão)',
         'Diagnóstico', 'Estatísticas de quadros no registro (a cada 5 s)',
         'Tempo de GPU por passe no registro',
         'Camadas de validação do Vulkan (precisa do Vulkan SDK; muito mais lento)',
@@ -931,6 +931,38 @@ EXTRA = {
         'The shader cache is already empty.': 'O cache de shaders já está vazio.',
         'Delete the shader cache ({} MB in {})? The game compiles the shaders again, so the next start stutters for a few minutes.': 'Apagar o cache de shaders ({} MB em {})? O jogo compila os shaders de novo, então a próxima inicialização trava por alguns minutos.',
         'Could not delete all of the shader cache; another program may be using it: {}': 'Não foi possível apagar todo o cache de shaders; outro programa pode estar usando: {}',
+        'Native · 1920 × 1080 · 16:9': 'Nativa · 1920 × 1080 · 16:9',
+        'Graphics card': 'Placa de vídeo',
+        'The GPU the game runs on. Choose your dedicated card if the game uses the integrated one.':
+            'A GPU em que o jogo roda. Escolha a placa dedicada se o jogo estiver usando a integrada.',
+        'Fast screen effects (Rage of Sparta, weapons)': 'Efeitos de tela rápidos (Rage of Sparta, armas)',
+        'Keeps powers and weapon effects at full FPS. Switch it off if a screen effect (blur, distortion, the color change of a power) looks stretched, shifted or wrong.':
+            'Mantém os efeitos de poderes e armas no FPS máximo. Desative se um efeito de tela (desfoque, distorção, a mudança de cor de um poder) parecer esticado, deslocado ou errado.',
+        'Your own dump of the game (eboot.bin, sce_module, sce_sys): God of War III Remastered, any region and version.':
+            'O seu próprio dump do jogo (eboot.bin, sce_module, sce_sys): God of War III Remastered, de qualquer região e versão.',
+        'L1 + Touchpad right': 'L1 + Touchpad direito',
+        "Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 to F12. A name the game does not know keeps the default (the log says which). L2/R2 on the gamepad stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right on the gamepad. Insert and R3+L2 always open the port's menu. Applied when the game starts.":
+            'As teclas usam os nomes do SDL: letras, números, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 a F12. Um nome que o jogo não conhece mantém o padrão (o registro diz qual). L2/R2 no controle ficam nos gatilhos. Touchpad direito abre o menu de pausa do jogo; Touchpad esquerdo (modo foto) é L1 + Touchpad direito no controle. Insert e R3+L2 sempre abrem o menu do port. Vale quando o jogo inicia.',
+        '{} · 60 FPS engine · no patches for this game': '{} · motor a 60 FPS · sem patches para este jogo',
+        '{} not found in this eboot.bin at the last start (see Log)': '{} não encontrados neste eboot.bin na última inicialização (veja o Registro)',
+        '   (game patches)': '   (patches do jogo)',
+        # Button names (PS_BUTTON_NAMES, PAD_STYLES).
+        'Cross': 'X', 'Circle': 'Círculo', 'Square': 'Quadrado', 'Triangle': 'Triângulo',
+        'Touchpad left': 'Touchpad esquerdo', 'Touchpad right': 'Touchpad direito',
+        'D-pad up': 'Direcional ↑', 'D-pad down': 'Direcional ↓', 'D-pad left': 'Direcional ←',
+        'D-pad right': 'Direcional →',
+        'Touchpad click': 'Clique do touchpad', 'PS button': 'Botão PS', 'Mute button': 'Botão de mudo',
+        'LS (left stick click)': 'LS (clique do analógico esquerdo)',
+        'RS (right stick click)': 'RS (clique do analógico direito)', 'Xbox button': 'Botão Xbox',
+        # Notes of the game patches (patches/God_of_War_III_Remastered.xml) shown on the Game page.
+        'Fixes corrupted textures in the game by increasing the Video Arena size, allowing the game to use more video memory for textures and effects. Requires setting DMEM to 2048 MB or more, or the game crashes. Enable either this patch or one resolution patch, never both.':
+            'Corrige texturas corrompidas no jogo aumentando a Video Arena, para o jogo usar mais memória de vídeo em texturas e efeitos. Exige DMEM de 2048 MB ou mais, senão o jogo fecha. Ative este patch ou um patch de resolução, nunca os dois.',
+        'Skips the initial logos. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.':
+            'Pula os logos iniciais. Agradecimentos a illusion0001, também conhecido como illusionyy, pelo patch do PS3 que tornou isso muito fácil.',
+        'Allows manual skipping of cinematics any cinematic with the X button. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.':
+            'Permite pular qualquer cinemática com o botão X. Agradecimentos a illusion0001, também conhecido como illusionyy, pelo patch do PS3 que tornou isso muito fácil.',
+        'Fixes the black screen at startup with the FPS counter running: the frame pacing index starts at 2 instead of 0, so the second frame no longer waits for a flip that only it can trigger.':
+            'Corrige a tela preta na inicialização com o contador de FPS rodando: o índice de ritmo dos quadros começa em 2 em vez de 0, então o segundo quadro não espera mais por um flip que só ele pode disparar.',
     },
     'es': {
         'Show Discord Rich Presence': 'Mostrar Discord Rich Presence',

@@ -8,9 +8,16 @@ restart the game confirms them (restart_unconfirmed=0) once it shows frames; whe
 never did, the next start goes back to the last confirmed values.
 """
 import json
+import math
 from pathlib import Path
 
-RESOLUTIONS = ('native', '480p', '720p', '1440p', '1800p', '4K')
+RESOLUTIONS = ('native', '480p', '720p', '1440p', '1800p', '4K',
+               '2560x1080', '3440x1440', '3840x1600', '5120x1440', '1920x1200', '2560x1600')
+# The ultrawide and 16:10 sizes of the Ultrawide mod (#202), built in: beta until more players confirm them.
+BETA_RESOLUTIONS = RESOLUTIONS[6:]
+SIZES = {'native': (1920, 1080), '480p': (854, 480), '720p': (1280, 720), '1440p': (2560, 1440),
+         '1800p': (3200, 1800), '4K': (3840, 2160)}
+ASPECTS = (('16:9', 16 / 9), ('16:10', 16 / 10), ('21:9', 2.37), ('32:9', 32 / 9))
 ENGINE_FPS = (60, 120, 240)
 DEFAULTS = {'render_resolution': 'native', 'engine_fps': '120', 'deferred_readback': '1',
             'stale_readback': '1', 'async_shaders': '1'}
@@ -51,10 +58,38 @@ def write_keys(path, updates):
     path.write_text('\n'.join(out) + '\n', encoding='utf-8')
 
 
-def startup_options(ini):
-    """The startup options, normalized; unknown values fall back to the defaults."""
+def resolutions(extra=()):
+    """The render resolutions: the built-in ones and those the enabled mods' patch files add."""
+    return RESOLUTIONS + tuple(e for e in extra if e not in RESOLUTIONS)
+
+
+def aspect_name(width, height):
+    """The marketing name of the aspect ratio ("21:9" covers 2560x1080 to 3840x1600), else the reduced ratio."""
+    ratio = width / height
+    for name, value in ASPECTS:
+        if abs(ratio - value) < 0.05:
+            return name
+    divisor = math.gcd(width, height)
+    return f'{width // divisor}:{height // divisor}'
+
+
+def resolution_label(name):
+    """What the lists show for a render resolution: '1440p · 2560 × 1440 · 16:9', '3440 × 1440 · 21:9 (beta)'.
+    `name` is a built-in name or a mod's "<width>x<height>"; anything else is shown as it is."""
+    try:
+        width, height = SIZES.get(name) or map(int, name.split('x'))
+    except ValueError:
+        return name
+    title = 'Native' if name == 'native' else name if name in SIZES else None
+    label = ' · '.join(p for p in (title, f'{width} × {height}', aspect_name(width, height)) if p)
+    return label + (' (beta)' if name in BETA_RESOLUTIONS else '')
+
+
+def startup_options(ini, extra=()):
+    """The startup options, normalized; unknown values fall back to the defaults. `extra`: the
+    resolutions of the enabled mods (a mod that is off leaves its resolution out: native)."""
     options = {key: ini.get(key, value) for key, value in DEFAULTS.items()}
-    if options['render_resolution'] not in RESOLUTIONS:
+    if options['render_resolution'] not in resolutions(extra):
         options['render_resolution'] = 'native'
     if options['engine_fps'] not in {str(f) for f in ENGINE_FPS}:
         options['engine_fps'] = '120'
@@ -63,7 +98,7 @@ def startup_options(ini):
     return options
 
 
-def prepare(config, state_path):
+def prepare(config, state_path, extra=()):
     """(options, reverted): the startup options of this launch, restoring the last confirmed
     ones when the previous launch after a restart never confirmed its own."""
     ini = read_ini(config)
@@ -72,11 +107,11 @@ def prepare(config, state_path):
         state = json.loads(Path(state_path).read_text(encoding='utf-8'))
     except (OSError, ValueError):
         pass
-    options = startup_options(ini)
+    options = startup_options(ini, extra)
     reverted = False
     if ini.get('restart_unconfirmed') == '1':
         if state.get('attempt') and state.get('last_good'):
-            options = startup_options(state['last_good'])
+            options = startup_options(state['last_good'], extra)
             write_keys(config, {**options, 'restart_unconfirmed': '0'})
             state['attempt'] = False
             reverted = True

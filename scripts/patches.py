@@ -248,6 +248,67 @@ def selected_patches(xml, app_version, extra, only=False):
     return [n for n in names if not (exclusive and n in REPLACED_BY_EXCLUSIVE)]
 
 
+def resolution_names(xmls):
+    """Sizes ("3440x1440") of the "Resolution Patch - <size>" entries of these patch files, smallest first."""
+    found = []
+    for path in xmls:
+        try:
+            root = ET.parse(path).getroot()
+        except (OSError, ET.ParseError):
+            continue
+        for meta in root.iter('Metadata'):
+            name = meta.get('Name') or ''
+            if name.startswith(EXCLUSIVE_PREFIX) and name[len(EXCLUSIVE_PREFIX):].startswith(' - '):
+                size = name[len(EXCLUSIVE_PREFIX) + 3:].strip()
+                if size and size not in found:
+                    found.append(size)
+    def pixels(size):
+        width, _, height = size.partition('x')
+        return (int(width) * int(height), size) if width.isdigit() and height.isdigit() else (1 << 60, size)
+    return sorted(found, key=pixels)
+
+
+def merge_patch_files(base, extras, out):
+    """Writes `out`: the patches of `base` plus those of the mods' patch files (`extras`, in load order).
+    A patch with a name that is already there is replaced; a file for other titles or one that does not
+    parse is left out with a note. Returns `out`."""
+    tree = ET.parse(base)
+    root = tree.getroot()
+    ids = {e.text.strip() for e in root.iter('ID') if e.text}
+    for path in extras:
+        try:
+            extra = ET.parse(path).getroot()
+        except (OSError, ET.ParseError) as error:
+            print(f'Patches: {Path(path).name}: {error}', file=sys.stderr)
+            continue
+        extra_ids = {e.text.strip() for e in extra.iter('ID') if e.text}
+        if extra_ids and not extra_ids & ids:
+            continue
+        for meta in extra.iter('Metadata'):
+            name = meta.get('Name')
+            for old in [m for m in root.iter('Metadata') if m.get('Name') == name]:
+                root.remove(old)
+            root.append(meta)
+            print(f'Patches: {name} from the mod file {Path(path).parent.parent.name}/{Path(path).name}')
+    ET.indent(tree)
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    tree.write(out, encoding='utf-8', xml_declaration=True)
+    return Path(out)
+
+
+def default_enabled(xmls, app_version):
+    """Names of the patches of these files that are on by default (isEnabled), for this app version."""
+    names = []
+    for path in xmls:
+        try:
+            root = ET.parse(path).getroot()
+        except (OSError, ET.ParseError):
+            continue
+        names += [m.get('Name') for m in root.iter('Metadata')
+                  if m.get('AppVer') == app_version and m.get('isEnabled', 'false').lower() == 'true']
+    return names
+
+
 def patch_requirements(xml, names, app_version):
     """(direct memory MiB, VBlank Hz) the selected patches' notes ask for, None when not needed.
     shadPS4 notes say "Requires setting DMEM to N MB": N is on top of the retail pool."""
@@ -325,6 +386,8 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--patches-dir',type=Path,help='third-party patch XML files (shadPS4 format)')
     p.add_argument('--patches-config',type=Path,help='patches.json: enabled/disabled external patches')
+    p.add_argument('--mod-patches',type=Path,action='append',default=[],
+                   help='patch file of an enabled mod (repeat; in load order)')
     p.add_argument('--extra',default='',help='additional patch names, separated by ";"')
     p.add_argument('--out',type=Path,default=Path(__file__).resolve().parent.parent/'out')
     p.add_argument('--game-dir',type=Path,default=Path(os.environ.get('GOW3_GAME_DIR','../CUSA01623')))
@@ -336,6 +399,8 @@ def main():
         print(f'Patches: no patch profile for {title}: none applied')
         return
     ids,xml,tag,_name=profile
+    if a.mod_patches:
+        xml=merge_patch_files(xml,a.mod_patches,a.out/'patches-merged.xml')
     sha=eboot_sha256(a.game_dir)
     print(f'Patches: {title} {game_app_version(a.game_dir)}, eboot.bin sha256 {sha}')
     names=selected_patches(xml,tag,a.extra,os.environ.get('GOW3_PATCHES_ONLY')=='1')

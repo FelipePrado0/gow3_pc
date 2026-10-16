@@ -8,6 +8,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
+import zipfile
 
 spec = importlib.util.spec_from_file_location('bbmods', ROOT / 'scripts/mods.py')
 mods = importlib.util.module_from_spec(spec)
@@ -59,6 +61,145 @@ class ModTests(unittest.TestCase):
         config = self.root / 'mods.json'
         config.write_text(json.dumps({'order': ['B', 'A', 'deleted'], 'disabled': ['A']}))
         self.assertEqual(mods.selected(self.moddir, config), ['B', 'C'])
+
+    PATCH = '<Patch><Metadata Name="Resolution Patch - 3440x1440" AppVer="01.02"><PatchList/></Metadata></Patch>'
+
+    def patch_mod(self, name, files=('mine.xml',), wrapper=None):
+        folder = self.moddir / name / (wrapper or '') / 'patches'
+        folder.mkdir(parents=True, exist_ok=True)
+        for file in files:
+            (folder / file).write_text(self.PATCH)
+        return self.moddir / name
+
+    def test_a_mod_with_only_patches_is_a_mod_and_replaces_no_file(self):
+        folder = self.patch_mod('Only patches')
+        self.mod('Files')
+        self.assertEqual(mods.discover(self.moddir), ['Files', 'Only patches'])
+        self.assertEqual(list(mods.mod_files(folder)), [])
+        result = mods.build_overlay(self.game, self.root / 'out', [('Only patches', folder)])
+        self.assertEqual(result, self.game)  # nothing to link
+
+    def test_patch_files_of_a_mod_and_its_wrapper_folder(self):
+        self.patch_mod('A', ('b.xml', 'a.xml', 'notes.txt'))
+        self.patch_mod('Wrapped', wrapper='Wrapped v1')
+        self.assertEqual([f.name for f in mods.patch_files(self.moddir / 'A')], ['a.xml', 'b.xml'])
+        self.assertEqual([f.name for f in mods.patch_files(self.moddir / 'Wrapped')], ['mine.xml'])
+        self.assertEqual(mods.patch_files(self.root / 'missing'), [])
+
+    def test_enabled_patch_files_follow_the_selection(self):
+        self.patch_mod('A')
+        self.patch_mod('B', ('b.xml',))
+        self.mod('Files only')
+        config = self.root / 'mods.json'
+        config.write_text(json.dumps({'order': ['B', 'A'], 'disabled': []}))
+        names = lambda enabled=True: [f.parent.parent.name + '/' + f.name
+                                      for f in mods.enabled_patch_files(self.moddir, config, enabled)]
+        self.assertEqual(names(), ['B/b.xml', 'A/mine.xml'])  # load order
+        config.write_text(json.dumps({'order': ['B', 'A'], 'disabled': ['B']}))
+        self.assertEqual(names(), ['A/mine.xml'])
+        self.assertEqual(names(False), [])  # "Load mods" off
+
+    def make_zip(self, name, entries):
+        """<mods>/<name>.zip with {path: bytes}; returns its path."""
+        self.moddir.mkdir(exist_ok=True)
+        path = self.moddir / f'{name}.zip'
+        with zipfile.ZipFile(path, 'w') as archive:
+            for member, data in entries.items():
+                archive.writestr(member, data)
+        return path
+
+    def test_a_zip_in_the_mods_folder_is_unpacked_and_is_a_mod(self):
+        self.make_zip('Ultra', {'patches/u.xml': self.PATCH, 'README.md': 'hello'})
+        self.make_zip('Assets', {'dvdroot_ps4/data/a.wad': b'zipped'})
+        self.assertEqual(mods.discover(self.moddir), ['Assets', 'Ultra'])
+        self.assertEqual([f.name for f in mods.patch_files(self.moddir / 'Ultra')], ['u.xml'])
+        result = mods.build_overlay(self.game, self.root / 'out', [('Assets', self.moddir / 'Assets')])
+        self.assertEqual((result / 'dvdroot_ps4/data/a.wad').read_bytes(), b'zipped')
+        self.assertTrue((self.moddir / 'Ultra' / mods.ZIP_STAMP).is_file())
+        self.assertTrue((self.moddir / 'Ultra.zip').is_file())  # the zip stays
+
+    def test_a_zip_with_a_folder_around_the_mod(self):
+        self.make_zip('Wrapped', {'Wrapped v1/patches/u.xml': self.PATCH})
+        self.assertEqual(mods.discover(self.moddir), ['Wrapped'])
+        self.assertEqual([f.name for f in mods.patch_files(self.moddir / 'Wrapped')], ['u.xml'])
+
+    def test_a_changed_zip_is_unpacked_again_without_leftovers(self):
+        zip_path = self.make_zip('Ultra', {'patches/old.xml': self.PATCH})
+        mods.discover(self.moddir)
+        self.assertTrue((self.moddir / 'Ultra/patches/old.xml').is_file())
+        zip_path.unlink()
+        self.make_zip('Ultra', {'patches/new.xml': self.PATCH, 'extra.txt': 'x'})
+        os.utime(zip_path, (1, 1))  # another time stamp, whatever the file system's resolution
+        mods.discover(self.moddir)
+        self.assertEqual([f.name for f in mods.patch_files(self.moddir / 'Ultra')], ['new.xml'])
+        self.assertFalse((self.moddir / 'Ultra/patches/old.xml').exists())
+
+    def test_a_folder_the_user_made_is_never_replaced_by_a_zip(self):
+        self.patch_mod('Ultra', ('mine.xml',))
+        self.make_zip('Ultra', {'patches/zipped.xml': self.PATCH})
+        mods.discover(self.moddir)
+        self.assertEqual([f.name for f in mods.patch_files(self.moddir / 'Ultra')], ['mine.xml'])
+        self.assertFalse((self.moddir / 'Ultra' / mods.ZIP_STAMP).exists())
+
+    def test_unsafe_zips_are_refused(self):
+        outside = self.root / 'evil.txt'
+        self.make_zip('Slip', {'../evil.txt': 'x', 'patches/u.xml': self.PATCH})
+        self.make_zip('Absolute', {'/abs.txt': 'x', 'patches/u.xml': self.PATCH})
+        self.make_zip('Drive', {'C:/drive.txt': 'x', 'patches/u.xml': self.PATCH})
+        link = self.moddir / 'Link.zip'
+        with zipfile.ZipFile(link, 'w') as archive:
+            info = zipfile.ZipInfo('patches/u.xml')
+            info.external_attr = (0o120777 << 16)  # a symbolic link
+            archive.writestr(info, 'target')
+        self.assertEqual(mods.discover(self.moddir), [])
+        for name in ('Slip', 'Absolute', 'Drive', 'Link'):
+            self.assertFalse((self.moddir / name).exists(), name)
+        self.assertFalse(outside.exists())
+
+    def test_a_zip_that_is_not_a_mod_or_not_a_zip_is_skipped(self):
+        self.make_zip('Notes', {'readme.txt': 'nothing to load'})
+        (self.moddir / 'Broken.zip').write_bytes(b'not a zip')
+        self.assertEqual(mods.discover(self.moddir), [])
+        self.assertFalse((self.moddir / 'Broken').exists())
+
+    def test_nested_drive_and_alternate_stream_paths_are_refused(self):
+        for member in ('wrapper/E:/outside.txt', 'wrapper/E:outside.txt',
+                       'wrapper\\E:\\outside.txt', 'patches/u.xml:stream'):
+            with self.subTest(member=member):
+                path = self.make_zip('Unsafe', {'patches/u.xml': self.PATCH, member: 'unsafe'})
+                with zipfile.ZipFile(path) as archive:
+                    with self.assertRaisesRegex(ValueError, 'unsafe path'):
+                        mods.zip_members(archive)
+
+    def test_windows_normalized_traversal_paths_are_refused(self):
+        for member in ('patches/.. /outside.txt', 'patches/.../outside.txt',
+                       'patches/..\\outside.txt'):
+            with self.subTest(member=member):
+                path = self.make_zip('Unsafe', {member: 'unsafe'})
+                with zipfile.ZipFile(path) as archive:
+                    with self.assertRaisesRegex(ValueError, 'unsafe path'):
+                        mods.zip_members(archive)
+
+    def test_unsafe_zip_is_refused_before_any_member_is_extracted(self):
+        self.make_zip('Unsafe', {'patches/u.xml': self.PATCH, 'wrapper/E:/outside.txt': 'unsafe'})
+        with mock.patch.object(zipfile.ZipFile, 'open', side_effect=AssertionError('extraction started')):
+            self.assertEqual(mods.unpack_zips(self.moddir), [])
+        self.assertFalse((self.moddir / 'Unsafe').exists())
+
+    def test_unresolvable_zip_target_does_not_stop_other_mods(self):
+        self.make_zip('Broken', {'patches/u.xml': self.PATCH})
+        self.make_zip('Good', {'patches/u.xml': self.PATCH})
+        resolve = Path.resolve
+        for error in (OSError('unreadable target'), RuntimeError('symlink loop')):
+            with self.subTest(error=type(error).__name__):
+                def resolve_target(path, *args, **kwargs):
+                    if path == self.moddir / 'Broken':
+                        raise error
+                    return resolve(path, *args, **kwargs)
+                with mock.patch.object(Path, 'resolve', autospec=True, side_effect=resolve_target):
+                    mods.unpack_zips(self.moddir)
+                self.assertTrue((self.moddir / 'Good/patches/u.xml').is_file())
+                self.assertFalse((self.moddir / 'Broken').exists())
 
     def test_no_mod_returns_original_game(self):
         self.assertEqual(mods.build_overlay(self.game, self.root / 'out', []), self.game)

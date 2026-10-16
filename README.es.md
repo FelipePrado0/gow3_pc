@@ -1,7 +1,7 @@
 # God of War III Remastered for PC 
 
 <div align="center">
-  <a href="https://ko-fi.com/S7O428PBCC" target="_blank"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="ko-fi"></a>
+  <a href="https://trendshift.io/repositories/299469?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-299469" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/299469/daily?language=C%2B%2B" alt="FelipePrado0%2Fgow3_pc | Trendshift" width="250" height="55"/></a>
 </div>
 
 [English](https://github.com/FelipePrado0/gow3_pc/blob/main/README.md) | [Português (Brasil)](https://github.com/FelipePrado0/gow3_pc/blob/main/README.pt-BR.md) | **Español**
@@ -16,21 +16,29 @@ Port para PC de **God of War III Remastered** (PlayStation 4) para Windows 10/11
 
 ## Índice
 
-- [Descargar y jugar](#descargar-y-jugar)
-- [Linux (AppImage, experimental)](#linux-appimage-experimental)
-- [Qué funciona](#qué-funciona)
-- [Disponibilidad de funciones](#disponibilidad-de-funciones)
-- [Configuración](#configuración)
-- [Controles de teclado](#controles-de-teclado)
-- [Importar partidas de shadPS4](#importar-partidas-de-shadps4)
-- [Overlays de terceros (Windows)](#overlays-de-terceros-windows)
-- [Solución de problemas](#solución-de-problemas)
-- [Rendimiento y compatibilidad](#rendimiento-y-compatibilidad)
-- [Compilar desde el código fuente](#compilar-desde-el-código-fuente)
-- [Tests](#tests)
-- [Cómo funciona](#cómo-funciona)
-- [Créditos](#créditos)
-- [Licencia](#licencia)
+- [God of War III Remastered for PC](#god-of-war-iii-remastered-for-pc)
+  - [Índice](#índice)
+  - [Descargar y jugar](#descargar-y-jugar)
+  - [Linux (AppImage, experimental)](#linux-appimage-experimental)
+  - [Qué funciona](#qué-funciona)
+  - [Disponibilidad de funciones](#disponibilidad-de-funciones)
+  - [Configuración](#configuración)
+  - [Controles de teclado](#controles-de-teclado)
+  - [Importar partidas de shadPS4](#importar-partidas-de-shadps4)
+  - [Overlays de terceros (Windows)](#overlays-de-terceros-windows)
+  - [Solución de problemas](#solución-de-problemas)
+  - [Rendimiento y compatibilidad](#rendimiento-y-compatibilidad)
+  - [Compilar desde el código fuente](#compilar-desde-el-código-fuente)
+    - [Windows](#windows)
+    - [Linux (Ubuntu 24.04)](#linux-ubuntu-2404)
+  - [Tests](#tests)
+    - [Python](#python)
+    - [Tests C++ en Windows (MSYS2 CLANG64)](#tests-c-en-windows-msys2-clang64)
+    - [Tests C/C++ en Linux](#tests-cc-en-linux)
+    - [Verificaciones con el juego preparado](#verificaciones-con-el-juego-preparado)
+  - [Cómo funciona](#cómo-funciona)
+  - [Créditos](#créditos)
+  - [Licencia](#licencia)
 
 ## Descargar y jugar
 
@@ -119,6 +127,9 @@ La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 
   Steam, con el ícono, las cápsulas vertical y horizontal, el fondo de la biblioteca y el logo hechos
   a partir de las imágenes del dump. Cerrá Steam primero (reescribe sus accesos directos al salir).
   El botón también está en el launcher de Windows (aún no probado ahí).
+- **Steam Deck / SteamOS (Gaming Mode):** si Steam intenta ejecutar el AppImage con Proton, abrí
+  **Propiedades → Compatibilidad** del acceso directo y seleccioná **Steam Linux Runtime** en lugar de Proton.
+  El AppImage es una aplicación nativa de Linux.
 - **Entrada de menú:** el AppImage escribe `~/.local/share/applications/gow3.desktop` al iniciar,
   para que el launcher y la ventana del juego muestren su ícono en el dock; **Advanced → Linux** lo
   desactiva y elimina la entrada.
@@ -136,6 +147,14 @@ La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 
 - Parches: resolución de render de 480p, 720p, 1440p, 1800p o 4K, corrección de texturas corruptas
   y saltar videos con el botón X (comunidad); tasa de cuadros del motor de 120 FPS (kvicken) o 240
   FPS (adaptado por Felipe Prado).
+- **Ultrawide (beta):** resoluciones 21:9, 32:9 y 16:10 (3440x1440 probada) con un campo de visión más ancho en
+  lugar de una imagen con zoom, ya incluidas: elige una en **Resolución de render**, donde cada opción muestra la
+  resolución exacta y la relación de aspecto. Las escenas de vídeo mantienen sus bordes 16:9 (ver
+  [docs/ultrawide.md](docs/ultrawide.md)). Los mods también pueden incluir parches del juego; el
+  [mod Ultrawide](extras/mods/Ultrawide) es lo mismo para versiones anteriores.
+  **Cómo instalar un mod:** pon su `.zip` (sin descomprimir) en la carpeta `mods`, junto a `God of War III.exe`; el
+  juego lo descomprime solo. El mod Ultrawide y un instalador de un clic para la 2.2.0 se explican en
+  [extras/mods/Ultrawide](extras/mods/Ultrawide/README.md).
 - **Compilación de shaders en segundo plano:** los pipelines guardados se cargan y compilan
   mientras jugás. Todavía puede haber tirones, efectos ausentes durante la compilación y caídas
   temporales de FPS; el inicio depende de la caché, del driver de video y de la CPU.

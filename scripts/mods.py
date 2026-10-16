@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Merge loose-file mods through links, preserving the original game and mod files."""
+"""Merge loose-file mods through links, preserving the original game and mod files.
+
+A mod folder can also carry game patches: XML files in its patches/ folder, in the format of the built-in
+patches (signatures, see patches.py). They are applied while the mod is enabled."""
 import argparse
 import json
 import os
@@ -8,6 +11,7 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
+import zipfile
 
 def child(folder, name):
     """`name` inside `folder`, matching an existing entry case-insensitively (mods made on
@@ -40,12 +44,111 @@ def content_root(folder):
     return None
 
 
+ZIP_STAMP = '.from-zip'
+ZIP_LIMIT = 16 << 30  # bytes a mod zip may unpack to (a zip bomb is refused)
+
+
+def zip_members(archive):
+    """(info, relative path) of the files in a mod zip. Anything that could write outside the mod's folder
+    (absolute paths, "..", drive letters) or is a link is refused with a ValueError."""
+    total, members = 0, []
+    for info in archive.infolist():
+        parts = Path(info.filename.replace('\\', '/')).parts
+        if info.is_dir() and not parts:
+            continue
+        if not parts or Path(info.filename).is_absolute() or info.filename.startswith(('/', '\\')) \
+                or '..' in parts or any(':' in part or '\0' in part or part.rstrip(' .') != part for part in parts):
+            raise ValueError(f'unsafe path in the zip: {info.filename}')
+        if (info.external_attr >> 16) & 0o170000 == 0o120000:
+            raise ValueError(f'links are not allowed in a mod zip: {info.filename}')
+        total += info.file_size
+        if total > ZIP_LIMIT:
+            raise ValueError('the zip unpacks to more than 16 GiB')
+        members.append((info, Path(*parts)))
+    return members
+
+
+def unpack_zips(root):
+    """Unpacks every <root>/<name>.zip into <root>/<name>/ (a mod dropped into the mods folder as a zip).
+    Done again when the zip changes; a folder with that name that did not come from the zip is left alone.
+    Returns the names unpacked now; a zip that cannot be unpacked is reported and skipped."""
+    root = Path(root)
+    done = []
+    if not root.is_dir():
+        return done
+    for archive_path in sorted(root.glob('*.zip'), key=lambda p: p.name.casefold()):
+        target = root / archive_path.stem
+        try:
+            resolved_target = target.resolve()
+            if resolved_target.parent != root.resolve():
+                print(f'Mods: {archive_path.name}: unsafe extraction folder', file=sys.stderr)
+                continue
+        except (OSError, RuntimeError) as error:
+            print(f'Mods: {archive_path.name}: {error}', file=sys.stderr)
+            continue
+        stat = archive_path.stat()
+        stamp = f'{stat.st_size} {stat.st_mtime_ns}'
+        marker = target / ZIP_STAMP
+        if target.exists() and not (marker.is_file() and marker.read_text() != stamp):
+            if not marker.is_file():
+                print(f'Mods: {archive_path.name}: a folder called {target.name} is already there; the zip is not unpacked',
+                      file=sys.stderr)
+            continue
+        try:
+            with zipfile.ZipFile(archive_path) as archive:
+                members = zip_members(archive)
+                destinations = [(info, target / relative) for info, relative in members]
+                if any(not destination.resolve().is_relative_to(resolved_target)
+                       for _, destination in destinations):
+                    raise ValueError('unsafe path in the zip: destination outside the mod folder')
+                if target.exists():
+                    shutil.rmtree(target)
+                for info, destination in destinations:
+                    if info.is_dir():
+                        destination.mkdir(parents=True, exist_ok=True)
+                        continue
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    with archive.open(info) as source, open(destination, 'wb') as out:
+                        shutil.copyfileobj(source, out)
+            target.mkdir(exist_ok=True)
+            marker.write_text(stamp)
+            done.append(archive_path.stem)
+            kind = 'a mod' if (content_root(target) or patch_files(target)) else 'not a mod (no dvdroot_ps4 or patches)'
+            print(f'Mods: {archive_path.name} unpacked: {kind}', file=sys.stderr)
+        except (OSError, ValueError, RuntimeError, zipfile.BadZipFile) as error:
+            shutil.rmtree(target, ignore_errors=True)
+            print(f'Mods: {archive_path.name}: {error}', file=sys.stderr)
+    return done
+
+
+def patch_files(folder):
+    """The game patch files (XML) of a mod: <mod>/patches/*.xml, with the same one wrapper folder
+    around it that content_root accepts. A mod with only these has no files to replace."""
+    folder = Path(folder)
+    if not folder.is_dir():
+        return []
+    found = child(folder, 'patches')
+    if found.is_dir():
+        files = sorted((f for f in found.iterdir() if f.is_file() and f.suffix.casefold() == '.xml'),
+                       key=lambda f: f.name.casefold())
+        if files:
+            return files
+    entries = [e for e in folder.iterdir() if not e.name.startswith('.')]
+    folders = [e for e in entries if e.is_dir()]
+    if len(folders) == 1 and not [e for e in entries if e.is_file() and
+                                  e.suffix.casefold() not in ('.txt', '.md', '.jpg', '.png', '.ini')]:
+        return patch_files(folders[0])
+    return []
+
+
 def discover(root):
-    """Named mods: folders of `root` with an accepted layout (content_root)."""
+    """Named mods: folders of `root` with an accepted layout (content_root) or with patch files. A mod
+    dropped in as <name>.zip is unpacked first (unpack_zips)."""
     root = Path(root)
     if not root.is_dir():
         return []
-    return sorted((p.name for p in root.iterdir() if p.is_dir() and content_root(p)),
+    unpack_zips(root)
+    return sorted((p.name for p in root.iterdir() if p.is_dir() and (content_root(p) or patch_files(p))),
                   key=lambda name: (name.casefold(), name))
 
 
@@ -66,10 +169,20 @@ def selected(root, config):
                              if n in available and n not in disabled))
 
 
+def enabled_patch_files(root, config, enabled=True):
+    """The patch files of the enabled mods, in load order (a later file wins where patches share a name)."""
+    if not enabled:
+        return []
+    root = Path(root)
+    return [f for name in selected(root, config) for f in patch_files(root / name)]
+
+
 def mod_files(folder):
     """(game path, source) of every file a mod replaces or adds under dvdroot_ps4."""
     layout = content_root(folder)
     if not layout:
+        if patch_files(folder):
+            return  # patches only
         raise ValueError(f'{folder}: expected dvdroot_ps4 (or chr/, parts/, ...) inside the mod folder')
     root, prefix = layout
     root = root.resolve()

@@ -43,6 +43,7 @@ if WINDOWS:
 FROZEN = getattr(sys, 'frozen', False)
 PORT_DIR = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PORT_DIR / 'scripts'))
+import graphics_options  # noqa: E402  (scripts/)
 import save_backup  # noqa: E402  (scripts/)
 import steam_shortcut  # noqa: E402  (scripts/)
 from patches import game_profile, game_sfo  # noqa: E402  (scripts/)
@@ -59,7 +60,7 @@ NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 NEW_GROUP = {} if WINDOWS else {'start_new_session': True}
 UI_FONT, MONO_FONT, SERIF_FONT = 'Segoe UI', 'Consolas', 'Georgia'
 # This build; GitHub release tags are windows-v<VERSION>.
-VERSION = '2.3.0'
+VERSION = '2.4.0'
 RELEASES_API = 'https://api.github.com/repos/FelipePrado0/gow3_pc/releases/latest'
 RELEASES_PAGE = 'https://github.com/FelipePrado0/gow3_pc/releases/latest'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'gow3-update'
@@ -866,8 +867,12 @@ def game_environment(s):
 # God of War III's own colors: near black, ash and blood red (no gold or orange).
 BG, PANEL, CARD, LINE = '#0d0b0b', '#161212', '#1d1717', '#2a2222'
 TEXT, MUTED, ACCENT, ACCENT_HI = '#e6e0d8', '#8a817a', '#a4161a', '#c81e25'
-RESOLUTION_CHOICES = [('native', ('Native (1080p)',)), ('480p', ('480p',)), ('720p', ('720p',)),
-                      ('1440p', ('1440p',)), ('1800p', ('1800p',)), ('4K', ('4K',))]
+def pad_labels(style):
+    """SDL gamepad button name -> its label in this naming style, in the launcher's language."""
+    return {name: _(label) for name, label in PAD_STYLES[style].items()}
+
+
+RESOLUTION_CHOICES = [(name, (graphics_options.resolution_label(name),)) for name in graphics_options.RESOLUTIONS]
 ENGINE_FPS_CHOICES = [('60', ('60 (original)',)), ('120', ('120',)), ('240', ('240',))]
 
 
@@ -1050,20 +1055,55 @@ class Launcher:
         return self.vars[key]
 
     def choice(self, parent, key, store, options, width=30, var=None):
-        """A combobox over (value, (english, russian)) pairs, kept in sync with its variable."""
+        """A combobox over (value, (english, russian)) pairs, kept in sync with its variable.
+        `options` can be a function returning the pairs: it is asked again each time the list opens."""
         var = var if var is not None else self.var(key, store)
-        values = [v for v, _t in options]
-        box = self.ttk.Combobox(parent, values=[_(*text) for _v, text in options], state='readonly', width=width)
-        if var.get() not in values:
-            var.set(values[0])
+        pairs = options if callable(options) else (lambda: options)
+
+        def values():
+            return [v for v, _t in pairs()]
+
+        def labels():
+            return [_(*text) for _v, text in pairs()]
+
+        def fit(texts):
+            # Wide enough for the longest label: the dropdown list is as wide as the box.
+            return max([width] + [len(t) + 2 for t in texts])
+
+        def reload():
+            texts = labels()
+            box.configure(values=texts, width=fit(texts))
+        texts = labels()
+        box = self.ttk.Combobox(parent, values=texts, state='readonly', width=fit(texts), postcommand=reload)
+        if var.get() not in values():
+            var.set(values()[0])
 
         def show(*_args):
-            current = var.get()
-            box.current(values.index(current) if current in values else 0)
+            reload()  # the list may have changed since it was last opened
+            current, known = var.get(), values()
+            box.current(known.index(current) if current in known else 0)
         show()
-        box.bind('<<ComboboxSelected>>', lambda _e: var.set(values[box.current()]))
+        box.bind('<<ComboboxSelected>>', lambda _e: var.set(values()[box.current()]))
         var.trace_add('write', show)
         return box
+
+    def mod_resolutions(self):
+        """(size, (label,)) of the render resolutions the enabled mods add: the "Resolution Patch - <size>"
+        entries of their patch files (a mod is on when its box is ticked on the Mods page, else as saved)."""
+        from mods import patch_files, selected
+        from patches import resolution_names
+        if not self.var('mods_enabled', 'app').get():
+            return []
+        root = Path(self.var('mods_dir', 'app').get() or DATA_DIR / 'mods')
+        names = ([n for n in self.mod_order if self.mod_vars.get(n) is None or self.mod_vars[n].get()]
+                 if getattr(self, 'mod_vars', None) else selected(root, DATA_DIR / 'mods.json'))
+        files = [f for n in names for f in patch_files(root / n)]
+        return [(size, (graphics_options.resolution_label(size) + ' (mod)',)) for size in resolution_names(files)
+                if size not in graphics_options.RESOLUTIONS]
+
+    def resolution_options(self):
+        """The render resolutions to choose from: the built-in ones and those of the enabled mods."""
+        return RESOLUTION_CHOICES + self.mod_resolutions()
 
     def next_row(self, parent):
         return parent.grid_size()[1]
@@ -1227,7 +1267,7 @@ class Launcher:
             row=0, column=0, columnspan=4, sticky='w')
         tk.Frame(quick, bg=LINE, height=1).grid(row=1, column=0, columnspan=4, sticky='we', pady=(2, 6))
         items = ((_('Display mode'), 'display_mode', DISPLAY_MODES), (_('Frame rate limit'), 'fps_limit', FPS_LIMITS),
-                 (_('Render resolution'), 'render_resolution', RESOLUTION_CHOICES),
+                 (_('Render resolution'), 'render_resolution', self.resolution_options),
                  (_('Engine frame rate'), 'engine_fps', ENGINE_FPS_CHOICES))
         for index, (title, key, options) in enumerate(items):
             r, c = 2 + index // 2, (index % 2) * 2
@@ -1339,7 +1379,7 @@ class Launcher:
                  _('1 is the lowest input latency; more can raise FPS when the graphics card is the limit.'))
         self.row(f, _('Engine frame rate'), self.choice(f, 'engine_fps', 'ini', ENGINE_FPS_CHOICES),
                  _('The highest frame rate the game itself runs at (a game patch).'), restart=True)
-        self.row(f, _('Render resolution'), self.choice(f, 'render_resolution', 'ini', RESOLUTION_CHOICES),
+        self.row(f, _('Render resolution'), self.choice(f, 'render_resolution', 'ini', self.resolution_options),
                  _('The size the game draws at; higher is sharper and slower. A resolution patch replaces the '
                    'texture fix and reserves the memory it needs.'), restart=True)
         self.section(f, _('Shaders'))
@@ -1541,7 +1581,8 @@ class Launcher:
             var = tk.BooleanVar(value=name in on)
             self.game_patch_vars[name] = var
             author = meta.get('Author')
-            self.check(f, None, None, name + (f'  ({author})' if author else ''), meta.get('Note'), var=var)
+            self.check(f, None, None, name + (f'  ({author})' if author else ''), meta.get('Note') and _(meta.get('Note')),
+                       var=var)
         self.game_patch_title = title_id
 
     def store_game_patches(self):
@@ -1600,7 +1641,7 @@ class Launcher:
             ttk.Label(table, text=heading_text(title), style='Section.TLabel').grid(row=0, column=column, columnspan=span, sticky='w')
         self.control_vars, self.pad_boxes, self.pad_icons = {'key': {}, 'pad': {}}, {}, {}
         size = self.px(28)
-        labels = PAD_STYLES[style]
+        labels = pad_labels(style)
 
         def icon_canvas(parent):
             return tk.Canvas(parent, width=size, height=size, bg=PANEL, highlightthickness=0, bd=0)
@@ -1608,7 +1649,7 @@ class Launcher:
             game_icon = icon_canvas(table)
             game_icon.grid(row=r, column=0, sticky='w', pady=3)
             button_icons.draw(game_icon, button_icons.GAME_BUTTONS[button], 'playstation', size)
-            ttk.Label(table, text=PS_BUTTON_NAMES[button], width=14).grid(row=r, column=1, sticky='w', padx=(0, 12))
+            ttk.Label(table, text=_(PS_BUTTON_NAMES[button]), width=-14).grid(row=r, column=1, sticky='w', padx=(0, 12))
             key_var = tk.StringVar(value=saved.get('key', {}).get(button) or key)
             self.control_vars['key'][button] = key_var
             ttk.Entry(table, textvariable=key_var, width=16).grid(row=r, column=2, sticky='w', padx=(0, 18))
@@ -1619,7 +1660,8 @@ class Launcher:
             pad_icon.grid(row=r, column=3, sticky='w', padx=(0, 6))
             self.pad_icons[button] = pad_icon
             if pad:
-                box = ttk.Combobox(table, state='readonly', width=22, values=list(labels.values()))
+                box = ttk.Combobox(table, state='readonly', values=list(labels.values()),
+                                   width=max(22, *(len(l) + 2 for l in labels.values())))
                 box.set(labels.get(pad_name, pad_name))
 
                 def chosen(_e, b=box, v=pad_var, n=button):
@@ -1629,7 +1671,7 @@ class Launcher:
                 self.pad_boxes[button] = box
             else:
                 fixed = (_('L1 + Touchpad right') if button == 'touchpad_left'
-                         else _('{} trigger').format(PS_BUTTON_NAMES[button]))
+                         else _('{} trigger').format(_(PS_BUTTON_NAMES[button])))
                 box = ttk.Label(table, text=fixed, style='Muted.TLabel')
             box.grid(row=r, column=4, sticky='w')
             self.draw_pad_icon(button)
@@ -1648,10 +1690,10 @@ class Launcher:
 
     def pad_name(self, label):
         """SDL gamepad button name of a label in the current naming style."""
-        return next((n for n, l in PAD_STYLES[self.pad_style.get()].items() if l == label), label)
+        return next((n for n, l in pad_labels(self.pad_style.get()).items() if l == label), label)
 
     def relabel_pad_controls(self):
-        labels = PAD_STYLES[self.pad_style.get()]
+        labels = pad_labels(self.pad_style.get())
         for button, box in self.pad_boxes.items():
             box.configure(values=list(labels.values()))
             name = self.control_vars['pad'][button].get()
@@ -1792,7 +1834,7 @@ class Launcher:
         self.store_game_patches()
         title_id, _profile = game_profile_of(self.meta_dir())
         names = self.app.get('game_patches', {}).get(title_id) or []
-        resolution = dict((v, t[0]) for v, t in RESOLUTION_CHOICES).get(self.var('render_resolution', 'ini').get(), '?')
+        resolution = dict((v, _(*t)) for v, t in self.resolution_options()).get(self.var('render_resolution', 'ini').get(), '?')
         from patches import game_patchable, patch_status
         if not game_patchable(self.meta_dir()):
             return _('{} · 60 FPS engine · no patches for this game').format(resolution)
@@ -1807,7 +1849,7 @@ class Launcher:
         if not hasattr(self, 'patches_frame'):
             return
         tk, ttk = self.tk, self.ttk
-        from mods import discover
+        from mods import discover, patch_files
         from patches import external_patches
         for holder in (self.mods_frame, self.patches_frame):
             for widget in holder.winfo_children():
@@ -1830,8 +1872,9 @@ class Launcher:
             self.mod_vars[name] = var
             ttk.Button(line, text='▲', width=3, command=lambda i=index: self.move_mod(i, -1)).pack(side='left')
             ttk.Button(line, text='▼', width=3, command=lambda i=index: self.move_mod(i, 1)).pack(side='left', padx=(2, 10))
-            ttk.Checkbutton(line, text=f'{index + 1}.  {name}', variable=var,
-                            command=self.refresh_conflicts).pack(side='left')
+            has_patches = bool(patch_files(root / name))
+            ttk.Checkbutton(line, text=f'{index + 1}.  {name}' + (_('   (game patches)') if has_patches else ''),
+                            variable=var, command=self.refresh_conflicts).pack(side='left')
         if len(self.mod_order) > 1:
             ttk.Label(self.mods_frame, text=_('Lower in the list loads later and wins conflicts.',
                                               'Ниже в списке — загружается позже и перекрывает.'),

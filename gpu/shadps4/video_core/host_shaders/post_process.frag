@@ -12,6 +12,7 @@ layout (push_constant) uniform settings {
     float gamma;
     bool hdr;
     bool srgb_input;
+    vec4 picture; // gow3: x0, y0, x1, y1 of the part shown; the rest is black (cutscene bars)
 } pp;
 
 const float cutoff = 0.0031308, a = 1.055, b = 0.055, d = 12.92;
@@ -34,6 +35,10 @@ vec3 degamma(vec3 rgb) {
 }
 
 void main() {
+    if (any(lessThan(uv, pp.picture.xy)) || any(greaterThan(uv, pp.picture.zw))) {
+        color = vec4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
     vec4 color_linear = texture(texSampler, uv);
     if (pp.hdr) {
         color = color_linear;

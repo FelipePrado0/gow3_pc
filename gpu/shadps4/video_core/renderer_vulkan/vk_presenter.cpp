@@ -663,6 +663,9 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     // the post process pass still sRGB encoded and has to be decoded there instead.
     pp_settings.srgb_input =
         attribute.attrib.pixel_format == Libraries::VideoOut::PixelFormat::A2R10G10B10Srgb;
+    // gow3: black bars around a cutscene when the render resolution is not 16:9 (movie_bars.h).
+    pp_settings.picture = MovieBars::Cutscenes().Bars(image_size.width, image_size.height,
+                                                      MovieBars::NowMs());
     pp_pass.Render(cmdbuf, image_view, image_size, *frame, pp_settings);
     if (frame_dump) {
         // The presented image as the swapchain blit reads it (General after the pass).

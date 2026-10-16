@@ -166,7 +166,17 @@ def main():
         import discord_presence
     except Exception:
         discord_presence = None
-    graphics, reverted = graphics_options.prepare(env['GOW3_CONFIG'], out / 'graphics_state.json')
+    import mods
+    import patches
+    # The enabled mods' patch files: their "Resolution Patch - <size>" entries are render resolutions too
+    # (the launcher and the in-game menu list them; GOW3_EXTRA_RESOLUTIONS tells the game).
+    mod_patch_files = mods.enabled_patch_files(env.get('GOW3_MODS_DIR', data / 'mods'),
+                                               env.get('GOW3_MODS_CONFIG', data / 'mods.json'),
+                                               env.get('GOW3_MODS_ENABLED', '1') != '0')
+    extra_resolutions = [s for s in patches.resolution_names(mod_patch_files) if s not in graphics_options.RESOLUTIONS]
+    env['GOW3_EXTRA_RESOLUTIONS'] = ';'.join(extra_resolutions)
+    derived.append('GOW3_EXTRA_RESOLUTIONS')
+    graphics, reverted = graphics_options.prepare(env['GOW3_CONFIG'], out / 'graphics_state.json', extra_resolutions)
     if reverted:
         print('Graphics: the last restart never reached the game; previous options restored', flush=True)
     env.update(graphics_options.environment(graphics))
@@ -222,7 +232,6 @@ def main():
                 isa_args = ['--isa-rewrite', str(out / 'isa-rewrite.bin')]
         run_script('content_profile.py', game, '--out', out, '--sku', env.get('GOW3_CONTENT_SKU', 'full'))
 
-        import patches
         from patches import game_profile_for, patch_requirements, patch_status, selected_patches
         profile = game_profile_for(game)
         engine_fps = 60
@@ -247,23 +256,30 @@ def main():
         if env.get('GOW3_EXPERIMENTAL_UPSCALER') != '1':
             env.setdefault('GOW3_UPSCALER', 'none')
         env.setdefault('GOW3_READBACK_LINEAR', '1')
+        patch_xml = profile[1] if profile else None
+        if profile and mod_patch_files:
+            # The built-in patches plus the enabled mods' (the same file for the selection and the notes).
+            patch_xml = patches.merge_patch_files(profile[1], mod_patch_files, out / 'patches-merged.xml')
         if profile:
-            names = selected_patches(profile[1], profile[2], env.get('GOW3_PATCHES', ''), env.get('GOW3_PATCHES_ONLY') == '1')
+            names = selected_patches(patch_xml, profile[2], env.get('GOW3_PATCHES', ''), env.get('GOW3_PATCHES_ONLY') == '1')
+            # A mod's patches that are on by default (isEnabled) stay on when the launcher chose the list.
+            names += [n for n in patches.default_enabled(mod_patch_files, profile[2]) if n not in names]
             # gow3.ini decides the resolution and frame rate patches (in-game menu, launcher).
             names = graphics_options.patch_names(names, graphics)
-            names = graphics_options.restrict_to_available(names, patches.available_patches(profile[1], profile[2]))
+            names = graphics_options.restrict_to_available(names, patches.available_patches(patch_xml, profile[2]))
             env['GOW3_PATCHES'] = ';'.join(names)
             env['GOW3_PATCHES_ONLY'] = '1'
         (out / 'patch_status.json').unlink(missing_ok=True)
         run_script('patches.py', '--out', out, '--extra', env.get('GOW3_PATCHES', ''), '--game-dir', game,
                    '--patches-dir', env.get('GOW3_PATCHES_DIR', data / 'patches'),
-                   '--patches-config', env.get('GOW3_PATCHES_CONFIG', data / 'patches.json'))
+                   '--patches-config', env.get('GOW3_PATCHES_CONFIG', data / 'patches.json'),
+                   *[arg for f in mod_patch_files for arg in ('--mod-patches', f)])
         if profile:
             # Only the patches found in this eboot.bin count: a frame rate patch that was skipped
             # leaves the engine at 60 FPS, and the notes' memory and VBlank needs follow the same list.
             applied = (patch_status(out) or {}).get('applied', [])
             engine_fps = graphics_options.applied_engine_fps(applied)
-            dmem, vblank = patch_requirements(profile[1], applied, profile[2])
+            dmem, vblank = patch_requirements(patch_xml, applied, profile[2])
             for key, value in (('GOW3_DMEM_MB', dmem), ('GOW3_VBLANK_HZ', vblank)):
                 if value and key not in env:
                     env[key] = str(value)
