@@ -30,7 +30,10 @@ INK, DIM, BODY = '#e6e0d8', '#5a5250', '#262020'
 
 
 def spec(button, style):
-    """(kind, text, color) of an SDL button in a style, or None for an unknown button."""
+    """(kind, text, color) of an SDL button in a style, or None for an unknown button.
+    'label:<text>' is a small pill with that text (actions such as L3+R3)."""
+    if button.startswith('label:'):
+        return 'pill', button[len('label:'):], INK
     if button in FACE.get(style, {}):
         text, color = FACE[style][button]
         return ('symbol' if style == 'playstation' else 'letter'), text, color

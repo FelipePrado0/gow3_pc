@@ -8,8 +8,8 @@ import gow3_launcher_win as launcher  # noqa: E402
 
 
 class PagesTest(unittest.TestCase):
-    def test_sidebar_lists_five_pages_in_order(self):
-        self.assertEqual(launcher.PAGES, ('home', 'graphics', 'performance', 'game', 'advanced'))
+    def test_sidebar_lists_six_pages_in_order(self):
+        self.assertEqual(launcher.PAGES, ('home', 'graphics', 'performance', 'game', 'controls', 'advanced'))
 
     def test_showing_a_page_refreshes_what_it_holds(self):
         self.assertEqual(launcher.PAGE_REFRESH['home'], ('refresh_status',))

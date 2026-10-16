@@ -122,6 +122,14 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.anisotropy = Gow3Graphics::ParseAnisotropy(i);
     } else if (key == "vibration") {
         v.vibration = value.empty() ? 100 : std::clamp(i, 0, 100);
+    } else if (key == "mouse_prompt_distance") {
+        v.mouse_prompt_distance = value.empty() ? 48 : std::clamp(i, 16, 200);
+    } else if (key == "mouse_lock") {
+        v.mouse_lock = value.empty() || i != 0;
+    } else if (key == "mouse_aim_style") {
+        v.mouse_aim_style = std::clamp(i, 0, 1);
+    } else if (key == "mouse_aim_sensitivity") {
+        v.mouse_aim_sensitivity = value.empty() ? 100 : std::clamp(i, 10, 200);
     } else if (key == "restart_unconfirmed") {
         v.restart_unconfirmed = i != 0;
     } else if (key == "enemy_health_bar") {
@@ -192,6 +200,8 @@ void Load() {
         {"GOW3_STALE_READBACK", "stale_readback"},     {"GOW3_FSR1", "fsr1"},
         {"GOW3_RCAS", "rcas"},                        {"GOW3_FRAMES_AHEAD", "frames_queued"},
         {"GOW3_ANISOTROPY", "anisotropy"},            {"GOW3_VIBRATION", "vibration"},
+        {"GOW3_MOUSE_PROMPT_DISTANCE", "mouse_prompt_distance"}, {"GOW3_MOUSE_LOCK", "mouse_lock"},
+        {"GOW3_MOUSE_AIM_STYLE", "mouse_aim_style"}, {"GOW3_MOUSE_AIM_SENSITIVITY", "mouse_aim_sensitivity"},
     };
     for (const auto& [env, key] : env_keys) {
         if (const char* value = std::getenv(env); value && value[0]) {
@@ -320,7 +330,10 @@ void Save() {
                  resolution_names[std::clamp(v.render_resolution.load(), 0, int(resolution_names.size()) - 1)].c_str(),
                  v.engine_fps.load(), int(v.deferred_readback.load()), int(v.stale_readback.load()),
                  int(v.restart_unconfirmed.load()));
-    std::fprintf(file, "anisotropy=%d\nvibration=%d\n", v.anisotropy.load(), v.vibration.load());
+    std::fprintf(file, "anisotropy=%d\nvibration=%d\nmouse_prompt_distance=%d\nmouse_lock=%d\nmouse_aim_style=%d\n"
+                       "mouse_aim_sensitivity=%d\n",
+                 v.anisotropy.load(), v.vibration.load(), v.mouse_prompt_distance.load(), int(v.mouse_lock.load()),
+                 v.mouse_aim_style.load(), v.mouse_aim_sensitivity.load());
     // Read by run.sh at start.
     std::fprintf(file, "live_resolution=%s\n", v.live_resolution < 0 ? "auto"
                                                   : v.live_resolution ? "1" : "0");

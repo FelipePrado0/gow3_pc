@@ -220,7 +220,7 @@ Automatic deja pasar un `GOW3_NO_MSAA` heredado. Se aplica en el próximo inicio
 
 ## Controles de teclado
 
-Valores por defecto; cambialos en la página **Game** del launcher, sección **Controls**.
+Valores por defecto; cambialos en la página **Controls** del launcher, sección **Keyboard & Mouse Mapping**.
 
 | Tecla | Botón |
 |---|---|
@@ -228,22 +228,36 @@ Valores por defecto; cambialos en la página **Game** del launcher, sección **C
 | Flechas | stick derecho (cámara) |
 | Espacio | Cruz (X) |
 | Shift izquierdo | Círculo |
-| E | Cuadrado |
-| Q | Triángulo |
-| 1 y 3 | L1 y R1 |
-| R y F | L2 y R2 |
-| Z y C | L3 y R3 |
-| I, K, J, L | cruceta |
-| Enter | Options |
-| Tab | clic del touchpad izquierdo (modo foto) |
-| Retroceso | clic del touchpad derecho (menú de pausa) |
+| Clic izquierdo | Cuadrado |
+| Clic derecho | Triángulo |
+| Q y E | L1 y R1 |
+| R y el botón de avanzar del mouse | L2 y R2 |
+| Z y X | L3 y R3 |
+| Clic de la rueda | Rage of Sparta (L3 + R3) |
+| C | Agarre (L1 + Círculo) |
+| El botón de retroceder del mouse | Esquivar |
+| 1, 2, 3, 4 | cruceta: arriba, derecha, abajo, izquierda (armas) |
+| Tab | Options |
+| P | clic del touchpad izquierdo (modo foto) |
+| Esc | clic del touchpad derecho (menú de pausa) |
 | Insert | el menú del port (R3+L2 en el control) |
+
+**Rage of Sparta en una tecla** (activado por defecto) deja Z y X sin uso. Los **Joystick prompts**
+responden a los quick-time events de girar el stick sin stick: escribí el giro (medias vueltas D S
+A, A S D, A W D o D W A; vueltas completas D S A W o A S D W) o, con *Adaptive mouse*, dibujalo con
+el mouse. Mientras jugás, el mouse queda dentro de la ventana del juego; el menú del juego, la tecla
+de pausa (Esc) y otras ventanas lo liberan, y Esc de nuevo o un clic en la ventana lo vuelve a
+tomar. Con L2 apretado (R), el mouse apunta con el stick derecho, para la Cabeza de Helios o el Arco
+de Apolo: *Relative* sigue el movimiento, *Absolute* apunta desde donde estaba el mouse al apretar
+L2, y *Right stick sensitivity* define cuánto mouse hace falta. Sin el launcher, el juego usa sus
+propias teclas: E y Q para Cuadrado y Triángulo, 1 y 3 para L1 y R1, F para R2, C para R3, I, K, J,
+L para la cruceta, Enter para Options, Tab y Retroceso para el touchpad.
 
 En un control sin touchpad (Xbox y otros), View abre el menú de pausa (el clic del touchpad derecho)
 y L1 + View abre el modo foto (el clic izquierdo). En un DualSense el touchpad funciona como en la
 PS4, y Share/Create funciona como View.
 
-Los **íconos de botones en el juego** (desactivados por defecto) se eligen en la página Game del launcher, sección Controls, en
+Los **íconos de botones en el juego** (desactivados por defecto) se eligen en la página Controls del launcher, en
 *In-game button icons*: *Match my controller*, *Xbox* o *Nintendo*. Reemplazan los íconos de
 PlayStation en los tutoriales, la lista de movimientos y las indicaciones de quick-time events; el
 dibujo del control en el menú de pausa sigue siendo un DualShock 4. El launcher escribe una copia

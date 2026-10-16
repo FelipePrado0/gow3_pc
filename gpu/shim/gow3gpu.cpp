@@ -359,6 +359,22 @@ extern "C" void gow3gpu_movie_picture(void) {
     Vulkan::MovieBars::Cutscenes().NotePicture(Vulkan::MovieBars::NowMs());
 }
 
+extern "C" int gow3gpu_mouse_prompt_distance(void) {
+    return Gow3Settings::Get().mouse_prompt_distance.load(std::memory_order_relaxed);
+}
+
+extern "C" int gow3gpu_mouse_aim_style(void) {
+    return Gow3Settings::Get().mouse_aim_style.load(std::memory_order_relaxed);
+}
+
+extern "C" int gow3gpu_mouse_aim_sensitivity(void) {
+    return Gow3Settings::Get().mouse_aim_sensitivity.load(std::memory_order_relaxed);
+}
+
+extern "C" void gow3gpu_mouse_pause_key(void) {
+    Frontend::ToggleMousePause();
+}
+
 extern "C" int gow3gpu_overlay_captures_input(void) {
     return Gow3Overlay::CapturesInput() ? 1 : 0;
 }

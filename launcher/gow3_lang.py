@@ -950,6 +950,48 @@ EXTRA = {
             'Permite pular qualquer cinemática com o botão X. Agradecimentos a illusion0001, também conhecido como illusionyy, pelo patch do PS3 que tornou isso muito fácil.',
         'Fixes the black screen at startup with the FPS counter running: the frame pacing index starts at 2 instead of 0, so the second frame no longer waits for a flip that only it can trigger.':
             'Corrige a tela preta na inicialização com o contador de FPS rodando: o índice de ritmo dos quadros começa em 2 em vez de 0, então o segundo quadro não espera mais por um flip que só ele pode disparar.',
+        '(none)': '(nenhuma)',
+        'Adaptive mouse: how far the mouse moves for one step of a rotation. Also in the in-game menu.':
+            'Mouse adaptativo: quanto o mouse se move para cada passo de um giro. Também no menu do jogo.',
+        'Aiming with the mouse while L2 is held (Head of Helios, Bow of Apollo). Relative: the stick follows the movement and goes back to neutral when the mouse stops. Absolute: where the mouse was when L2 was pressed is the centre, and the stick points from it to the mouse. Also in the in-game menu.':
+            'Mira com o mouse enquanto L2 está pressionado (Cabeça de Hélio, Arco de Apolo). Relativo: o analógico segue o movimento e volta ao centro quando o mouse para. Absoluto: onde o mouse estava ao apertar L2 é o centro, e o analógico aponta dele até o mouse. Também no menu do jogo.',
+        'Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, higher less. Also in the in-game menu.':
+            'Mira com o mouse enquanto L2 está pressionado: menor precisa de mais movimento do mouse para o mesmo analógico, maior de menos. Também no menu do jogo.',
+        "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving (WASD), or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.":
+            'Clique em uma caixa e aperte uma tecla, clique com um botão do mouse ou gire a roda (desiste após {} segundos). Uma entrada já usada por outro botão troca com ele; a seta devolve um botão ao padrão. Rage of Sparta aperta L3 e R3 juntos: marque a caixa acima dele para usar uma entrada em vez de duas. Agarrar aperta L1 e Círculo juntos. A esquiva vai na direção em que você anda (WASD), ou para trás quando parado. O touchpad direito abre o menu de pausa do jogo. Insert sempre abre o menu do port e não pode ser atribuído. Aplicado ao iniciar o jogo.',
+        'Gamepad Mapping': 'Mapeamento do controle',
+        'General': 'Geral',
+        'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.':
+            'Como os eventos de girar o analógico são respondidos. Teclado: digite o giro, meias-voltas a partir de cima D S A (horário) ou A S D, a partir de baixo A W D ou D W A, voltas completas D S A W ou A S D W; uma tecla fora de ordem recomeça. Mouse adaptativo: desenhe o giro com o mouse.',
+        'Joystick prompts': 'Prompts do analógico',
+        'Keep the mouse in the game window': 'Manter o mouse na janela do jogo',
+        'Key not supported': 'Tecla não suportada',
+        'Keyboard & Mouse Mapping': 'Mapeamento de teclado e mouse',
+        'Keyboard and mouse, button icons and gamepad mapping.':
+            'Teclado e mouse, ícones dos botões e mapeamento do controle.',
+        "L2/R2 stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right. R3+L2 always opens the port's menu. Applied when the game starts.":
+            'L2/R2 ficam nos gatilhos. O touchpad direito abre o menu de pausa do jogo; o touchpad esquerdo (modo foto) é L1 + touchpad direito. R3+L2 sempre abre o menu do port. Aplicado ao iniciar o jogo.',
+        'Mouse prompt distance': 'Distância do mouse nos prompts',
+        'Press a key': 'Aperte uma tecla',
+        'Press a key or mouse': 'Aperte uma tecla ou o mouse',
+        'Rage of Sparta on one input (L3 + R3 together)':
+            'Rage of Sparta em uma entrada (L3 + R3 juntos)',
+        'Reset gamepad to defaults': 'Restaurar o controle ao padrão',
+        'Reset keyboard & mouse to defaults': 'Restaurar teclado e mouse ao padrão',
+        'Right stick sensitivity': 'Sensibilidade do analógico direito',
+        'Right stick style': 'Estilo do analógico direito',
+        'Which gamepad button presses each button of the game.':
+            'Qual botão do controle aperta cada botão do jogo.',
+        'Which key or mouse input presses each button of the game.':
+            'Qual tecla ou entrada do mouse aperta cada botão do jogo.',
+        'While you play, the mouse stays in the game window, so a click cannot land on another monitor or app. The in-game menu and switching windows get it back. Also in the in-game menu.':
+            'Enquanto você joga, o mouse fica na janela do jogo, então um clique não cai em outro monitor ou programa. O menu do jogo e trocar de janela o liberam. Também no menu do jogo.',
+        'Keyboard (native)': 'Teclado (nativo)',
+        'Adaptive mouse (experimental)': 'Mouse adaptativo (experimental)',
+        'Relative': 'Relativo',
+        'Absolute': 'Absoluto',
+        'Grab': 'Agarrar',
+        'Dodge': 'Esquiva',
     },
     'es': {
         'Show Discord Rich Presence': 'Mostrar Discord Rich Presence',
@@ -1173,6 +1215,48 @@ EXTRA = {
             'Guarda la imagen del juego, sin el overlay, como PNG en la carpeta screenshots de las partidas.',
         'Vibration': 'Vibración',
         "Strength of the gamepad's vibration; 0% turns it off.": 'Fuerza de la vibración del mando; 0% la desactiva.',
+        '(none)': '(ninguna)',
+        'Adaptive mouse: how far the mouse moves for one step of a rotation. Also in the in-game menu.':
+            'Ratón adaptativo: cuánto se mueve el ratón para cada paso de un giro. También en el menú del juego.',
+        'Aiming with the mouse while L2 is held (Head of Helios, Bow of Apollo). Relative: the stick follows the movement and goes back to neutral when the mouse stops. Absolute: where the mouse was when L2 was pressed is the centre, and the stick points from it to the mouse. Also in the in-game menu.':
+            'Apuntar con el ratón mientras mantienes L2 (Cabeza de Helios, Arco de Apolo). Relativo: el stick sigue el movimiento y vuelve al centro cuando el ratón se detiene. Absoluto: donde estaba el ratón al pulsar L2 es el centro, y el stick apunta desde él hasta el ratón. También en el menú del juego.',
+        'Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, higher less. Also in the in-game menu.':
+            'Apuntar con el ratón mientras mantienes L2: más bajo necesita más movimiento del ratón para el mismo stick, más alto menos. También en el menú del juego.',
+        "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving (WASD), or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.":
+            'Haz clic en una casilla y luego pulsa una tecla, haz clic con un botón del ratón o gira la rueda (se cancela tras {} segundos). Una entrada ya usada por otro botón se intercambia con él; la flecha devuelve un botón a su valor predeterminado. Rage of Sparta pulsa L3 y R3 a la vez: marca la casilla de encima para usar una entrada en lugar de dos. Agarrar pulsa L1 y Círculo a la vez. Esquivar evade hacia donde te mueves (WASD), o hacia atrás si estás quieto. El touchpad derecho abre el menú de pausa del juego. Insert siempre abre el menú del port y no se puede asignar. Se aplica al iniciar el juego.',
+        'Gamepad Mapping': 'Asignación del mando',
+        'General': 'General',
+        'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.':
+            'Cómo se responden los eventos de girar el stick. Teclado: escribe el giro, medias vueltas desde arriba D S A (horario) o A S D, desde abajo A W D o D W A, vueltas completas D S A W o A S D W; una tecla fuera de orden vuelve a empezar. Ratón adaptativo: dibuja el giro con el ratón.',
+        'Joystick prompts': 'Eventos del stick',
+        'Keep the mouse in the game window': 'Mantener el ratón en la ventana del juego',
+        'Key not supported': 'Tecla no compatible',
+        'Keyboard & Mouse Mapping': 'Asignación de teclado y ratón',
+        'Keyboard and mouse, button icons and gamepad mapping.':
+            'Teclado y ratón, iconos de botones y asignación del mando.',
+        "L2/R2 stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right. R3+L2 always opens the port's menu. Applied when the game starts.":
+            'L2/R2 siguen en los gatillos. El touchpad derecho abre el menú de pausa del juego; el touchpad izquierdo (modo foto) es L1 + touchpad derecho. R3+L2 siempre abre el menú del port. Se aplica al iniciar el juego.',
+        'Mouse prompt distance': 'Distancia del ratón en los eventos',
+        'Press a key': 'Pulsa una tecla',
+        'Press a key or mouse': 'Pulsa una tecla o el ratón',
+        'Rage of Sparta on one input (L3 + R3 together)':
+            'Rage of Sparta en una entrada (L3 + R3 a la vez)',
+        'Reset gamepad to defaults': 'Restablecer el mando',
+        'Reset keyboard & mouse to defaults': 'Restablecer teclado y ratón',
+        'Right stick sensitivity': 'Sensibilidad del stick derecho',
+        'Right stick style': 'Estilo del stick derecho',
+        'Which gamepad button presses each button of the game.':
+            'Qué botón del mando pulsa cada botón del juego.',
+        'Which key or mouse input presses each button of the game.':
+            'Qué tecla o entrada del ratón pulsa cada botón del juego.',
+        'While you play, the mouse stays in the game window, so a click cannot land on another monitor or app. The in-game menu and switching windows get it back. Also in the in-game menu.':
+            'Mientras juegas, el ratón se queda en la ventana del juego, así un clic no cae en otro monitor o programa. El menú del juego y cambiar de ventana lo liberan. También en el menú del juego.',
+        'Keyboard (native)': 'Teclado (nativo)',
+        'Adaptive mouse (experimental)': 'Ratón adaptativo (experimental)',
+        'Relative': 'Relativo',
+        'Absolute': 'Absoluto',
+        'Grab': 'Agarrar',
+        'Dodge': 'Esquivar',
     },
 }
 

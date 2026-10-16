@@ -10,6 +10,7 @@
 #include "isa_rewrite.h"
 #include "orb_hook.h"
 #include "cheat_hook.h"
+#include "qte_hook.h"
 #include "actor_hook.h"
 #include "damage_hook.h"
 #include "gpu/gow3gpu.h"
@@ -376,6 +377,7 @@ extern void gow3_cheat_status(unsigned id);
 extern uintptr_t gow3_damage_multiplier(int taken);
 extern uintptr_t gow3_orb_pickup_multiplier(unsigned kind);
 extern void gow3_stat_multipliers_status(int damage, int orb_pickup);
+extern uintptr_t gow3_qte_state_address(void);
 
 /* The hooks below find their sites by signature (src/signature.h), so they work in any region
  * and version of the game whose code matches; a site that is not found leaves its feature off. */
@@ -449,6 +451,50 @@ static void install_actor_watch(Segment *segments, uint64_t count, uint64_t size
     memset(image + at + 5, 0x90, GOW3_ACTOR_HOOK_LENGTH - 5);
     gow3_actor_status(1);
     printf("Health display: damage hook ready (enemy health bar in the menu)\n");
+}
+
+/* QTE prompts (src/qte_hook.h): a frame count in the prompt's update and an answer in its
+ * rotation check, for the stick prompts in runtime_pad.c (typed or drawn rotations). Both or
+ * neither; they do nothing until the player finishes a rotation that way. */
+static void install_qte_hooks(Segment *segments, uint64_t count, uint64_t size) {
+    const uint64_t sites[2] = {gow3_signature_find(image, size, &gow3_qte_update_site),
+                               gow3_signature_find(image, size, &gow3_qte_rotation_site)};
+    const unsigned char *originals[2] = {gow3_qte_update_original, gow3_qte_rotation_original};
+    for (unsigned i = 0; i < 2; ++i) {
+        if (sites[i] == UINT64_MAX || !mapped(segments, count, sites[i], GOW3_QTE_BLOCK_NEXT) ||
+            memcmp(image + sites[i], originals[i], GOW3_QTE_HOOK_LENGTH)) {
+            printf("Stick prompts: unavailable (code not found in this eboot.bin)\n");
+            return;
+        }
+    }
+    const uint64_t block = gow3_qte_block(image + sites[1], sites[1]);
+    if (!mapped(segments, count, block, GOW3_QTE_TYPE_OFFSET + 2)) {
+        printf("Stick prompts: unavailable (prompt state outside the image)\n");
+        return;
+    }
+    unsigned char *stubs = allocate(page_size);
+    int32_t relative[2];
+    for (unsigned i = 0; i < 2; ++i) {
+        const int64_t delta = (int64_t)(uintptr_t)(stubs + i * 128) - (int64_t)(uintptr_t)(image + sites[i] + 5);
+        if (delta < INT32_MIN || delta > INT32_MAX) {
+            printf("Stick prompts: unavailable (hook outside relative-jump range)\n");
+            return;
+        }
+        relative[i] = (int32_t)delta;
+    }
+    Gow3QteState *state = (Gow3QteState *)gow3_qte_state_address();
+    gow3_qte_build_update_stub(stubs, (uintptr_t)&state->heartbeat,
+                               (uintptr_t)(image + sites[0] + GOW3_QTE_HOOK_LENGTH));
+    gow3_qte_build_rotation_stub(stubs + 128, (uintptr_t)&state->pass,
+                                 (uintptr_t)(image + sites[1] + GOW3_QTE_HOOK_LENGTH));
+    protect(stubs, page_size, 5);
+    for (unsigned i = 0; i < 2; ++i) {
+        image[sites[i]] = 0xe9;
+        memcpy(image + sites[i] + 1, &relative[i], 4);
+        memset(image + sites[i] + 5, 0x90, GOW3_QTE_HOOK_LENGTH - 5);
+    }
+    state->block = (uint64_t)(uintptr_t)(image + block);
+    printf("Stick prompts: rotation prompt hooks ready\n");
 }
 
 static void install_orb_multiplier(Segment *segments, uint64_t count, uint64_t size) {
@@ -908,6 +954,7 @@ int main(int argc, char **argv) {
     if (gpu_enabled) install_cheats(segments, ns, size);
     if (gpu_enabled) install_actor_watch(segments, ns, size);
     if (gpu_enabled) install_stat_multipliers(segments, ns, size);
+    if (gpu_enabled) install_qte_hooks(segments, ns, size);
 #ifdef _WIN32
     printf("Guest TCB loads redirected to the TEB TLS slot: %" PRIu64 "\n", patch_tcb_loads(segments, ns));
 #endif

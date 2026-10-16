@@ -3,6 +3,7 @@ import queue
 import struct
 import sys
 import unittest
+from unittest import mock
 
 from paths import ROOT
 sys.path.insert(0, str(ROOT / 'launcher'))
@@ -51,7 +52,7 @@ class ControlMapTest(unittest.TestCase):
         self.assertEqual(launcher.control_map({}, 'pad'), '')
 
     def test_only_changes_from_the_defaults_are_kept(self):
-        keys = {b: k for b, k, _p in launcher.CONTROLS}
+        keys = {row[0]: launcher.default_input(row, 'key') for row in launcher.table_rows('key')}
         keys.update(cross='q', circle='LEFT SHIFT', square='  ')
         self.assertEqual(launcher.control_changes(keys, 'key'), {'cross': 'q'})
         pads = {b: p or '' for b, _k, p in launcher.CONTROLS}
@@ -78,10 +79,147 @@ class ControlMapTest(unittest.TestCase):
             self.assertTrue(all(p in labels for _b, _k, p in launcher.CONTROLS if p))
             self.assertEqual(len(set(labels.values())), len(labels))
 
+    def test_pressed_keys_become_sdl_names(self):
+        self.assertEqual(launcher.sdl_key_name('q'), 'Q')
+        self.assertEqual(launcher.sdl_key_name('Q'), 'Q')
+        self.assertEqual(launcher.sdl_key_name('7'), '7')
+        self.assertEqual(launcher.sdl_key_name('F12'), 'F12')
+        self.assertEqual(launcher.sdl_key_name('space'), 'Space')
+        self.assertEqual(launcher.sdl_key_name('Shift_L'), 'Left Shift')
+        self.assertEqual(launcher.sdl_key_name('Control_L'), 'Left Ctrl')
+        self.assertEqual(launcher.sdl_key_name('KP_5'), 'Keypad 5')
+        self.assertEqual(launcher.sdl_key_name('BackSpace'), 'Backspace')
+
+    def test_keys_that_cannot_be_bound(self):
+        for keysym in ('Insert', 'Win_L', 'Print', 'F25', 'eacute'):
+            self.assertIsNone(launcher.sdl_key_name(keysym), keysym)
+        for keysym in ('Insert', 'Win_L', 'Win_R', 'Print'):
+            self.assertIn(keysym, launcher.RESERVED_KEYS)
+
+    def test_more_keys_can_be_bound(self):
+        expected = {'Escape': 'Escape', 'comma': 'Comma', 'equal': 'Equals', 'Pause': 'Pause',
+                    'Scroll_Lock': 'ScrollLock', 'Num_Lock': 'Numlock', 'App': 'Application',
+                    'KP_Home': 'Keypad 7', 'KP_Insert': 'Keypad 0', 'KP_Delete': 'Keypad .', 'F24': 'F24'}
+        for keysym, name in expected.items():
+            self.assertEqual(launcher.sdl_key_name(keysym), name, keysym)
+            self.assertEqual(launcher.control_map({'key': {'cross': name}}, 'key'), f'cross={name}')
+
+    def test_captured_names_reach_the_game(self):
+        for keysym in ('q', 'space', 'Shift_L', 'KP_Enter', 'minus', 'F5'):
+            name = launcher.sdl_key_name(keysym)
+            self.assertNotIn(',', name)
+            value = launcher.control_map({'key': {'cross': name}}, 'key')
+            self.assertEqual(value, f'cross={name}')
+
+    def test_mouse_inputs_become_game_names(self):
+        self.assertEqual([launcher.mouse_name(n) for n in (1, 2, 3, 4, 5)],
+                         ['Mouse Left', 'Mouse Middle', 'Mouse Right', 'Mouse Back', 'Mouse Forward'])
+        self.assertEqual(launcher.mouse_name(wheel_delta=120), 'Wheel Up')
+        self.assertEqual(launcher.mouse_name(wheel_delta=-120), 'Wheel Down')
+        self.assertIsNone(launcher.mouse_name(9))
+        self.assertTrue(launcher.is_mouse_name(' wheel down '))
+        self.assertFalse(launcher.is_mouse_name('Left Shift'))
+
+    def test_the_mouse_binds_in_the_keyboard_table(self):
+        controls = {'key': {'square': 'Mouse Left', 'cross': 'Q'}}
+        self.assertEqual(launcher.control_values(controls, 'key'), {'square': 'Mouse Left', 'cross': 'Q'})
+
+    def test_keyboard_defaults_put_the_attacks_on_the_mouse(self):
+        pairs = dict(entry.split('=', 1) for entry in launcher.keyboard_map({}, rage=False).split(','))
+        self.assertEqual((pairs['square'], pairs['triangle'], pairs['r2']), ('Mouse Left', 'Mouse Right', 'Mouse Forward'))
+        for button, key, _pad in launcher.CONTROLS:  # written where the game's own key differs
+            default = launcher.KEY_DEFAULTS.get(button, key)
+            if default.casefold() != key.casefold():
+                self.assertEqual(pairs.pop(button), default)
+        self.assertEqual(pairs, {'grab': 'C', 'dodge': 'Mouse Back'})
+        self.assertIn('l3=None,r3=None,rage=Mouse Middle', launcher.keyboard_map({}))
+        controls = {'key': {'square': 'Wheel Up', 'cross': 'Q', 'triangle': 'E'}}
+        self.assertIn('cross=Q,square=Wheel Up,triangle=E,', launcher.keyboard_map(controls))
+        values = {row[0]: launcher.default_input(row, 'key') for row in launcher.table_rows('key')}
+        self.assertEqual(launcher.control_changes(values, 'key'), {})
+        values['square'] = 'E'
+        self.assertEqual(launcher.control_changes(values, 'key'), {'square': 'E'})
+
+    def test_actions_belong_to_the_keyboard_table(self):
+        names = [row[0] for row in launcher.table_rows('key')]
+        self.assertEqual(names[names.index('r3') + 1], 'rage')
+        self.assertEqual(names[-2:], ['grab', 'dodge'])
+        self.assertNotIn('dodge', [row[0] for row in launcher.table_rows('pad')])
+        self.assertEqual(launcher.control_values({'key': {'dodge': 'V'}}, 'key'), {'dodge': 'V'})
+        self.assertIn('dodge=V', launcher.keyboard_map({'key': {'dodge': 'V'}}))
+        self.assertIn('grab=None', launcher.keyboard_map({'key': {'grab': 'None'}}))
+        self.assertTrue(launcher.APP_DEFAULTS['rage_one_input'])
+        self.assertNotIn('native_input', launcher.APP_DEFAULTS)
+
+    def test_rage_switch_moves_l3_and_r3_to_one_input(self):
+        controls = {'key': {'l3': 'Z', 'r3': 'X', 'rage': 'Mouse Middle'}}
+        apart = launcher.keyboard_map(controls, rage=False)
+        self.assertIn('r3=X', apart)
+        self.assertNotIn('rage=', apart)
+        self.assertIn('l3=None,r3=None,rage=Mouse Middle', launcher.keyboard_map(controls))
+        env = launcher.game_environment({**launcher.APP_DEFAULTS, 'controls': controls})
+        self.assertIn('l3=None,r3=None,rage=Mouse Middle', env['GOW3_KEY_MAP'])
+        env = launcher.game_environment({**launcher.APP_DEFAULTS, 'controls': controls, 'rage_one_input': False})
+        self.assertIn('r3=X', env['GOW3_KEY_MAP'])
+
+    def test_stick_prompts_reach_the_game(self):
+        with mock.patch.dict(os.environ, {'GOW3_STICK_PROMPTS': 'mouse'}):  # left over from a shell
+            env = launcher.game_environment(dict(launcher.APP_DEFAULTS))
+        self.assertEqual(env['GOW3_STICK_PROMPTS'], 'keyboard')
+        mouse = launcher.game_environment({**launcher.APP_DEFAULTS, 'stick_prompts': 'mouse'})
+        self.assertEqual(mouse['GOW3_STICK_PROMPTS'], 'mouse')
+        odd = launcher.game_environment({**launcher.APP_DEFAULTS, 'stick_prompts': 'joystick'})
+        self.assertNotIn('GOW3_STICK_PROMPTS', odd)
+
+    def test_saved_keyboard_binds_keep_their_layout(self):
+        old = {'controls': {'key': {'cross': 'Q'}, 'pad': {'cross': 'b'}}, 'pad_style': 'xbox'}
+        new = launcher.migrate_controls(old)
+        key = new['controls']['key']
+        self.assertEqual(key['cross'], 'Q')
+        for button, game_key, _pad in launcher.CONTROLS:  # the game's keys, not the new defaults
+            if button != 'cross':
+                self.assertEqual(key[button], game_key)
+        self.assertEqual((key['rage'], key['grab'], key['dodge']), ('Mouse Middle', 'C', 'Mouse Back'))
+        self.assertEqual(new['controls']['pad'], {'cross': 'b'})
+        self.assertEqual(new['controls_layout'], launcher.CONTROLS_LAYOUT)
+        self.assertEqual(launcher.migrate_controls(new), new)  # once
+        game = launcher.keyboard_map(new['controls'])
+        self.assertIn('cross=Q', game)
+        self.assertNotIn('square=', game)  # still E, the game's own key
+        apart = launcher.migrate_controls({'controls': {'key': {'cross': 'Q'}}, 'native_rage': False})
+        self.assertEqual(apart['controls']['key']['grab'], 'None')  # C stays R3's
+        self.assertFalse(apart['rage_one_input'])
+        taken = launcher.migrate_controls({'controls': {'key': {'cross': 'Mouse Back'}}})
+        self.assertEqual(taken['controls']['key']['dodge'], 'None')
+
+    def test_native_translation_carries_over(self):
+        old = {'controls': {'key': {'cross': 'Q'}, 'native': {'circle': 'Mouse Middle'}},
+               'native_input': True, 'native_rage': True}
+        new = launcher.migrate_controls(old)
+        self.assertEqual(new['controls']['key'], {'circle': 'Mouse Middle'})
+        self.assertNotIn('native', new['controls'])
+        self.assertNotIn('native_input', new)
+        self.assertTrue(new['rage_one_input'])
+        unused = launcher.migrate_controls({'controls': {'native': {'circle': 'Mouse Middle'}}, 'native_input': False})
+        self.assertEqual(unused['controls'], {})
+
+    def test_new_players_get_the_new_defaults(self):
+        self.assertEqual(launcher.migrate_controls({}), {})
+        fresh = launcher.migrate_controls({'game_dir': 'D:/games'})
+        self.assertEqual(fresh['controls'], {})
+        self.assertIn('square=Mouse Left', launcher.keyboard_map(fresh['controls']))
+
+    def test_binding_a_used_key_swaps_the_buttons(self):
+        bindings = {'cross': 'Space', 'circle': 'Left Shift', 'square': 'E'}
+        self.assertEqual(launcher.bind_key(bindings, 'cross', 'e'), 'square')
+        self.assertEqual(bindings, {'cross': 'e', 'circle': 'Left Shift', 'square': 'Space'})
+        self.assertIsNone(launcher.bind_key(bindings, 'circle', 'Q'))
+        self.assertEqual(bindings['circle'], 'Q')
+
     def test_environment(self):
         settings = {**launcher.APP_DEFAULTS, 'controls': {'key': {'cross': 'Q'}}}
         env = launcher.game_environment(settings)
-        self.assertEqual(env['GOW3_KEY_MAP'], 'cross=Q')
+        self.assertTrue(env['GOW3_KEY_MAP'].startswith('cross=Q,square=Mouse Left,'))
         self.assertNotIn('GOW3_PAD_MAP', env)
         self.assertEqual(env['GOW3_PARALLEL_WARMUP'], '1')
         self.assertEqual(env['GOW3_BACKGROUND_WARMUP'], '1')

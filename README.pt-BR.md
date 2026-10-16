@@ -216,7 +216,7 @@ essa variável caso ela já exista no ambiente.
 
 ## Teclado
 
-Padrão; mude na tela **Game** do launcher, seção **Controls**.
+Padrão; mude na tela **Controls** do launcher, seção **Keyboard & Mouse Mapping**.
 
 | Tecla | Botão |
 |---|---|
@@ -224,22 +224,36 @@ Padrão; mude na tela **Game** do launcher, seção **Controls**.
 | Setas | analógico direito (câmera) |
 | Espaço | Xis (Cross) |
 | Shift esquerdo | Círculo |
-| E | Quadrado |
-| Q | Triângulo |
-| 1 e 3 | L1 e R1 |
-| R e F | L2 e R2 |
-| Z e C | L3 e R3 |
-| I, K, J, L | direcional |
-| Enter | Options |
-| Tab | clique esquerdo do touchpad (modo foto) |
-| Backspace | clique direito do touchpad (menu de pausa) |
+| Clique esquerdo | Quadrado |
+| Clique direito | Triângulo |
+| Q e E | L1 e R1 |
+| R e o botão de avançar do mouse | L2 e R2 |
+| Z e X | L3 e R3 |
+| Clique da roda | Rage of Sparta (L3 + R3) |
+| C | Agarrar (L1 + Círculo) |
+| O botão de voltar do mouse | Esquiva |
+| 1, 2, 3, 4 | direcional: cima, direita, baixo, esquerda (armas) |
+| Tab | Options |
+| P | clique esquerdo do touchpad (modo foto) |
+| Esc | clique direito do touchpad (menu de pausa) |
 | Insert | menu do port (R3+L2 no controle) |
+
+**Rage of Sparta em uma tecla** (ligado por padrão) deixa Z e X sem uso. Os **Joystick prompts**
+respondem aos eventos rápidos de girar o analógico sem analógico: digite o giro (meias-voltas D S A,
+A S D, A W D ou D W A; voltas completas D S A W ou A S D W) ou, com *Adaptive mouse*, desenhe-o com
+o mouse. Enquanto você joga, o mouse fica preso na janela do jogo; o menu do jogo, a tecla de pausa
+(Esc) e outras janelas o liberam, e Esc de novo ou um clique na janela o prende outra vez. Com L2
+pressionado (R), o mouse mira com o analógico direito, para a Cabeça de Hélio ou o Arco de Apolo:
+*Relative* segue o movimento, *Absolute* aponta a partir de onde o mouse estava ao apertar L2, e
+*Right stick sensitivity* define quanto mouse é preciso. Sem o launcher, o jogo usa as próprias
+teclas: E e Q para Quadrado e Triângulo, 1 e 3 para L1 e R1, F para R2, C para R3, I, K, J, L para o
+direcional, Enter para Options, Tab e Backspace para o touchpad.
 
 Em um controle sem touchpad (Xbox e outros), View abre o menu de pausa (o clique direito do
 touchpad) e L1 + View abre o modo foto (o clique esquerdo). No DualSense o touchpad funciona
 como no PS4, e Share/Create funciona como View.
 
-Os **ícones de botões no jogo** (desligados por padrão) são escolhidos na tela Game do launcher, seção Controls, em
+Os **ícones de botões no jogo** (desligados por padrão) são escolhidos na tela Controls do launcher, em
 *Ícones dos botões no jogo*: *Igual ao meu controle*, *Xbox* ou *Nintendo*. Eles trocam os ícones
 PlayStation dos tutoriais, da lista de golpes e dos eventos rápidos; o desenho do controle no menu
 de pausa continua sendo um DualShock 4. O launcher grava uma cópia com patch de dois arquivos do
