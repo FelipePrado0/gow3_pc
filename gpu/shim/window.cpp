@@ -1,4 +1,5 @@
-// gow3: SDL3 window for the Vulkan swapchain (X11 or Wayland).
+// gow3: SDL3 window for the Vulkan swapchain (X11 or Wayland; Windows; a Metal layer on macOS).
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -17,6 +18,18 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
         UNREACHABLE_MSG("Failed to initialize SDL video: {}", SDL_GetError());
     }
+#ifdef __APPLE__
+    // macOS: laptop desktops are smaller than 1920x1080 points; the window starts inside the
+    // usable area (below the menu bar, with its title bar), at the same aspect ratio.
+    if (SDL_Rect usable; SDL_GetDisplayUsableBounds(SDL_GetPrimaryDisplay(), &usable)) {
+        constexpr s32 TitleBar = 32;
+        if (width_ > usable.w || height_ > usable.h - TitleBar) {
+            const float scale = std::min(float(usable.w) / float(width_), float(usable.h - TitleBar) / float(height_));
+            width_ = s32(float(width_) * scale);
+            height_ = s32(float(height_) * scale);
+        }
+    }
+#endif
     SDL_PropertiesID props = SDL_CreateProperties();
     SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, title);
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_X_NUMBER, SDL_WINDOWPOS_CENTERED);
@@ -24,7 +37,13 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, width_);
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, height_);
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, true);
+#ifdef __APPLE__
+    // macOS: the Vulkan driver presents to the view's CAMetalLayer (VK_EXT_metal_surface); SDL
+    // loads no Vulkan library for a Metal window.
+    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_METAL_BOOLEAN, true);
+#else
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_VULKAN_BOOLEAN, true);
+#endif
     base_title = title;
     window = SDL_CreateWindowWithProperties(props);
     SDL_DestroyProperties(props);
@@ -43,6 +62,12 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     if (driver && !std::strcmp(driver, "windows")) {
         window_info.type = WindowSystemType::Windows;
         window_info.render_surface = SDL_GetPointerProperty(wp, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
+    } else
+#elif defined(__APPLE__)
+    if (driver && !std::strcmp(driver, "cocoa")) {
+        window_info.type = WindowSystemType::Metal;
+        window_info.render_surface = SDL_Metal_GetLayer(SDL_Metal_CreateView(window));
+        ASSERT_MSG(window_info.render_surface, "Failed to create the Metal view: {}", SDL_GetError());
     } else
 #endif
     if (driver && !std::strcmp(driver, "x11")) {

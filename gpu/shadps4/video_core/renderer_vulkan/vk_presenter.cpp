@@ -318,6 +318,7 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
     }
 
     fsr_pass.Create(device, instance.GetAllocator(), num_images);
+    metalfx_pass.Create(instance);
     pp_pass.Create(device, swapchain.GetSurfaceFormat().format);
     Gow3Overlay::Init(instance, swapchain.GetSurfaceFormat().format, num_images);
 
@@ -588,7 +589,7 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     };
 
     draw_scheduler.EndRendering();
-    const auto cmdbuf = draw_scheduler.CommandBuffer();
+    auto cmdbuf = draw_scheduler.CommandBuffer(); // gow3: MetalFX submits it and starts another
     cmdbuf.pipelineBarrier2(vk::DependencyInfo{
         .imageMemoryBarrierCount = 1,
         .pImageMemoryBarriers = &pre_barrier,
@@ -601,6 +602,7 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
 
     vk::ImageView image_view{};
     vk::Extent2D image_size{};
+    vk::Image display_image{}; // gow3: what MetalFX copies (ShaderReadOnlyOptimal below)
     if (upscaled) {
         const auto device = instance.GetDevice();
         image_view = Check(device.createImageView({
@@ -613,6 +615,7 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         }));
         draw_scheduler.DeferOperation([device, image_view] { device.destroyImageView(image_view); });
         image_size = vk::Extent2D{display.width, display.height};
+        display_image = display.image;
         const vk::ImageMemoryBarrier2 to_read{
             .srcStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
             .srcAccessMask = vk::AccessFlagBits2::eColorAttachmentWrite,
@@ -636,6 +639,7 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         }
         image_view = *image.FindView(view_info).image_view;
         image_size = vk::Extent2D{image.info.size.width, image.info.size.height};
+        display_image = image.GetImage();
         runtime.Transit(&image, vk::ImageLayout::eShaderReadOnlyOptimal,
                         vk::PipelineStageFlagBits2::eFragmentShader,
                         vk::AccessFlagBits2::eShaderRead);
@@ -652,12 +656,36 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     Gow3Settings::Get().image_height = int(image_size.height);
     Gow3Settings::Get().window_width = int(frame->width);
     Gow3Settings::Get().window_height = int(frame->height);
+    // gow3 (macOS): MetalFX's spatial scaler in FSR 1's place when chosen (screen_upscaler), FSR 1
+    // where it cannot run. It sharpens by itself, more than FSR 1 with RCAS at 75%: RCAS on top
+    // of it overdid edges and noise in the game's frames, so it does not run on its result.
+    const vk::Extent2D window_size{frame->width, frame->height};
+    vk::Extent2D fsr_input_size = image_size;
+    bool metalfx_applied = false;
+    const char* metalfx_problem = nullptr;
+    if (graphics.screen_upscaler == Gow3Graphics::ScreenMetalFx &&
+        Gow3Graphics::FsrPassRuns(fsr_settings.enable, false, int(image_size.width),
+                                  int(image_size.height), int(frame->width), int(frame->height))) {
+        if (const vk::ImageView enlarged = metalfx_pass.Render(
+                draw_scheduler, display_image, view_info.format, image_size, window_size)) {
+            cmdbuf = draw_scheduler.CommandBuffer(); // the frame's commands so far are submitted
+            image_view = enlarged;
+            fsr_input_size = window_size;
+            fsr_settings.enable = false;
+            fsr_settings.use_rcas = false;
+            metalfx_applied = true;
+        } else {
+            metalfx_problem = metalfx_pass.Problem();
+        }
+    }
+    Gow3Settings::Get().screen_metalfx_applied = metalfx_applied;
+    Gow3Settings::Get().screen_metalfx_problem = metalfx_problem;
     Gow3Settings::Get().rcas_applied =
         fsr_settings.use_rcas &&
-        Gow3Graphics::FsrPassRuns(fsr_settings.enable, true, int(image_size.width), int(image_size.height),
-                                  int(frame->width), int(frame->height));
-    image_view = fsr_pass.Render(cmdbuf, image_view, image_size, {frame->width, frame->height},
-                                 fsr_settings, frame->is_hdr);
+        Gow3Graphics::FsrPassRuns(fsr_settings.enable, true, int(fsr_input_size.width),
+                                  int(fsr_input_size.height), int(frame->width), int(frame->height));
+    image_view = fsr_pass.Render(cmdbuf, image_view, fsr_input_size, window_size, fsr_settings,
+                                 frame->is_hdr);
 
     // Vulkan has no sRGB variant of the 10-bit format, so an A2R10G10B10Srgb buffer reaches
     // the post process pass still sRGB encoded and has to be decoded there instead.
@@ -683,6 +711,7 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     frame->ready_semaphore = draw_scheduler.GetWorkSemaphore()->Handle();
     frame->ready_tick = draw_scheduler.CurrentTick();
     SubmitInfo info{};
+    metalfx_pass.AddWait(info); // gow3: what was recorded since MetalFX was queued reads its result
     draw_scheduler.Flush(info);
 
     // gow3: the GPU command thread runs at most GOW3_FRAMES_AHEAD (default 1) guest frames

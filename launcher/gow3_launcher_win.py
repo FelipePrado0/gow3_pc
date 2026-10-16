@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""God of War III (gow3) launcher for Windows and Linux (Tkinter).
+"""God of War III (gow3) launcher for Windows, Linux and macOS (Tkinter).
 
 Every setting of the port in one window: the game folder and saves, gow3.ini (upscaler,
 preset, output, effects), start-up options passed to run.py as environment variables
 (frame rate, presentation, HDR, ...), mods, third-party patches and controls.
-Launcher options live in %APPDATA%/gow3-launcher/settings.json (~/.config/gow3-launcher on Linux).
+Launcher options live in %APPDATA%/gow3-launcher/settings.json (~/.config/gow3-launcher on Linux
+and macOS).
 
 Frozen with PyInstaller (packaging/windows/package.sh) the same God of War III.exe also runs the
 game without the window (`--play`), run.py (`--run`) and the preparation scripts (`--script`),
@@ -34,20 +35,39 @@ import webbrowser
 import zipfile
 
 WINDOWS = sys.platform == 'win32'
-import ctypes  # GDI on Windows, fontconfig elsewhere
+MACOS = sys.platform == 'darwin'
+LINUX = not WINDOWS and not MACOS
+PLATFORM = 'Mac' if MACOS else 'PC'
+# The key that opens the port's in-game menu: Mac keyboards have no Insert key, so the game takes `
+# there (gpu/shim/gow3_overlay.cpp).
+MENU_KEY = '`' if MACOS else 'Insert'
+import ctypes  # GDI on Windows, Core Text on macOS, fontconfig elsewhere
 # Windows without a cursor of their own show the X root window's, which XWayland leaves blank.
 ARROW = '' if WINDOWS else 'left_ptr'
 if WINDOWS:
     # AMD hybrid laptops: this layer hides the NVIDIA GPU from Vulkan and the game stays black (#263).
     os.environ.setdefault('VK_LOADER_LAYERS_DISABLE', 'VK_LAYER_AMD_switchable_graphics')
 FROZEN = getattr(sys, 'frozen', False)
-PORT_DIR = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
+# The port's files: the source tree; next to the frozen executable on Windows; in the macOS
+# application's Contents/Resources (packaging/macos/package.sh), as code signing wants only the
+# executable in Contents/MacOS.
+if not FROZEN:
+    PORT_DIR = Path(__file__).resolve().parent.parent
+elif MACOS:
+    PORT_DIR = Path(sys.executable).resolve().parent.parent / 'Resources'
+else:
+    PORT_DIR = Path(sys.executable).resolve().parent
 sys.path.insert(0, str(PORT_DIR / 'scripts'))
 import graphics_options  # noqa: E402  (scripts/)
 import save_backup  # noqa: E402  (scripts/)
 import steam_shortcut  # noqa: E402  (scripts/)
 from patches import game_profile, game_sfo  # noqa: E402  (scripts/)
 from prepare import load_sfo  # noqa: E402  (scripts/)
+# The macOS application keeps nothing inside its bundle: generated files, saves and gow3.ini go to
+# Application Support (as the AppImage's go to ~/.local/share/gow3); run.py inherits the variable.
+if MACOS and FROZEN and not os.environ.get('GOW3_DATA_DIR'):
+    os.environ['GOW3_DATA_DIR'] = str(Path.home() / 'Library' / 'Application Support' / 'gow3')
+    Path(os.environ['GOW3_DATA_DIR']).mkdir(parents=True, exist_ok=True)
 DATA_DIR = Path(os.environ.get('GOW3_DATA_DIR', PORT_DIR))
 CONFIG_DIR = (Path(os.environ.get('APPDATA', Path.home())) if WINDOWS else
               Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config')) / 'gow3-launcher'
@@ -59,10 +79,14 @@ NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 # The game and everything it starts form one process group, ended together (GameJob).
 NEW_GROUP = {} if WINDOWS else {'start_new_session': True}
 UI_FONT, MONO_FONT, SERIF_FONT = 'Segoe UI', 'Consolas', 'Georgia'
-# This build; GitHub release tags are windows-v<VERSION>.
+# This build; GitHub release tags are windows-v<VERSION>. A release can carry the Mac application's
+# disk image (gow3-macos.dmg) beside the Windows zip; without one, a Mac opens the release page.
 VERSION = '2.4.0'
-RELEASES_API = 'https://api.github.com/repos/FelipePrado0/gow3_pc/releases/latest'
-RELEASES_PAGE = 'https://github.com/FelipePrado0/gow3_pc/releases/latest'
+RELEASES_REPO = 'FelipePrado0/gow3_pc'
+RELEASES_API = f'https://api.github.com/repos/{RELEASES_REPO}/releases/latest'
+RELEASES_PAGE = f'https://github.com/{RELEASES_REPO}/releases/latest'
+# The download a release offers: the zip an update installs in place, or the Mac disk image.
+RELEASE_ASSET = '.dmg' if MACOS else '.zip'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'gow3-update'
 # Never copied over an installation by an update (the package does not hold them either).
 USER_FILES = ('user', 'out', 'mods', 'gow3.ini', 'mods.json', 'mods_presets.json', 'patches.json', 'last_run.log')
@@ -193,12 +217,12 @@ def monitor_under_pointer(root):
 
 
 def pick_fonts(families):
-    """Windows fonts first, then the DejaVu family that most Linux desktops ship."""
+    """Windows fonts first, then macOS's, then the DejaVu family that most Linux desktops ship."""
     global UI_FONT, MONO_FONT, SERIF_FONT
     available = set(families)
     pick = lambda names: next((name for name in names if name in available), names[-1])
-    UI_FONT = pick(('Segoe UI', 'Noto Sans', 'DejaVu Sans'))
-    MONO_FONT = pick(('Consolas', 'Noto Sans Mono', 'DejaVu Sans Mono'))
+    UI_FONT = pick(('Segoe UI', 'Noto Sans', 'Helvetica Neue', 'DejaVu Sans'))
+    MONO_FONT = pick(('Consolas', 'Noto Sans Mono', 'Menlo', 'DejaVu Sans Mono'))
     SERIF_FONT = pick(('Georgia', 'Noto Serif', 'DejaVu Serif'))
 
 
@@ -211,7 +235,7 @@ def host_environment():
 
 
 def open_url(url):
-    if WINDOWS:
+    if WINDOWS or MACOS:
         webbrowser.open(url)
     else:
         subprocess.Popen(['xdg-open', url], env=host_environment(), stdin=subprocess.DEVNULL,
@@ -224,6 +248,11 @@ def _(en, ru=None):
     if LANG == 'ru':
         return ru or en
     return gow3_lang.table(LANG).get(en) or en
+
+
+def menu_key(text):
+    """A text that names the Insert key, with the key that opens the port's menu on this platform."""
+    return text.replace('Insert', MENU_KEY)
 
 
 def environment_language():
@@ -245,20 +274,42 @@ def windows_language():
 
 
 def register_font(path):
-    """Makes a font file available to this process (nothing else sees it): GDI on Windows, fontconfig (which Tk
-    uses) elsewhere. False when the file is missing or the system refuses it: the launcher then keeps its
-    standard fonts."""
+    """Makes a font file available to this process (nothing else sees it): GDI on Windows, Core Text on
+    macOS, fontconfig (which Tk uses) elsewhere. False when the file is missing or the system refuses it:
+    the launcher then keeps its standard fonts."""
     if not path.is_file():
         return False
     try:
         if WINDOWS:
             return bool(ctypes.windll.gdi32.AddFontResourceExW(str(path), FR_PRIVATE, 0))
+        if MACOS:
+            return register_font_macos(path)
         fontconfig = ctypes.CDLL('libfontconfig.so.1')
         fontconfig.FcConfigAppFontAddFile.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
         fontconfig.FcConfigAppFontAddFile.restype = ctypes.c_int
         return bool(fontconfig.FcConfigAppFontAddFile(None, os.fsencode(path)))
     except (AttributeError, OSError):
         return False
+
+
+def register_font_macos(path):
+    """CTFontManagerRegisterFontsForURL in the process scope; Tk lists the family afterwards."""
+    cf = ctypes.CDLL('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation')
+    ct = ctypes.CDLL('/System/Library/Frameworks/CoreText.framework/CoreText')
+    cf.CFURLCreateFromFileSystemRepresentation.restype = ctypes.c_void_p
+    cf.CFURLCreateFromFileSystemRepresentation.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_long,
+                                                           ctypes.c_bool]
+    cf.CFRelease.argtypes = [ctypes.c_void_p]
+    ct.CTFontManagerRegisterFontsForURL.restype = ctypes.c_bool
+    ct.CTFontManagerRegisterFontsForURL.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p]
+    name = os.fsencode(path)
+    url = cf.CFURLCreateFromFileSystemRepresentation(None, name, len(name), False)
+    if not url:
+        return False
+    try:
+        return bool(ct.CTFontManagerRegisterFontsForURL(url, 1, None))  # kCTFontManagerScopeProcess
+    finally:
+        cf.CFRelease(url)
 
 
 # The God of War face has ASCII letters only: the Latin-script languages use it for headings with
@@ -301,15 +352,20 @@ def heading_text(text, every_language=False):
 # launcher's own settings.json (passed to run.py as environment variables).
 
 INI_FLAGS = {'cheat_double_jumps', 'cheat_very_hard', 'object_motion', 'show_fps', 'vsync', 'async_shaders', 'deferred_readback',
-             'stale_readback'}
+             'stale_readback', 'fewer_gpu_waits', 'fsr1'}
 # The graphics keys are also in the in-game menu (Insert / R3+L2); run.py reads the startup ones.
 INI_DEFAULTS = {'upscaler': 'fsr3', 'preset': '1',
                 'object_motion': '1', 'show_fps': '1', 'output_res': '1920x1080',
                 'live_resolution': 'auto', 'display_mode': 'windowed', 'vsync': '1', 'fps_limit': '0',
-                'async_shaders': '1', 'deferred_readback': '1', 'stale_readback': '1',
+                'async_shaders': '1', 'deferred_readback': '1', 'stale_readback': '1', 'fewer_gpu_waits': '0',
                 'render_resolution': 'native', 'engine_fps': '120',
                 'frames_queued': '1', 'cheat_very_hard': '0', 'cheat_double_jumps': '0',
                 'anisotropy': '0', 'vibration': '100'}
+if MACOS:
+    # Upscaling to the window stays on a Mac (FSR 1 left the other systems' menus in 2.2.0), where
+    # Apple's MetalFX can do it (gpu/shim/gow3_graphics.h ScreenUpscaler, host_passes/metalfx_pass.h).
+    INI_DEFAULTS.update({'fsr1': '0', 'screen_upscaler': 'fsr1'})
+SCREEN_UPSCALERS = [('fsr1', ('FSR 1',)), ('metalfx', ('MetalFX (Apple)',))]
 DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
 ANISOTROPY = [('0', ('Game default',)), ('2', ('2x',)), ('4', ('4x',)), ('8', ('8x',)), ('16', ('16x',))]
 FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('120', ('120',)), ('240', ('240',)), ('0', ('Unlimited',))]
@@ -322,7 +378,7 @@ APP_DEFAULTS = {'ui_language': 'en', 'game_dir': os.environ.get('GOW3_GAME_DIR',
                 'hdr': False, 'draw_pipe': '', 'readbacks': '', 'no_msaa': '', 'stream_memory': 'cached',
                 'gpu_id': '', 'partial_height_views': True, 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True,
                 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
-                'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
+                'metal_hud': False, 'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation',
                 'glyph_style': 'off'}
 
@@ -414,8 +470,9 @@ FRAMES_QUEUED = [('1', ('1 (lowest latency)',)), ('2', ('2',)), ('0', ('Unlimite
 UI_LANGUAGES = gow3_lang.LANGUAGE_NAMES
 
 def fsr4_folder():
-    """Next to the port; in the data directory when the port is read-only (AppImage)."""
-    if WINDOWS or os.access(PORT_DIR, os.W_OK):
+    """Next to the port; in the data directory when the port is read-only (AppImage) or an
+    application bundle (macOS)."""
+    if WINDOWS or (os.access(PORT_DIR, os.W_OK) and not (MACOS and FROZEN)):
         return PORT_DIR / 'fsr4_shaders'
     return DATA_DIR / 'fsr4_shaders'
 
@@ -772,7 +829,7 @@ def write_linux_shortcut(command, appimage, icon_source, desktop, home=None, env
 
 
 def steam_icon(game):
-    """Picture of the Steam shortcut's icon: the launcher's own on Linux, the game's on Windows."""
+    """Picture of the Steam shortcut's icon: the launcher's own on Linux and macOS, the game's on Windows."""
     return Path(game) / 'sce_sys' / 'icon0.png' if WINDOWS else PORT_DIR / 'launcher' / 'gow3.png'
 
 
@@ -802,12 +859,14 @@ def game_environment(s):
     env['GOW3_EXPERIMENTAL_UPSCALER'] = '0'
     if s.get('update_dir'):
         env['GOW3_PATCH_DIR'] = s['update_dir']
-    if not WINDOWS:
+    if LINUX:
         backend = s.get('video_backend', 'auto')
         if backend in ('wayland', 'x11'):
             env['SDL_VIDEO_DRIVER'] = env['SDL_VIDEODRIVER'] = backend
         env['GOW3_GAMEMODE'] = '1' if s.get('gamemode') else '0'
         env['GOW3_MANGOHUD'] = '1' if s.get('mangohud') else '0'
+    if MACOS:  # Apple's Metal performance HUD on the game window, as MangoHud on Linux
+        env['MTL_HUD_ENABLED'] = '1' if s.get('metal_hud') else '0'
     # The launcher's patch selection is the whole list (run.py, patches.py).
     title_id, profile = game_profile_of(meta_folder(s['game_dir'], s.get('update_dir')))
     chosen = s.get('game_patches', {}).get(title_id) if title_id else None
@@ -873,6 +932,16 @@ RESOLUTION_CHOICES = [(name, (graphics_options.resolution_label(name),)) for nam
 ENGINE_FPS_CHOICES = [('60', ('60 (original)',)), ('120', ('120',)), ('240', ('240',))]
 
 
+def upscaling_note(upscale, resolution, screen_height):
+    """A Mac's note under the upscaler when it has nothing to enlarge: upscaling on at Native (1080p)
+    on a screen no taller than that. Every render resolution smaller than the window is enlarged;
+    screen_height is in the units of the game's window (Tk's points: the window is not high density)."""
+    if upscale and resolution == 'native' and 0 < screen_height <= 1080:
+        return _('Render resolution is Native (1080p), as tall as this screen: there is nothing to enlarge. '
+                 'Every lower render resolution is enlarged:')
+    return ''
+
+
 def window_icon(root, tk, game_icon, own_icon, ico_file):
     """The launcher window's icon: the game's (icon0.png) when the game is set, else the port's own.
     Windows gets an .ico made with Pillow (ico_file); without Pillow, Tk reads the PNG itself.
@@ -916,7 +985,7 @@ class Launcher:
         self.ui_calls = queue.Queue()  # work for the Tk thread from helper threads
         self.mod_order, self.mod_vars, self.patch_vars = [], {}, {}
         self.pending_update = None  # (version, url, page) once offered
-        root.title(f'{APP_NAME} (PC)')
+        root.title(f'{APP_NAME} ({PLATFORM})')
         if sys.platform == 'win32':
             try:  # the taskbar shows this window's icon, not Python's
                 import ctypes
@@ -949,7 +1018,7 @@ class Launcher:
         root.protocol('WM_DELETE_WINDOW', self.close)
         root.after(100, self.drain_output)
         root.after(500, self.watch_changes)
-        if WINDOWS and self.app.get('check_updates', True):
+        if (WINDOWS or MACOS) and self.app.get('check_updates', True):
             threading.Thread(target=self.check_update, daemon=True).start()
 
     def meta_dir(self):
@@ -1201,8 +1270,8 @@ class Launcher:
             self.nav[name] = item
         tk.Frame(side, bg=BG).pack(fill='both', expand=True)
         self.update_box = None
-        self.side_note = tk.Label(side, text=_('In the game: Insert or R3+L2\nopens the port\'s menu.',
-                                               'В игре: Insert или R3+L2\nоткрывает меню порта.'),
+        self.side_note = tk.Label(side, text=menu_key(_('In the game: Insert or R3+L2\nopens the port\'s menu.',
+                                                        'В игре: Insert или R3+L2\nоткрывает меню порта.')),
                                   bg=BG, fg=MUTED, font=(UI_FONT, 9), justify='left', wraplength=self.px(210))
         self.side_note.pack(anchor='w', padx=22, pady=(0, 4))
         tk.Label(side, text=f'v{VERSION}', bg=BG, fg=MUTED, font=(UI_FONT, 9)).pack(anchor='w', padx=22, pady=(0, 18))
@@ -1270,6 +1339,10 @@ class Launcher:
             r, c = 2 + index // 2, (index % 2) * 2
             ttk.Label(quick, text=title).grid(row=r, column=c, sticky='w', pady=6, padx=(0, 12))
             self.choice(quick, key, 'ini', options, width=18).grid(row=r, column=c + 1, sticky='w', padx=(0, 40))
+        if MACOS:  # where the same settings are, with the Mac's upscaling beside them
+            ttk.Label(quick, text=_('The same settings as on the Graphics and Performance pages: a change here is '
+                                    'a change there.'), style='Muted.TLabel').grid(row=4, column=0, columnspan=4,
+                                                                                 sticky='w', pady=(4, 0))
 
     def draw_banner(self):
         """The cover art of the selected dump (sce_sys/pic1.png) under the title."""
@@ -1352,20 +1425,73 @@ class Launcher:
         self.check(f, 'vsync', 'ini', _('VSync'), _('Off allows tearing for the lowest latency.'))
         self.check(f, 'hdr', 'app', _('Allow HDR output', 'Разрешить HDR'),
                    _('When HDR is on in Windows and the display supports it.',
-                     'Если HDR включён в Windows и монитор его поддерживает.'))
+                     'Если HDR включён в Windows и монитор его поддерживает.') if WINDOWS
+                   else _('When the display supports HDR.', 'Если монитор поддерживает HDR.'))
+        if MACOS:
+            self.build_mac_upscaling(f)
         self.section(f, _('Textures'))
         self.row(f, _('Anisotropic filtering'), self.choice(f, 'anisotropy', 'ini', ANISOTROPY),
                  _('Sharper floors and walls seen at an angle, at little cost on most graphics cards.'),
                  restart=True)
         self.section(f, _('Overlay'))
         self.check(f, 'show_fps', 'ini', _('Show performance overlay'),
-                   _('Items, size and corner: in-game menu (Insert / R3+L2) > Overlay.'))
+                   menu_key(_('Its upscaler item says what enlarges the image, such as "MetalFX 720p->1080p", '
+                              'or "Native 1080p" without upscaling. Items, size and corner: in-game menu '
+                              '(Insert / R3+L2) > Overlay.') if MACOS else
+                            _('Items, size and corner: in-game menu (Insert / R3+L2) > Overlay.')))
         self.section(f, _('Screenshots'))
         shots = self.ttk.Button(f, text=_('Open the screenshots folder'),
                            command=lambda: self.open_path(
                                Path(self.var('user_dir', 'app').get() or DATA_DIR / 'user') / 'screenshots'))
         self.row(f, _('F12 in the game'), shots,
                  _("Saves the game's image, without the overlay, as a PNG in the screenshots folder of the saves."))
+
+    def build_mac_upscaling(self, f):
+        """A Mac's upscaling to the window, with the experimental CPU saving the user put beside it:
+        FSR 1 or Apple's MetalFX enlarges a smaller render resolution (the other systems' menus left
+        FSR 1 out in 2.2.0)."""
+        ttk = self.ttk
+        self.section(f, _('Upscaling'))
+        upscale, resolution = self.var('fsr1', 'ini'), self.var('render_resolution', 'ini')
+        self.check(f, 'fsr1', 'ini', _('Upscale to the window'),
+                   _('Enlarges every game image smaller than the window: with Render resolution 720p or 480p '
+                     '(Home or Performance) it raises the FPS; at the size of the window it does nothing.'))
+        box = self.choice(f, 'screen_upscaler', 'ini', SCREEN_UPSCALERS)
+        self.row(f, _('Upscaler'), box,
+                 _('FSR 1 (AMD) or MetalFX (Apple, on the GPU through Metal): both enlarge the finished image, '
+                   'and MetalFX also sharpens it. Where MetalFX cannot run, the game uses FSR 1.'))
+        # As in the in-game menu: the choice counts only with upscaling on.
+        enable = lambda *_a: box.configure(state='readonly' if upscale.get() else 'disabled')
+        upscale.trace_add('write', enable)
+        enable()
+        # Under the upscaler: nothing to enlarge at this render resolution, and the lower ones.
+        note = ttk.Frame(f)
+        note.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(8, 2))
+        text = ttk.Label(note, style='Warning.TLabel', wraplength=self.px(420), justify='left')
+        text.pack(side='left')
+        for value in ('720p', '480p'):
+            ttk.Button(note, text=value, width=6, command=lambda v=value: resolution.set(v)).pack(
+                side='left', padx=(10, 0))
+
+        def explain(*_args):
+            message = upscaling_note(upscale.get(), resolution.get(), self.root.winfo_screenheight())
+            text.configure(text=message)
+            (note.grid if message else note.grid_remove)()
+        upscale.trace_add('write', explain)
+        resolution.trace_add('write', explain)
+        explain()
+        self.fewer_gpu_waits_switch(f)
+
+    def fewer_gpu_waits_switch(self, f):
+        """Fewer GPU waits (texture_cache.h): greyed out without the readback mode it builds on."""
+        waits = self.check(f, 'fewer_gpu_waits', 'ini', _('Fewer GPU waits (experimental)'),
+                           _('The game keeps preparing draws while small images are read back for it, instead '
+                             'of stopping each time: less CPU load, and more FPS where the CPU limits it. Needs '
+                             '"Game reads GPU data without waiting" (Performance).'), restart=True)
+        stale = self.var('stale_readback', 'ini')
+        follow = lambda *_a: waits.configure(state='normal' if stale.get() else 'disabled')
+        stale.trace_add('write', follow)
+        follow()
 
     def build_performance(self):
         f = self.scrolled_page('performance', _('Performance'), _('Frame rate and speed options.'))
@@ -1393,18 +1519,22 @@ class Launcher:
                    _('Loading screen only: builds the cached pipelines on several CPU threads.'))
         self.section(f, _('GPU data'))
         gpus = list_gpus()
-        cards = [('', ('Automatic',))] + [(row[0], (row[1],)) for row in gpus]
-        self.row(f, _('Graphics card'), self.choice(f, 'gpu_id', 'app', cards),
-                 _('The GPU the game runs on. Choose your dedicated card if the game uses the integrated one.'),
-                 restart=True)
-        self.row(f, _('Stream buffer memory'), self.choice(f, 'stream_memory', 'app', STREAM_MEMORY),
-                 _('System RAM can improve FPS on NVIDIA laptops. Choose GPU memory to restore the previous '
-                   'behavior. Applies on the next game launch.'), restart=True)
+        # A Mac has one GPU, sharing the system's memory: no card to choose, no memory to place data in.
+        if not MACOS:
+            cards = [('', ('Automatic',))] + [(row[0], (row[1],)) for row in gpus]
+            self.row(f, _('Graphics card'), self.choice(f, 'gpu_id', 'app', cards),
+                     _('The GPU the game runs on. Choose your dedicated card if the game uses the integrated one.'),
+                     restart=True)
+            self.row(f, _('Stream buffer memory'), self.choice(f, 'stream_memory', 'app', STREAM_MEMORY),
+                     _('System RAM can improve FPS on NVIDIA laptops. Choose GPU memory to restore the previous '
+                       'behavior. Applies on the next game launch.'), restart=True)
         self.check(f, 'stale_readback', 'ini', _('Game reads GPU data without waiting (big FPS gain)'),
                    _('About 40 to 66 FPS in a heavy scene. Needs deferred GPU readbacks. Switch it off if lighting '
                      'or objects look wrong.'), restart=True)
         self.check(f, 'deferred_readback', 'ini', _('Deferred GPU readbacks'),
                    _('Fewer waits for the GPU. Switch it off if textures or shadows look wrong.'), restart=True)
+        if not MACOS:  # a Mac has it beside its upscaling (Graphics)
+            self.fewer_gpu_waits_switch(f)
         self.check(f, 'partial_height_views', 'app', _('Fast screen effects (Rage of Sparta, weapons)'),
                    _('Keeps powers and weapon effects at full FPS. Switch it off if a screen effect '
                      '(blur, distortion, the color change of a power) looks stretched, shifted or wrong.'),
@@ -1636,11 +1766,11 @@ class Launcher:
                 box = ttk.Label(table, text=fixed, style='Muted.TLabel')
             box.grid(row=r, column=4, sticky='w')
             self.draw_pad_icon(button)
-        self.note(f, _('Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, '
-                       'Backspace, Up, Down, Left, Right, F1 to F12. A name the game does not know keeps the default '
-                       '(the log says which). L2/R2 on the gamepad stay on the triggers. Touchpad right opens the '
-                       'game\'s pause menu; Touchpad left (photo mode) is L1 + Touchpad right on the gamepad. Insert '
-                       'and R3+L2 always open the port\'s menu. Applied when the game starts.'))
+        self.note(f, menu_key(_('Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, '
+                                'Backspace, Up, Down, Left, Right, F1 to F12. A name the game does not know keeps the default '
+                                '(the log says which). L2/R2 on the gamepad stay on the triggers. Touchpad right opens the '
+                                'game\'s pause menu; Touchpad left (photo mode) is L1 + Touchpad right on the gamepad. Insert '
+                                'and R3+L2 always open the port\'s menu. Applied when the game starts.')))
         self.ttk.Button(f, text=_('Reset to defaults'), command=self.reset_controls).grid(
             row=self.next_row(f), column=0, sticky='w', pady=(14, 0))
 
@@ -1687,6 +1817,13 @@ class Launcher:
             if not tools[name]:
                 box.configure(state='disabled')
 
+    def build_macos_options(self, f):
+        """Apple's Metal performance HUD, the counterpart of the MangoHud switch on Linux."""
+        self.section(f, _('macOS'), top=4)
+        self.check(f, 'metal_hud', 'app', _('Metal performance HUD'),
+                   _("Apple's overlay on the game window: frame rate, frame times and memory, measured by Metal "
+                     'itself.'), restart=True)
+
     def build_advanced(self):
         tk, ttk = self.tk, self.ttk
         f = self.scrolled_page('advanced', _('Advanced', 'Дополнительно'),
@@ -1698,20 +1835,23 @@ class Launcher:
                    _('Shows only the game name and the time played on your Discord profile.',
                      'Показывает в профиле Discord только название игры и время в игре.'))
         self.check(f, 'close_on_play', 'app', _('Close the launcher when the game starts', 'Закрывать лаунчер при запуске игры'))
-        if WINDOWS:
+        if WINDOWS or MACOS:  # the Windows zip installs itself; a Mac downloads the new disk image
             self.check(f, 'check_updates', 'app', _('Check for updates when the launcher opens',
                                                     'Проверять обновления при открытии лаунчера'))
         holder = ttk.Frame(f)
         holder.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(10, 0))
-        if WINDOWS:
+        if WINDOWS or MACOS:
             ttk.Button(holder, text=_('Check for updates', 'Проверить обновления'),
                        command=lambda: threading.Thread(target=self.check_update, args=(True,), daemon=True).start()
                        ).pack(side='left')
-        ttk.Button(holder, text=_('Desktop shortcut', 'Ярлык на рабочем столе'), command=self.shortcut).pack(side='left', padx=6)
+        if not (MACOS and FROZEN):  # the macOS application is its own shortcut (Dock, Launchpad)
+            ttk.Button(holder, text=_('Desktop shortcut', 'Ярлык на рабочем столе'), command=self.shortcut).pack(side='left', padx=6)
         ttk.Button(holder, text=_('Add to Steam'), command=self.add_to_steam).pack(side='left')
         ttk.Label(holder, text=f'v{VERSION}', style='Muted.TLabel').pack(side='left', padx=10)
-        if not WINDOWS:
+        if LINUX:
             self.build_linux_options(f)
+        elif MACOS:
+            self.build_macos_options(f)
         self.section(f, _('Files'))
         holder = ttk.Frame(f)
         holder.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(6, 0))
@@ -1773,7 +1913,7 @@ class Launcher:
         folder = self.meta_dir()
         info = game_info(folder)
         title = info[0] if info else APP_NAME
-        self.root.title(f'{title} (PC)')
+        self.root.title(f'{title} ({PLATFORM})')
         self.side_title.configure(text=heading_text(title.upper(), every_language=True))
         if self.current_page == 'game':
             self.refresh_game_patches()
@@ -1795,7 +1935,11 @@ class Launcher:
         self.store_game_patches()
         title_id, _profile = game_profile_of(self.meta_dir())
         names = self.app.get('game_patches', {}).get(title_id) or []
-        resolution = dict((v, _(*t)) for v, t in self.resolution_options()).get(self.var('render_resolution', 'ini').get(), '?')
+        chosen = self.var('render_resolution', 'ini').get()
+        resolution = dict((v, _(*t)) for v, t in self.resolution_options()).get(chosen, '?')
+        if MACOS and self.var('fsr1', 'ini').get() and chosen in ('480p', '720p'):  # what enlarges it
+            upscaler = self.var('screen_upscaler', 'ini').get()
+            resolution += ' → ' + dict(SCREEN_UPSCALERS).get(upscaler, ('FSR 1',))[0]
         from patches import game_patchable, patch_status
         if not game_patchable(self.meta_dir()):
             return _('{} · 60 FPS engine · no patches for this game').format(resolution)
@@ -2202,8 +2346,8 @@ class Launcher:
         if WINDOWS:
             os.startfile(str(path))
         else:
-            subprocess.Popen(['xdg-open', str(path)], env=host_environment(), stdin=subprocess.DEVNULL,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(['open' if MACOS else 'xdg-open', str(path)], env=host_environment(),
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     # ---- updates -------------------------------------------------------------------------------
     def check_update(self, manual=False):
@@ -2211,7 +2355,10 @@ class Launcher:
         try:
             version, url, page = latest_release()
         except (OSError, ValueError, KeyError) as failure:
-            if manual:
+            if manual and getattr(failure, 'code', None) == 404:  # a repository with no release yet
+                self.ui_calls.put(lambda: self.messagebox.showinfo(
+                    APP_NAME, _('No release has been published yet: {}').format(RELEASES_PAGE)))
+            elif manual:
                 self.ui_calls.put(lambda error=failure: self.messagebox.showerror(
                     APP_NAME, _('Could not check for updates: {}', 'Не удалось проверить обновления: {}').format(error)))
             return
@@ -2235,7 +2382,7 @@ class Launcher:
         self.update_label.pack(anchor='w', padx=10, pady=(8, 6))
         buttons = tk.Frame(box, bg=CARD)
         buttons.pack(fill='x', padx=10, pady=(0, 10))
-        self.update_button = ttk.Button(buttons, text=_('Update', 'Обновить'),
+        self.update_button = ttk.Button(buttons, text=_('Download', 'Скачать') if MACOS else _('Update', 'Обновить'),
                                         command=lambda: self.install_update(version, url, page))
         self.update_button.pack(fill='x')
         ttk.Button(buttons, text=_("What's new", 'Что нового'), command=lambda: open_url(page)).pack(
@@ -2247,6 +2394,9 @@ class Launcher:
             self.status.configure(text=text, fg=TEXT)
 
     def install_update(self, version, url, page):
+        if MACOS and FROZEN and url:  # the browser downloads the disk image; it replaces the application
+            open_url(url)
+            return
         if self.process:
             self.messagebox.showinfo(APP_NAME, _('Close the game before updating.', 'Закройте игру перед обновлением.'))
             return
@@ -2309,7 +2459,11 @@ class Launcher:
                                                  'минут будет подтормаживать, пока кэш собирается заново.'))
 
     def shortcut(self):
-        """God of War III.lnk on the desktop (a .desktop entry in the menu and on the desktop on Linux)."""
+        """God of War III.lnk on the desktop (a .desktop entry in the menu and on the desktop on Linux,
+        an application bundle on the macOS desktop)."""
+        if MACOS:
+            self.macos_shortcut()
+            return
         if not WINDOWS:
             self.linux_shortcut()
             return
@@ -2329,6 +2483,36 @@ class Launcher:
             self.messagebox.showinfo(APP_NAME, _('Shortcut created on the desktop.', 'Ярлык создан на рабочем столе.'))
         else:
             self.messagebox.showerror(APP_NAME, result.stderr.decode(errors='replace')[:400])
+
+    def macos_shortcut(self):
+        """God of War III.app on the desktop: a bundle whose program starts this launcher."""
+        app = Path.home() / 'Desktop' / 'God of War III.app'
+        launcher = [sys.executable] if FROZEN else [sys.executable, str(Path(__file__).resolve())]
+        try:
+            (app / 'Contents' / 'MacOS').mkdir(parents=True, exist_ok=True)
+            (app / 'Contents' / 'Resources').mkdir(parents=True, exist_ok=True)
+            program = app / 'Contents' / 'MacOS' / 'gow3'
+            program.write_text(f'#!/bin/sh\ncd {shlex.quote(str(PORT_DIR))}\nexec {shlex.join(launcher)} "$@"\n',
+                               encoding='utf-8')
+            program.chmod(0o755)
+            # sips writes the icon (a missing icon only leaves the generic one).
+            subprocess.run(['sips', '-s', 'format', 'icns', str(PORT_DIR / 'launcher' / 'gow3.png'),
+                            '--out', str(app / 'Contents' / 'Resources' / 'gow3.icns')], capture_output=True)
+            (app / 'Contents' / 'Info.plist').write_text(
+                '<?xml version="1.0" encoding="UTF-8"?>\n'
+                '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+                '<plist version="1.0"><dict>\n'
+                '<key>CFBundleName</key><string>God of War III</string>\n'
+                '<key>CFBundleIdentifier</key><string>pc.gow3.launcher</string>\n'
+                '<key>CFBundleExecutable</key><string>gow3</string>\n'
+                '<key>CFBundleIconFile</key><string>gow3</string>\n'
+                '<key>CFBundlePackageType</key><string>APPL</string>\n'
+                '<key>LSMinimumSystemVersion</key><string>26.0</string>\n'
+                '</dict></plist>\n', encoding='utf-8')
+        except OSError as error:
+            self.messagebox.showerror(APP_NAME, str(error))
+            return
+        self.messagebox.showinfo(APP_NAME, _('Shortcut created:', 'Ярлык создан:') + '\n' + str(app))
 
     def linux_shortcut(self):
         launcher = os.environ.get('APPIMAGE') or (sys.executable if FROZEN else '')
@@ -2501,14 +2685,14 @@ def version_tuple(text):
 
 
 def latest_release():
-    """(version, zip URL, page URL) of the newest GitHub release."""
+    """(version, download URL, page URL) of the newest GitHub release."""
     request = urllib.request.Request(RELEASES_API, headers={'Accept': 'application/vnd.github+json',
                                                             'User-Agent': 'gow3-launcher'})
     with urllib.request.urlopen(request, timeout=15) as response:
         release = json.load(response)
     version = '.'.join(re.findall(r'\d+', release['tag_name']))
     url = next((asset['browser_download_url'] for asset in release.get('assets', [])
-                if asset.get('name', '').lower().endswith('.zip')), None)
+                if asset.get('name', '').lower().endswith(RELEASE_ASSET)), None)
     return version, url, release.get('html_url') or RELEASES_PAGE
 
 
@@ -2546,7 +2730,7 @@ def main():
         sys.exit(run_role(args))
     settings = {**APP_DEFAULTS, **load_json(CONFIG_FILE, {})}
     LANG = settings.get('ui_language') or windows_language()
-    if not WINDOWS:
+    if LINUX:
         integrate_desktop(settings.get('desktop_integration', True), os.environ.get('APPIMAGE'),
                           PORT_DIR / 'launcher' / 'gow3.png', DATA_DIR)
     if WINDOWS and args[:1] == ['--install-update'] and len(args) == 3:

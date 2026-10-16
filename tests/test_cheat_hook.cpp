@@ -4,7 +4,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <initializer_list>
+#ifdef _WIN32
 #include <windows.h>
+#else
+#include <sys/mman.h>
+#endif
 #include "../src/cheat_hook.h"
 
 static int read_difficulty(void* entry, unsigned completed) {
@@ -22,7 +26,9 @@ static int jump_blocked(void* entry, void* actor) {
 }
 
 int main() {
+#ifdef _WIN32
     _set_error_mode(_OUT_TO_STDERR);
+#endif
     const Gow3CheatHook* unlock = nullptr;
     for (const auto& hook : gow3_cheat_hooks) {
         if (hook.offset == 0xc77ea) unlock = &hook;
@@ -35,8 +41,14 @@ int main() {
         0x83,0xe1,1,0xff,0xc9,0x89,0xc8,0xc3
     };
     assert(gow3_cheat_signature_match(unlock, tail, sizeof(tail)));
+#ifdef _WIN32
     auto* memory = static_cast<unsigned char*>(VirtualAlloc(nullptr,4096,MEM_COMMIT|MEM_RESERVE,PAGE_EXECUTE_READWRITE));
     assert(memory);
+#else
+    void* page = mmap(nullptr,4096,PROT_READ|PROT_WRITE|PROT_EXEC,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+    assert(page != MAP_FAILED);
+    auto* memory = static_cast<unsigned char*>(page);
+#endif
     std::memcpy(memory+512,tail,sizeof(tail));
     unsigned char enabled=0;
     gow3_cheat_build_stub(memory,unlock,reinterpret_cast<uintptr_t>(&enabled),reinterpret_cast<uintptr_t>(memory+512+unlock->length));
@@ -71,6 +83,10 @@ int main() {
         assert(jump_blocked(memory,actor)==int((flags&4)!=0));
         unsigned after;std::memcpy(&after,actor+0x4ac,4);assert(after==flags);
     }
+#ifdef _WIN32
     VirtualFree(memory,0,MEM_RELEASE);
+#else
+    munmap(memory,4096);
+#endif
     std::puts("PASS: live cheat hooks");
 }

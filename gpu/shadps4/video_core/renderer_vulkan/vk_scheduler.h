@@ -68,14 +68,18 @@ static_assert(std::has_unique_object_representations_v<RenderState>);
 struct SubmitInfo {
     std::array<vk::Semaphore, 4> wait_semas;
     std::array<u64, 4> wait_ticks;
+    /// gow3: the stages a wait blocks. None: by its position among such waits (all commands,
+    /// then color attachment output), as before; MetalFX's wait gives all commands.
+    std::array<vk::PipelineStageFlags, 4> wait_stages;
     std::array<vk::Semaphore, 4> signal_semas;
     std::array<u64, 4> signal_ticks;
     vk::Fence fence;
     u32 num_wait_semas;
     u32 num_signal_semas;
 
-    void AddWait(vk::Semaphore semaphore, u64 tick = 1) {
+    void AddWait(vk::Semaphore semaphore, u64 tick = 1, vk::PipelineStageFlags stages = {}) {
         wait_semas[num_wait_semas] = semaphore;
+        wait_stages[num_wait_semas] = stages;
         wait_ticks[num_wait_semas++] = tick;
     }
 

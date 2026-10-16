@@ -434,6 +434,10 @@ bool Instance::CreateDevice() {
         compute_shader_derivatives_features =
             feature_chain.get<vk::PhysicalDeviceComputeShaderDerivativesFeaturesKHR>();
     }
+#ifdef __APPLE__
+    // gow3 (macOS): MetalFX reads and writes images whose memory is exported as MTLHeaps.
+    external_memory_metal = add_extension("VK_EXT_external_memory_metal");
+#endif
     shader_clock = add_extension(VK_KHR_SHADER_CLOCK_EXTENSION_NAME);
     if (shader_clock) {
         shader_clock_features = feature_chain.get<vk::PhysicalDeviceShaderClockFeaturesKHR>();

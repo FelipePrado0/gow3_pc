@@ -29,6 +29,8 @@
 #include "video_core/texture_cache/image_view.h"
 #include "video_core/texture_cache/texture_cache.h"
 
+#include <vk_mem_alloc.h>
+
 namespace Vulkan {
 
 static Shader::PushData MakeUserData(const AmdGpu::Regs& regs) {
@@ -408,6 +410,196 @@ bool Rasterizer::OnStageA() const {
 namespace {
 /// Stage A: cycles waited per drain site (GOW3_FRAME_STATS), keyed by function name and line.
 std::unordered_map<const char*, std::unordered_map<u32, u64>> drain_sites;
+
+/// gow3 (debug): GOW3_CAPTURE_DUMP=<hex address>@<pass>[,...]: while a frame is captured
+/// (GOW3_CAPTURE_TRIGGER), the image at <address> is written as it is before pass <pass> of the
+/// capture begins, to GOW3_DUMP_DIR (default out/dump) as raw texels,
+/// pass<pass>_<address>_<w>x<h>x<d>_<format>.raw: multisampled color resolved, every slice of a
+/// 3D image, the depth aspect of depth images (not multisampled ones).
+void DumpCaptureImages(const Instance& instance, Scheduler& scheduler, Runtime& runtime,
+                       VideoCore::TextureCache& texture_cache, u32 pass) {
+    static const auto requests = [] {
+        std::vector<std::pair<VAddr, u32>> list;
+        const char* p = std::getenv("GOW3_CAPTURE_DUMP");
+        while (p && *p) {
+            char* end{};
+            const VAddr address = std::strtoull(p, &end, 16);
+            if (*end != '@') {
+                break;
+            }
+            list.emplace_back(address, u32(std::strtoul(end + 1, &end, 10)));
+            p = *end == ',' ? end + 1 : nullptr;
+        }
+        return list;
+    }();
+    static const std::string dir = [] {
+        const char* env = std::getenv("GOW3_DUMP_DIR");
+        return std::string{env && env[0] ? env : "out/dump"};
+    }();
+    for (const auto& [address, index] : requests) {
+        if (index != pass) {
+            continue;
+        }
+        VideoCore::Image* found = nullptr;
+        texture_cache.ForEachImageInRegion(address, 1,
+                                           [&](VideoCore::ImageId, VideoCore::Image& image) {
+                                               if (image.info.guest_address == address && !found) {
+                                                   found = &image;
+                                               }
+                                           });
+        if (!found) {
+            std::printf("Capture dump: no image at %#llx before pass %u\n",
+                        static_cast<unsigned long long>(address), pass);
+            continue;
+        }
+        auto& image = *found;
+        const auto& info = image.info;
+        u32 bytes = 0;
+        switch (info.pixel_format) {
+        case vk::Format::eR8Unorm:
+            bytes = 1;
+            break;
+        case vk::Format::eR16G16B16A16Sfloat:
+            bytes = 8;
+            break;
+        case vk::Format::eR8G8B8A8Unorm:
+        case vk::Format::eR8G8B8A8Srgb:
+        case vk::Format::eB8G8R8A8Unorm:
+        case vk::Format::eB8G8R8A8Srgb:
+        case vk::Format::eA2B10G10R10UnormPack32:
+        case vk::Format::eB10G11R11UfloatPack32:
+        case vk::Format::eR16G16Sfloat:
+        case vk::Format::eR32Sfloat:
+        case vk::Format::eD32Sfloat:
+        case vk::Format::eD32SfloatS8Uint:
+            bytes = 4;
+            break;
+        default:
+            break;
+        }
+        if (bytes && image.backing->num_samples > 1 && info.num_samples == 1 &&
+            !info.props.is_depth) {
+            // A multisampled backing of a single-sampled guest image: converted as sampling
+            // the image would convert it (Image::FindView).
+            std::printf("Capture dump: %#llx has a %u-sample backing; converting\n",
+                        static_cast<unsigned long long>(address), image.backing->num_samples);
+            runtime.SetBackingSamples(&image, info.num_samples);
+        }
+        const bool resolve = image.backing->num_samples > 1 && !info.props.is_depth;
+        if (!bytes || (image.backing->num_samples > 1 && !resolve)) {
+            std::printf("Capture dump: %#llx %s, %u samples: not dumped\n",
+                        static_cast<unsigned long long>(address),
+                        vk::to_string(info.pixel_format).c_str(), image.backing->num_samples);
+            continue;
+        }
+        const u32 width = info.size.width, height = info.size.height;
+        const u32 depth = info.type == AmdGpu::ImageType::Color3D ? info.size.depth : 1;
+        // A multisampled color image is resolved into a temporary image first.
+        VkImage resolved_image{};
+        VmaAllocation resolved_allocation{};
+        if (resolve) {
+            const VkImageCreateInfo resolved_ci{
+                .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+                .imageType = VK_IMAGE_TYPE_2D,
+                .format = static_cast<VkFormat>(info.pixel_format),
+                .extent = {width, height, 1},
+                .mipLevels = 1,
+                .arrayLayers = 1,
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .tiling = VK_IMAGE_TILING_OPTIMAL,
+                .usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            };
+            const VmaAllocationCreateInfo resolved_alloc_ci{.usage = VMA_MEMORY_USAGE_AUTO};
+            if (vmaCreateImage(instance.GetAllocator(), &resolved_ci, &resolved_alloc_ci,
+                               &resolved_image, &resolved_allocation, nullptr) != VK_SUCCESS) {
+                continue;
+            }
+        }
+        const VkBufferCreateInfo buffer_ci{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                                           .size = VkDeviceSize(width) * height * depth * bytes,
+                                           .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT};
+        const VmaAllocationCreateInfo alloc_ci{
+            .flags =
+                VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
+            .usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST};
+        VkBuffer buffer{};
+        VmaAllocation allocation{};
+        VmaAllocationInfo allocation_info{};
+        if (vmaCreateBuffer(instance.GetAllocator(), &buffer_ci, &alloc_ci, &buffer, &allocation,
+                            &allocation_info) != VK_SUCCESS) {
+            continue;
+        }
+        scheduler.EndRendering();
+        if (runtime.Transit(&image, vk::ImageLayout::eTransferSrcOptimal,
+                            vk::PipelineStageFlagBits2::eCopy,
+                            vk::AccessFlagBits2::eTransferRead)) {
+            runtime.FlushBarriers();
+        }
+        const auto aspect = info.props.is_depth ? vk::ImageAspectFlagBits::eDepth
+                                                : vk::ImageAspectFlagBits::eColor;
+        scheduler.Record([src = image.GetImage(), buffer, width, height, depth, aspect,
+                          resolved = vk::Image{resolved_image}](vk::CommandBuffer cmdbuf) {
+            vk::Image copy_src = src;
+            if (resolved) {
+                const vk::ImageSubresourceRange range{aspect, 0, 1, 0, 1};
+                const vk::ImageMemoryBarrier2 to_dst{
+                    .srcStageMask = vk::PipelineStageFlagBits2::eAllCommands,
+                    .dstStageMask = vk::PipelineStageFlagBits2::eResolve,
+                    .dstAccessMask = vk::AccessFlagBits2::eTransferWrite,
+                    .oldLayout = vk::ImageLayout::eUndefined,
+                    .newLayout = vk::ImageLayout::eTransferDstOptimal,
+                    .image = resolved,
+                    .subresourceRange = range,
+                };
+                cmdbuf.pipelineBarrier2(
+                    {.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &to_dst});
+                cmdbuf.resolveImage(src, vk::ImageLayout::eTransferSrcOptimal, resolved,
+                                    vk::ImageLayout::eTransferDstOptimal,
+                                    vk::ImageResolve{.srcSubresource = {aspect, 0, 0, 1},
+                                                     .dstSubresource = {aspect, 0, 0, 1},
+                                                     .extent = {width, height, 1}});
+                const vk::ImageMemoryBarrier2 to_src{
+                    .srcStageMask = vk::PipelineStageFlagBits2::eResolve,
+                    .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
+                    .dstStageMask = vk::PipelineStageFlagBits2::eCopy,
+                    .dstAccessMask = vk::AccessFlagBits2::eTransferRead,
+                    .oldLayout = vk::ImageLayout::eTransferDstOptimal,
+                    .newLayout = vk::ImageLayout::eTransferSrcOptimal,
+                    .image = resolved,
+                    .subresourceRange = range,
+                };
+                cmdbuf.pipelineBarrier2(
+                    {.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &to_src});
+                copy_src = resolved;
+            }
+            cmdbuf.copyImageToBuffer(copy_src, vk::ImageLayout::eTransferSrcOptimal, buffer,
+                                     vk::BufferImageCopy{.imageSubresource = {aspect, 0, 0, 1},
+                                                         .imageExtent = {width, height, depth}});
+        });
+        if (resolved_image) {
+            scheduler.DeferOperation([allocator = instance.GetAllocator(), resolved_image,
+                                      resolved_allocation] {
+                vmaDestroyImage(allocator, resolved_image, resolved_allocation);
+            });
+        }
+        char path[512];
+        std::snprintf(path, sizeof(path), "%s/pass%03u_%llx_%ux%ux%u_%s.raw", dir.c_str(), pass,
+                      static_cast<unsigned long long>(address), width, height, depth,
+                      vk::to_string(info.pixel_format).c_str());
+        std::printf("Capture dump: %s\n", path);
+        scheduler.DeferPriorityOperation([allocator = instance.GetAllocator(), buffer, allocation,
+                                          allocation_info, size = buffer_ci.size,
+                                          file = std::string{path}] {
+            vmaInvalidateAllocation(allocator, allocation, 0, VK_WHOLE_SIZE);
+            if (FILE* f = std::fopen(file.c_str(), "wb")) {
+                std::fwrite(allocation_info.pMappedData, 1, size, f);
+                std::fclose(f);
+            }
+            vmaDestroyBuffer(allocator, buffer, allocation);
+        });
+    }
+}
 } // namespace
 
 void Rasterizer::DrainDrawPipe(u32 reason, u32 line, const char* function) {
@@ -3097,6 +3289,9 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
         census.area = {state.width, state.height};
         FrameCapture::BeginPass(colors.data(), state.num_color_attachments, depth,
                                 PassCensus::Format(census));
+        if (const int pass = FrameCapture::NewPassIndex(); pass >= 0) {
+            DumpCaptureImages(instance, scheduler, runtime, texture_cache, u32(pass));
+        }
         diag_targets.clear();
         for (u32 cb = 0; cb < state.num_color_attachments; ++cb) {
             if (cb_descs[cb].first) {

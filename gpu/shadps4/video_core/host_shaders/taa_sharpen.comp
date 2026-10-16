@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // RCAS on the resolved scene only. The unsharpened history and HUD are untouched.
 // Strength 0..2: above 1 the RCAS change is extrapolated (stronger than AMD's maximum). The
-// same pass sharpens FSR 3/4 output beyond their own RCAS (LDR_OUTPUT: the 8-bit UI image).
+// same pass sharpens FSR 3/4 output beyond their own RCAS (LDR_OUTPUT: the 8-bit UI image), and
+// copies MetalFX's RGBA16F output (HALF_INPUT), which has no sharpening of its own.
 #version 450
 #extension GL_GOOGLE_include_directive : require
 layout(local_size_x = 8, local_size_y = 8) in;
+#ifdef HALF_INPUT
+layout(binding = 0, rgba16f) uniform readonly image2D resolved_img;
+#else
 layout(binding = 0, rgba32f) uniform readonly image2D resolved_img;
+#endif
 #ifdef LDR_OUTPUT
 layout(binding = 1, rgba8) uniform writeonly image2D result_img;
 #else

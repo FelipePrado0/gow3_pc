@@ -5,6 +5,10 @@
 #ifdef _WIN32
 #define setenv(name, value, overwrite) _putenv_s(name, value)
 #endif
+#ifdef __APPLE__
+/* usleep wakes up to a third late on macOS (timer coalescing); the click window is 50 ms. */
+#define usleep(us) compat_sleep_ns((uint64_t)(us) * 1000)
+#endif
 
 static int capture;
 static int vibration_percent=100;

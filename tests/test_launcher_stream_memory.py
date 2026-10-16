@@ -62,7 +62,9 @@ class StreamMemoryLauncherTest(unittest.TestCase):
             self.skipTest(f'Tk display unavailable: {error}')
         root.withdraw()
         self.addCleanup(root.destroy)
+        # The page as Windows and Linux build it (a Mac has no stream memory to choose).
         with tempfile.TemporaryDirectory() as folder, \
+                mock.patch.object(launcher, 'MACOS', False), \
                 mock.patch.object(launcher, 'CONFIG_DIR', Path(folder)), \
                 mock.patch.object(launcher, 'CONFIG_FILE', Path(folder) / 'settings.json'), \
                 mock.patch.dict(os.environ, {'GOW3_CONFIG': str(Path(folder) / 'gow3.ini')}):

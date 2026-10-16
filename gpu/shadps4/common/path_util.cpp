@@ -92,8 +92,9 @@ static auto UserPaths = [] {
         // If it doesn't exist, use the standard path for the platform instead.
         // NOTE: On Windows we currently just create the portable directory instead.
 #ifdef __APPLE__
-        user_dir =
-            std::filesystem::path(getenv("HOME")) / "Library" / "Application Support" / "shadPS4";
+        // gow3: never shadPS4's ~/Library/Application Support folder (an installed shadPS4 owns
+        // it): the portable folder is created here, as on Windows (run.py sets GOW3_GPU_USER_DIR).
+        std::filesystem::create_directories(user_dir);
 #elif defined(__linux__)
         const char* xdg_data_home = getenv("XDG_DATA_HOME");
         if (xdg_data_home != nullptr && strlen(xdg_data_home) > 0) {

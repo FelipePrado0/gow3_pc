@@ -17,11 +17,12 @@ class GraphicsOptionsTest(unittest.TestCase):
         self.temp.cleanup()
 
     def test_defaults_and_invalid_values(self):
-        self.ini.write_text('render_resolution=8K\nengine_fps=90\nstale_readback=yes\n', encoding='utf-8')
+        self.ini.write_text('render_resolution=8K\nengine_fps=90\nstale_readback=yes\nfewer_gpu_waits=yes\n',
+                            encoding='utf-8')
         options, reverted = g.prepare(self.ini, self.state)
         self.assertFalse(reverted)
         self.assertEqual(options, {'render_resolution': 'native', 'engine_fps': '120', 'deferred_readback': '1',
-                                   'stale_readback': '1', 'async_shaders': '1'})
+                                   'stale_readback': '1', 'async_shaders': '1', 'fewer_gpu_waits': '0'})
 
     def test_corrupt_state_file_preserves_current_settings(self):
         self.ini.write_text('render_resolution=1440p\nengine_fps=240\n', encoding='utf-8')
@@ -117,7 +118,10 @@ class GraphicsOptionsTest(unittest.TestCase):
 
     def test_environment(self):
         env = g.environment(g.startup_options({'stale_readback': '0'}))
-        self.assertEqual(env, {'GOW3_DEFERRED_READBACK': '1', 'GOW3_STALE_READBACK': '0', 'GOW3_ASYNC_SHADERS': '1'})
+        self.assertEqual(env, {'GOW3_DEFERRED_READBACK': '1', 'GOW3_STALE_READBACK': '0', 'GOW3_ASYNC_SHADERS': '1',
+                               'GOW3_FEWER_GPU_WAITS': '0'})
+        env = g.environment(g.startup_options({'fewer_gpu_waits': '1'}))
+        self.assertEqual(env['GOW3_FEWER_GPU_WAITS'], '1')
 
 
 if __name__ == '__main__':

@@ -4,6 +4,7 @@
 // runs FSR 3.1 (FireBurn/FSR-Vulkan, native Vulkan) on the scene color right before the
 // post-processing combine pass, with the scene depth and camera motion vectors, and writes the
 // result back so the game's own post, tonemap and UI continue unchanged (Native AA preset).
+// On macOS, GOW3_UPSCALER=metalfx gives the same inputs to Apple's MetalFX (vk_metalfx).
 //
 // Guest targets stay at 1920x1080. Host scene targets use output/preset dimensions,
 // resized at frame boundaries. At 1080p HDR reconstruction precedes post; other outputs
@@ -23,6 +24,7 @@
 #include "video_core/renderer_vulkan/vk_common.h"
 #include "video_core/renderer_vulkan/vk_dlss.h"
 #include "video_core/renderer_vulkan/vk_fsr4.h"
+#include "video_core/renderer_vulkan/vk_metalfx.h"
 #include "video_core/texture_cache/image.h"
 
 struct FfxVkPortableUpscaleContext;
@@ -172,6 +174,14 @@ private:
     bool RecordDlss(vk::CommandBuffer cmdbuf, const Dlss::Resource& color,
                     const Dlss::Resource& depth, u32 w, u32 h, u32 ow, u32 oh, float frame_ms,
                     bool hdr);
+    /// gow3: MetalFX selected and available (macOS, vk_metalfx).
+    [[nodiscard]] bool UseMetalFx() const;
+    /// Copies the inputs into MetalFX's shared images, submits them (`cmdbuf` becomes the next
+    /// command buffer) and queues the upscale, then records its sharpened copy into
+    /// output_image. FinishMetalFx submits that behind a wait for the upscale.
+    bool RecordMetalFx(vk::CommandBuffer& cmdbuf, vk::Image color, vk::Format color_format,
+                       vk::Image depth, vk::Format depth_format, u32 w, u32 h, u32 ow, u32 oh);
+    void FinishMetalFx();
     /// Records FSR 4 into output_image; on a permanent failure FSR 3 takes over.
     bool RecordFsr4(vk::CommandBuffer cmdbuf, Fsr4Upscaler::Image color, Fsr4Upscaler::Image depth,
                     u32 w, u32 h, u32 ow, u32 oh, float frame_ms);
@@ -253,6 +263,11 @@ private:
     std::unique_ptr<Fsr4Upscaler> fsr4;
     bool fsr4_failed = false;
     bool dlss_failed = false;
+    std::unique_ptr<MetalFxUpscaler> metalfx;
+    bool metalfx_failed = false;
+    bool metalfx_ready = false; ///< configured since it was last selected
+    u64 metalfx_wait = 0;       ///< MetalFxUpscaler::Semaphore() value FinishMetalFx waits for
+    vk::UniquePipeline metalfx_sharpen_pipeline;
     VideoCore::UniqueImage motion_image;
     VideoCore::UniqueImage output_image;
     vk::UniqueImageView motion_view;

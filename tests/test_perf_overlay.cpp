@@ -10,6 +10,19 @@
 
 namespace P = Gow3PerfStats;
 
+// _putenv_s on Windows: an empty value removes the variable.
+static void SetEnv(const char* name, const char* value) {
+#ifdef _WIN32
+    _putenv_s(name, value);
+#else
+    if (value[0]) {
+        setenv(name, value, 1);
+    } else {
+        unsetenv(name);
+    }
+#endif
+}
+
 static std::string Read(const char* path) {
     std::ifstream in(path);
     std::stringstream s;
@@ -47,6 +60,15 @@ int main() {
     unknown.ram_used_gb = 2.0;
     assert(P::Format(unknown, P::Ram, true) == "RAM 2.0 GB");
 
+    // The upscaler item says what brings the game's image to the window.
+    assert(P::UpscalerText("FSR 3.1", true, true, 1280, 720, 1920, 1080) == "FSR 3.1");
+    assert(P::UpscalerText("", true, true, 1280, 720, 1920, 1080) == "MetalFX 720p->1080p");
+    assert(P::UpscalerText("", true, false, 854, 480, 1920, 1080) == "FSR 1 480p->1080p");
+    assert(P::UpscalerText("", false, false, 1280, 720, 1920, 1080) == "Stretched 720p->1080p");
+    assert(P::UpscalerText("", true, false, 1920, 1080, 1920, 1080) == "Native 1080p");
+    assert(P::UpscalerText("", true, false, 2560, 1440, 1920, 1080) == "Downscaled 1440p->1080p");
+    assert(P::UpscalerText(nullptr, true, false, 0, 0, 0, 0) == "Native");  // before the first frame
+
     const char* path = "perf-overlay-test.ini";
     {
         std::ofstream out(path);
@@ -54,7 +76,7 @@ int main() {
                "overlay_cpu=1\noverlay_ram=0\noverlay_vram=1\noverlay_scale=400\noverlay_corner=2\n"
                "overlay_opacity=-5\noverlay_layout=1\nmenu_tab=3\n";
     }
-    _putenv_s("GOW3_CONFIG", path);
+    SetEnv("GOW3_CONFIG", path);
     auto& v = Gow3Settings::Get();
     assert(v.overlay_items == P::DefaultItems && v.overlay_scale == 100 && v.overlay_corner == 1);
     Gow3Settings::Load();

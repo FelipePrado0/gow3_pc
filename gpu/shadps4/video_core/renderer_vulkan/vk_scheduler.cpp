@@ -474,10 +474,17 @@ void Scheduler::SubmitExecution(SubmitInfo& info) {
     const vk::Semaphore timeline = work_semaphore.Handle();
     info.AddSignal(timeline, signal_value);
 
-    static constexpr std::array<vk::PipelineStageFlags, 2> wait_stage_masks = {
+    static constexpr std::array<vk::PipelineStageFlags, 4> by_position = {
         vk::PipelineStageFlagBits::eAllCommands,
         vk::PipelineStageFlagBits::eColorAttachmentOutput,
+        vk::PipelineStageFlagBits::eAllCommands,
+        vk::PipelineStageFlagBits::eAllCommands,
     };
+    // gow3: a wait added with its stages (MetalFX's, before the buffer cache's) keeps them.
+    std::array<vk::PipelineStageFlags, 4> wait_stage_masks{};
+    for (u32 i = 0, position = 0; i < info.num_wait_semas; ++i) {
+        wait_stage_masks[i] = info.wait_stages[i] ? info.wait_stages[i] : by_position[position++];
+    }
 
     const vk::TimelineSemaphoreSubmitInfo timeline_si = {
         .waitSemaphoreValueCount = info.num_wait_semas,

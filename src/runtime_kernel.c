@@ -94,7 +94,7 @@ uint64_t runtime_process_time_counter(void) { return process_time_counter(); }
 uint64_t runtime_tsc_frequency(void) { return tsc_frequency(); }
 uint64_t runtime_read_tsc(void) { return read_tsc(); }
 static int sleep_ns(uint64_t ns) {
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
     compat_sleep_ns(ns);
 #else
     struct timespec t={.tv_sec=(time_t)(ns/1000000000),.tv_nsec=(long)(ns%1000000000)};
@@ -211,7 +211,7 @@ typedef struct { GuestTimeval utime, stime; int64_t rest[14]; } GuestRusage;
 static ABI int32_t guest_getrusage(int who,GuestRusage *out) {
     if (!out || (who!=0 && who!=1)) return fail_posix(EINVAL);
     memset(out,0,sizeof(*out));
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
     int64_t user=0,kernel=0;
     compat_cpu_times(who,&user,&kernel);
     out->utime=(GuestTimeval){user/1000000,user%1000000};
@@ -231,6 +231,8 @@ static ABI int32_t guest_sysctl(const int32_t *name,uint32_t namelen,void *old,u
         if (!old || !oldlen) return fail_posix(EINVAL);
 #ifdef _WIN32
         if (compat_random(old,(size_t)*oldlen)) return fail_posix(EIO);
+#elif defined(__APPLE__)
+        arc4random_buf(old,(size_t)*oldlen);
 #else
         if (getrandom(old,(size_t)*oldlen,0)<0) return fail_posix(errno);
 #endif

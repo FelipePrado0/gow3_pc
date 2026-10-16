@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstring>
+#include <type_traits>
 #include "common/assert.h"
 #include "common/bit_field.h"
 #include "common/types.h"
@@ -761,7 +762,11 @@ struct PM4CmdWriteData {
 
     template <typename T>
     T Address() const {
-        return reinterpret_cast<T>(addr64);
+        if constexpr (std::is_integral_v<T>) {
+            return static_cast<T>(addr64); // gow3: u64 and uintptr_t differ on macOS
+        } else {
+            return reinterpret_cast<T>(addr64);
+        }
     }
 };
 

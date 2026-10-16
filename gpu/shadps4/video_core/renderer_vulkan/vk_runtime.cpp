@@ -724,6 +724,27 @@ void Runtime::SetBackingSamples(VideoCore::Image* image, u32 num_samples, bool c
     if (it == backing_images.end()) {
         auto new_image_ci = backing->image.image_ci;
         new_image_ci.samples = LiverpoolToVK::NumSamples(num_samples, image->supported_samples);
+        // gow3: a single-sampled image keeps its speculative storage usage, which a device
+        // without shaderStorageImageMultisample (Apple GPUs) allows on one sample only: the
+        // multisampled backing goes without it rather than being created single-sampled.
+        if (num_samples > 1 && new_image_ci.samples == vk::SampleCountFlagBits::e1 &&
+            (new_image_ci.usage & vk::ImageUsageFlagBits::eStorage)) {
+            const auto usage = new_image_ci.usage & ~vk::ImageUsageFlagBits::eStorage;
+            const auto properties = instance.GetPhysicalDevice().getImageFormatProperties2(
+                vk::PhysicalDeviceImageFormatInfo2{.format = new_image_ci.format,
+                                                   .type = new_image_ci.imageType,
+                                                   .tiling = new_image_ci.tiling,
+                                                   .usage = usage,
+                                                   .flags = new_image_ci.flags});
+            if (properties.result == vk::Result::eSuccess) {
+                const auto samples = LiverpoolToVK::NumSamples(
+                    num_samples, properties.value.imageFormatProperties.sampleCounts);
+                if (samples != vk::SampleCountFlagBits::e1) {
+                    new_image_ci.usage = usage;
+                    new_image_ci.samples = samples;
+                }
+            }
+        }
 
         new_backing = &backing_images.emplace_back();
         new_backing->num_samples = num_samples;

@@ -9,6 +9,7 @@
 
 #include "core/libraries/videoout/buffer.h"
 #include "video_core/renderer_vulkan/host_passes/fsr_pass.h"
+#include "video_core/renderer_vulkan/host_passes/metalfx_pass.h"
 #include "video_core/renderer_vulkan/host_passes/pp_pass.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_runtime.h"
@@ -124,6 +125,9 @@ private:
     AmdGpu::Liverpool* liverpool;
     Scheduler draw_scheduler;
     std::deque<u64> recent_frame_ticks; ///< gow3: GOW3_FRAMES_AHEAD bound (PrepareFrame)
+    /// gow3 (macOS): MetalFX in FSR 1's place. Destroyed before draw_scheduler, whose timeline
+    /// semaphore its relay thread waits on.
+    HostPasses::MetalFxPass metalfx_pass;
     Scheduler present_scheduler;
     Scheduler flip_scheduler;
     Swapchain swapchain;

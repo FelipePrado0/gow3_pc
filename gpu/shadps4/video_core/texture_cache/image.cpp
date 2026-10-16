@@ -179,6 +179,28 @@ Image::Image(const Vulkan::Instance& instance, Vulkan::Runtime& runtime_,
             format_info.usage = usage_flags;
         }
     }
+    // gow3: the same for multisampled images. Without shaderStorageImageMultisample (Apple GPUs
+    // under KosmicKrisp) storage usage allows one sample only, and keeping it would create the
+    // image single-sampled while the guest, the pipelines and the shaders (texture2DMS) treat
+    // it as multisampled: sampled reads of it return zero (God of War III's fog pass then
+    // turns every object into flat fog).
+    if (info.num_samples > 1 && image_format_properties.result == vk::Result::eSuccess &&
+        (usage_flags & vk::ImageUsageFlagBits::eStorage)) {
+        const auto wanted = LiverpoolToVK::NumSamples(info.num_samples, vk::SampleCountFlags{0x7Fu});
+        if (!(image_format_properties.value.imageFormatProperties.sampleCounts & wanted)) {
+            format_info.usage = usage_flags & ~vk::ImageUsageFlagBits::eStorage;
+            const auto without_storage =
+                instance.GetPhysicalDevice().getImageFormatProperties2(format_info);
+            if (without_storage.result == vk::Result::eSuccess &&
+                (without_storage.value.imageFormatProperties.sampleCounts & wanted)) {
+                usage_flags = format_info.usage;
+                format_features = FormatFeatureFlags(usage_flags);
+                image_format_properties = without_storage;
+            } else {
+                format_info.usage = usage_flags;
+            }
+        }
+    }
     if (image_format_properties.result == vk::Result::eErrorFormatNotSupported) {
         LOG_ERROR(Render_Vulkan, "image format {} type {} is not supported (flags {}, usage {})",
                   vk::to_string(supported_format), vk::to_string(format_info.type),

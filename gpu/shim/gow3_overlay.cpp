@@ -41,6 +41,17 @@ asm(".section .rdata,\"dr\"\n"
     ".global gow3_font_ttf_end\n"
     "gow3_font_ttf_end:\n"
     ".text\n");
+#elif defined(__APPLE__)
+asm(".section __TEXT,__const\n"
+    ".p2align 4\n"
+    ".private_extern _gow3_font_ttf\n"
+    ".globl _gow3_font_ttf\n"
+    "_gow3_font_ttf:\n"
+    ".incbin \"" GOW3_FONT_PATH "\"\n"
+    ".private_extern _gow3_font_ttf_end\n"
+    ".globl _gow3_font_ttf_end\n"
+    "_gow3_font_ttf_end:\n"
+    ".text\n");
 #else
 asm(".section .rodata\n"
     ".balign 16\n"
@@ -88,6 +99,8 @@ std::vector<Gow3Png::Image> choice_pictures;
 std::vector<ImTextureData*> choice_textures, choice_retired;
 std::atomic<bool> choice_retiring{false};
 float base_scale = 1.0f;
+// Text that asks for something: a pending restart, an option that has no effect.
+constexpr ImVec4 Attention{0.85f, 0.72f, 0.45f, 1.0f};
 
 // Present rate for the FPS counter.
 std::chrono::steady_clock::time_point last_present{};
@@ -262,7 +275,9 @@ void MultiplierRow(const char* label, std::atomic<float>& value, const char* hel
 
 void InfoRow(const char* label, const char* text) {
     Row(label);
+    ImGui::PushTextWrapPos(0.0f); // long texts (why MetalFX cannot run) wrap in the column
     ImGui::TextDisabled("%s", text);
+    ImGui::PopTextWrapPos();
     ImGui::PopID();
 }
 
@@ -283,6 +298,7 @@ const char* UpscalerLabel(int upscaler) {
     case Gow3Settings::UpscalerFsr411: return "FSR 4.1.1";
     case Gow3Settings::UpscalerTaa: return "TAA";
     case Gow3Settings::UpscalerDlss: return "DLSS";
+    case Gow3Settings::UpscalerMetalFx: return "MetalFX";
     default: return "";
     }
 }
@@ -300,7 +316,8 @@ std::string OverlayText() {
     P::Sample sample = P::Latest();
     sample.fps = frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f;
     sample.frame_ms = frame_ms_avg;
-    sample.upscaler = UpscalerLabel(s.upscaler);
+    sample.upscaler = P::UpscalerText(UpscalerLabel(s.upscaler), s.fsr1, s.screen_metalfx_applied, s.image_width,
+                                      s.image_height, s.window_width, s.window_height);
     return P::Format(sample, items, s.overlay_layout == 0);
 }
 
@@ -392,6 +409,57 @@ void ImageTab() {
     const int iw = s.image_width, ih = s.image_height, ww = s.window_width, wh = s.window_height;
     const bool downscaling = iw > ww || ih > wh;
     const bool rcas_blocked = s.rcas && !s.rcas_applied;
+#ifdef __APPLE__
+    // gow3 (macOS): upscaling to the window stays on a Mac, where MetalFX can do it in FSR 1's place.
+    const bool upscaling = iw < ww && ih < wh;
+    ImGui::SeparatorText("Scaling and sharpening");
+    if (BeginRows("##scaling")) {
+        CheckRow("Upscale to the window", s.fsr1,
+                 "Enlarges every game image smaller than the window. For more FPS: Render resolution 720p or "
+                 "480p + upscaling.");
+        ImGui::BeginDisabled(!s.fsr1);
+        ChoiceRow("Upscaler", s.screen_upscaler, G::ScreenUpscalerNames.data(), nullptr, G::ScreenUpscalerCount,
+                  "FSR 1 (AMD) or MetalFX (Apple, on the GPU through Metal): both enlarge the finished image. "
+                  "MetalFX also sharpens it, so RCAS sharpening applies to FSR 1.");
+        ImGui::EndDisabled();
+        ImGui::EndTable();
+    }
+    if (s.fsr1 && iw > 0 && !upscaling) {
+        // Upscaling with nothing to enlarge. Every render resolution below the window's is enlarged;
+        // it is a startup option, so the buttons pick one and "Apply and restart" applies it.
+        ImGui::PushTextWrapPos(0.0f);
+        ImGui::TextColored(Attention, "No effect: the game draws at %d x %d, not smaller than the window (%d x %d).",
+                           iw, ih, ww, wh);
+        const int r720 = G::ParseResolution("720p"), r480 = G::ParseResolution("480p");
+        if (s.render_resolution != s.startup_render_resolution) {
+            ImGui::TextDisabled("The new render resolution applies with \"Apply and restart\" below.");
+        } else if (s.render_resolution == r480) {
+            ImGui::TextDisabled("Make the window larger than the game's image: Borderless or Fullscreen.");
+        } else {
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Render at:");
+            for (const int resolution : {r720, r480}) {
+                if (resolution == s.render_resolution) {
+                    continue;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button(resolution == r720 ? "720p" : "480p")) {
+                    Store(s.render_resolution, resolution, true);
+                }
+                Help("Render resolution (Performance tab), applied with \"Apply and restart\": the upscaler then "
+                     "enlarges the image to the window, for more FPS. 480p blows out bright areas (a known bug).");
+            }
+        }
+        ImGui::PopTextWrapPos();
+    }
+    if (BeginRows("##sharpening")) {
+        ImGui::BeginDisabled(rcas_blocked);
+        CheckRow("Sharpening (RCAS)", s.rcas,
+                 rcas_blocked && s.screen_metalfx_applied ? "No effect with MetalFX: it sharpens the image itself."
+                 : rcas_blocked && downscaling            ? "No effect: the game's image is larger than the window."
+                 : rcas_blocked                           ? "Needs upscaling: the game's image is smaller than the window."
+                                                          : "Sharpens the final image.");
+#else
     ImGui::SeparatorText("Sharpening");
     if (BeginRows("##scaling")) {
         ImGui::BeginDisabled(rcas_blocked);
@@ -399,6 +467,7 @@ void ImageTab() {
                  rcas_blocked && downscaling ? "No effect: the game's image is larger than the window."
                  : rcas_blocked              ? "No effect: the game's image is smaller than the window."
                                              : "Sharpens the final image.");
+#endif
         ImGui::EndDisabled();
         ImGui::BeginDisabled(!s.rcas || rcas_blocked);
         SliderRow("Sharpening strength", s.rcas_strength, 0, 100, "%d%%", "How strong the sharpening is.");
@@ -416,12 +485,23 @@ void ImageTab() {
     ImGui::TextDisabled("F12 saves a screenshot to the user\\screenshots folder.");
     ImGui::SeparatorText("Information");
     if (BeginRows("##image_info")) {
-        char text[96];
+        char text[160];
         std::snprintf(text, sizeof(text), "%d x %d", iw, ih);
         InfoRow("Game image", text);
         std::snprintf(text, sizeof(text), "%d x %d", ww, wh);
         InfoRow("Window", text);
+#ifdef __APPLE__
+        const char* metalfx_problem = s.screen_metalfx_problem;
+        std::snprintf(text, sizeof(text), "FSR 1 (MetalFX unavailable: %s)",
+                      metalfx_problem ? metalfx_problem : "");
+        InfoRow("Upscaling", !s.fsr1 ? "off"
+                             : !upscaling ? "no effect (image not smaller than window)"
+                             : s.screen_metalfx_applied ? "MetalFX"
+                             : metalfx_problem ? text : "FSR 1");
+        InfoRow("Sharpening", s.rcas_applied ? "applied" : s.screen_metalfx_applied ? "MetalFX's own" : "not applied");
+#else
         InfoRow("Sharpening", s.rcas_applied ? "applied" : "not applied");
+#endif
         ImGui::EndTable();
     }
 }
@@ -467,8 +547,15 @@ void PerformanceTab() {
         for (std::size_t i = 0; i < resolution_names.size(); ++i) {
             resolution_labels.push_back(i < G::Resolutions.size() ? builtin_labels[i] : resolution_names[i].c_str());
         }
+#ifdef __APPLE__
+        constexpr const char* resolution_help = "The resolution the game draws at. Higher is sharper and slower; "
+                                                "below the window's size the upscaler enlarges it (Image tab). 480p "
+                                                "blows out bright areas (a known bug).";
+#else
+        constexpr const char* resolution_help = "The resolution the game draws at. Higher is sharper and slower.";
+#endif
         ChoiceRow("Render resolution", s.render_resolution, resolution_labels.data(), nullptr,
-                  int(resolution_labels.size()), "The resolution the game draws at. Higher is sharper and slower.");
+                  int(resolution_labels.size()), resolution_help);
         static const char* const engine_labels[] = {"60 (original)", "120", "240"};
         ChoiceRow("Engine frame rate", s.engine_fps, engine_labels, G::EngineFps.data(), int(G::EngineFps.size()),
                   "The highest frame rate the game itself runs at.");
@@ -476,6 +563,13 @@ void PerformanceTab() {
                  "Big FPS gain. Switch it off if lighting or objects look wrong.");
         CheckRow("Deferred GPU readbacks", s.deferred_readback,
                  "Fewer waits for the GPU. Switch it off if textures or shadows look wrong.");
+        // The launcher shows it with the upscaler (Display); it is a startup option, so it is here.
+        ImGui::BeginDisabled(!s.stale_readback);
+        CheckRow("Fewer GPU waits (experimental)", s.fewer_gpu_waits,
+                 s.stale_readback ? "The game keeps preparing draws while small images are read back for it: "
+                                    "less CPU load, more FPS where the CPU limits it."
+                                  : "Needs \"Game reads GPU data without waiting\".");
+        ImGui::EndDisabled();
         ImGui::EndTable();
     }
 }
@@ -557,7 +651,7 @@ int RestartChanges() {
     const auto& s = Gow3Settings::Get();
     return (s.render_resolution != s.startup_render_resolution) + (s.engine_fps != s.startup_engine_fps) +
            (s.deferred_readback != s.startup_deferred_readback) + (s.stale_readback != s.startup_stale_readback) +
-           (s.anisotropy != s.startup_anisotropy);
+           (s.fewer_gpu_waits != s.startup_fewer_gpu_waits) + (s.anisotropy != s.startup_anisotropy);
 }
 
 void Menu() {
@@ -573,7 +667,12 @@ void Menu() {
     // gow3: the game's own title (param.sfo), not a fixed one.
     static const std::string heading = [] {
         const std::string_view title = Common::ElfInfo::Instance().Title();
+#ifdef __APPLE__
+        // A Mac keyboard has no Insert key: ` opens the menu there.
+        return std::string(title.empty() ? "God of War III" : title) + PadText("  (` / R3+L2)", "  (` / RS+LT)", "  (` / RS+ZL)");
+#else
         return std::string(title.empty() ? "God of War III" : title) + PadText("  (Insert / R3+L2)", "  (Insert / RS+LT)", "  (Insert / RS+ZL)");
+#endif
     }();
     if (!ImGui::Begin(heading.c_str(), &keep_open, ImGuiWindowFlags_NoCollapse)) {
         ImGui::End();
@@ -627,7 +726,7 @@ void Menu() {
     ImGui::TextDisabled("%s", footer_help ? footer_help : PadText("L1 / R1 or Q / E: switch tabs. Settings are saved in gow3.ini.", "LB / RB or Q / E: switch tabs. Settings are saved in gow3.ini.", "L / R or Q / E: switch tabs. Settings are saved in gow3.ini."));
     ImGui::PopTextWrapPos();
     if (const int changes = RestartChanges()) {
-        ImGui::TextColored(ImVec4(0.85f, 0.72f, 0.45f, 1.0f), "%d change%s need%s a restart (unsaved progress is lost).",
+        ImGui::TextColored(Attention, "%d change%s need%s a restart (unsaved progress is lost).",
                            changes, changes == 1 ? "" : "s", changes == 1 ? "s" : "");
         ImGui::SameLine();
         ImGui::BeginDisabled(!std::getenv("GOW3_RESTART_COMMAND"));
@@ -941,7 +1040,11 @@ void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) 
     }
     overlay_instance = &instance;
     initialized = true;
+#ifdef __APPLE__
+    std::printf("Overlay: menu ready (` or Insert, or R3+L2)\n");
+#else
     std::printf("Overlay: menu ready (Insert or R3+L2)\n");
+#endif
 }
 
 void UpdateTextInput(SDL_Window* window) {
@@ -1057,9 +1160,14 @@ bool HandleEvent(const SDL_Event& event) {
             Vulkan::FrameCapture::Request();
             return true;
         }
-        if (down && !event.key.repeat &&
-            (event.key.key == SDLK_INSERT || (is_open && event.key.key == SDLK_ESCAPE))) {
-            SetOpen(event.key.key == SDLK_INSERT ? !is_open : false);
+#ifdef __APPLE__
+        // gow3 (macOS): Mac laptop keyboards have no Insert key; ` (left of 1) opens the menu too.
+        const bool toggle = event.key.key == SDLK_INSERT || event.key.scancode == SDL_SCANCODE_GRAVE;
+#else
+        const bool toggle = event.key.key == SDLK_INSERT;
+#endif
+        if (down && !event.key.repeat && (toggle || (is_open && event.key.key == SDLK_ESCAPE))) {
+            SetOpen(toggle ? !is_open : false);
             return true;
         }
         if (!is_open) {

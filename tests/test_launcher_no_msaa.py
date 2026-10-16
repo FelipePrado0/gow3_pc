@@ -127,6 +127,9 @@ class NoMsaaLauncherTest(unittest.TestCase):
         # The graphics card list still offers both cards, and Automatic follows that choice at once.
         cards = [widget for widget in widgets(app.pages['performance'])
                  if isinstance(widget, ttk.Combobox) and widget['values'][0] == 'Automatic']
+        if launcher.MACOS:  # a Mac has one GPU: no card to choose (build_performance)
+            self.assertEqual(cards, [])
+            return
         self.assertEqual(tuple(cards[0]['values'])[1:], tuple(name for _i, name, *_rest in ARC_LAPTOP))
         cards[0].current(1)
         cards[0].event_generate('<<ComboboxSelected>>')

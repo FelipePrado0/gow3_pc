@@ -24,10 +24,6 @@
 #include "video_core/renderer_vulkan/vk_platform.h"
 #include "video_core/renderer_vulkan/vk_dlss.h"
 
-#ifdef __APPLE__
-#include <mach-o/dyld.h>
-#endif
-
 namespace Vulkan {
 
 static const char* const VALIDATION_LAYER_NAME = "VK_LAYER_KHRONOS_validation";
@@ -260,18 +256,17 @@ vk::UniqueInstance CreateInstance(Frontend::WindowSystemType window_type, bool e
     LOG_INFO(Render_Vulkan, "Creating vulkan instance");
 
 #if defined(__APPLE__)
-    // Initialize the environment with the path to the included ICD, so that the loader will
-    // find it.
-    static const auto icd_path = [] {
-        char path[PATH_MAX];
-        u32 length = PATH_MAX;
-        _NSGetExecutablePath(path, &length);
-        return std::filesystem::path(path).parent_path();
+    // gow3 (macOS): the Vulkan loader the port ships, found through the run paths; the loader
+    // process points it at the KosmicKrisp driver (VK_DRIVER_FILES, src/compat_mac.c).
+    // GOW3_VULKAN_LIBRARY names another Vulkan library.
+    static vk::detail::DynamicLoader dl = [] {
+        const char* library = std::getenv("GOW3_VULKAN_LIBRARY");
+        return vk::detail::DynamicLoader(library && *library ? library : "@rpath/libvulkan.1.dylib");
     }();
-    setenv("VK_DRIVER_FILES", icd_path.c_str(), true);
-#endif
-
+    ASSERT_MSG(dl.success(), "Cannot load the Vulkan loader (libvulkan.1.dylib)");
+#else
     static vk::detail::DynamicLoader dl;
+#endif
     VULKAN_HPP_DEFAULT_DISPATCHER.init(
         dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr"));
 

@@ -18,6 +18,20 @@
 #endif
 #ifdef _WIN32
 #include <windows.h>
+#elif defined(__APPLE__)
+#include <sys/mman.h>
+#include <sys/resource.h>
+#include <sys/sysctl.h>
+#include <unistd.h>
+#include <signal.h>
+#include <fcntl.h>
+#include <dlfcn.h>
+#include <execinfo.h>
+#include <limits.h>
+#include <pthread.h>
+#include <mach/mach.h>
+#include <mach/mach_vm.h>
+#include <mach-o/dyld.h>
 #else
 #include <sys/mman.h>
 #include <malloc.h>
@@ -29,6 +43,20 @@
 #include <execinfo.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
+#endif
+#ifdef __APPLE__
+#undef round_page /* <mach/vm_page_size.h> */
+#undef trunc_page
+/* Mach-O symbol names carry a leading underscore. */
+#define ASM_NAME(name) "_" #name
+#define CONTEXT_RIP(uc) ((uintptr_t)(uc)->uc_mcontext->__ss.__rip)
+#define CONTEXT_RBP(uc) ((uintptr_t)(uc)->uc_mcontext->__ss.__rbp)
+#define CONTEXT_RDI(uc) ((uintptr_t)(uc)->uc_mcontext->__ss.__rdi)
+#else
+#define ASM_NAME(name) #name
+#define CONTEXT_RIP(uc) ((uintptr_t)(uc)->uc_mcontext.gregs[REG_RIP])
+#define CONTEXT_RBP(uc) ((uintptr_t)(uc)->uc_mcontext.gregs[REG_RBP])
+#define CONTEXT_RDI(uc) ((uintptr_t)(uc)->uc_mcontext.gregs[REG_RDI])
 #endif
 
 typedef struct { uint64_t address, size, flags; } Segment;
@@ -47,7 +75,7 @@ static IsaTable *isa_table; /* rewritten sites (--isa-rewrite); the fault handle
 static void isa_report_hook(void) { isa_rewrite_report(isa_table, stdout); }
 int vulkan_smoke(void);
 
-static void fail(const char *message) { fprintf(stderr, "ERROR: %s\n", message); exit(1); }
+static __attribute__((noreturn)) void fail(const char *message) { fprintf(stderr, "ERROR: %s\n", message); exit(1); }
 static uint64_t read64(FILE *f) {
     unsigned char b[8];
     if (fread(b, 1, 8, f) != 8) fail("truncated boot file");
@@ -90,7 +118,7 @@ static ABI __attribute__((noreturn)) void unresolved(uint32_t id, uintptr_t argu
     uintptr_t caller=(uintptr_t)__builtin_return_address(0)-(uintptr_t)image;
     for (uint64_t m=0;m<module_count;++m)
         if (caller>=modules[m].base && caller-modules[m].base<modules[m].size)
-            printf("Caller in linked module %" PRIu64 " (%s): +0x%" PRIxPTR "\n",m,m==0 ? "libc.prx" : "system module",caller-modules[m].base);
+            printf("Caller in linked module %" PRIu64 " (%s): +0x%" PRIxPTR "\n",m,m==0 ? "libc.prx" : "system module",(uintptr_t)(caller-modules[m].base));
     runtime_report();
     puts(entered_game ? "Original guest entry instructions executed; game initialization is incomplete." :
                         "Native libc initialization is incomplete; game entry has not run.");
@@ -100,7 +128,7 @@ static ABI __attribute__((noreturn)) void unresolved(uint32_t id, uintptr_t argu
 #ifndef _WIN32
 /* enter_on_stack(entry, arg0, arg1, stack_top): call entry(arg0,arg1) on a new stack. */
 void enter_on_stack(void *entry, void *arg0, void *arg1, void *top);
-__asm__(".text\n.globl enter_on_stack\nenter_on_stack:\n"
+__asm__(".text\n.globl " ASM_NAME(enter_on_stack) "\n" ASM_NAME(enter_on_stack) ":\n"
         " push %rbp\n mov %rsp,%rbp\n and $-16,%rcx\n mov %rcx,%rsp\n"
         " mov %rdi,%rax\n mov %rsi,%rdi\n mov %rdx,%rsi\n call *%rax\n"
         " mov %rbp,%rsp\n pop %rbp\n ret\n");
@@ -209,8 +237,11 @@ static LONG CALLBACK vectored_fault(EXCEPTION_POINTERS *info) {
     return EXCEPTION_CONTINUE_SEARCH;
 }
 static LONG WINAPI unhandled_fault(EXCEPTION_POINTERS *info) { return fatal_exception(info); }
-/* Guest code reads its TCB with `mov rax, gs:[0]` (link_*.py rewrote fs:[0]); on Windows
- * the displacement becomes the TEB TLS slot that holds the guest TCB (runtime_thread.c). */
+#endif
+#if defined(_WIN32) || defined(__APPLE__)
+/* Guest code reads its TCB with `mov rax, gs:[0]` (link_*.py rewrote fs:[0]); the displacement
+ * becomes the slot that holds the guest TCB: the TEB TLS slot on Windows, the pthread key's
+ * TSD slot on macOS (runtime_thread.c). */
 uint32_t runtime_thread_tcb_offset(void);
 static uint64_t patch_tcb_loads(const Segment *segments, uint64_t count) {
     static const unsigned char load[]={0x65,0x48,0x8b,0x04,0x25,0,0,0,0};
@@ -225,16 +256,34 @@ static uint64_t patch_tcb_loads(const Segment *segments, uint64_t count) {
     return patched;
 }
 #endif
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__APPLE__)
 /* ucontext gregs of IsaRegs.gpr (x86 numbering). */
 static const int isa_gregs[16]={REG_RAX,REG_RCX,REG_RDX,REG_RBX,REG_RSP,REG_RBP,REG_RSI,REG_RDI,
                                 REG_R8,REG_R9,REG_R10,REG_R11,REG_R12,REG_R13,REG_R14,REG_R15};
+#endif
+#ifndef _WIN32
 static void fault(int sig, siginfo_t *info, void *context) {
     if (sig == SIGTRAP && isa_table) {
         /* An int3 ISA site (RIP is past the CC byte); any other trap ends in the report below. */
-        greg_t *g = ((ucontext_t *)context)->uc_mcontext.gregs;
         IsaRegs regs;
         uintptr_t rip;
+#ifdef __APPLE__
+        /* macOS: the thread state's registers, in IsaRegs.gpr's x86 numbering. */
+        _STRUCT_X86_THREAD_STATE64 *state = &((ucontext_t *)context)->uc_mcontext->__ss;
+        uint64_t *gpr[16] = {&state->__rax, &state->__rcx, &state->__rdx, &state->__rbx,
+                             &state->__rsp, &state->__rbp, &state->__rsi, &state->__rdi,
+                             &state->__r8,  &state->__r9,  &state->__r10, &state->__r11,
+                             &state->__r12, &state->__r13, &state->__r14, &state->__r15};
+        for (int i = 0; i < 16; ++i) regs.gpr[i] = *gpr[i];
+        regs.rflags = state->__rflags;
+        if (isa_rewrite_trap(isa_table, (uintptr_t)state->__rip - 1, &regs, &rip)) {
+            for (int i = 0; i < 16; ++i) *gpr[i] = regs.gpr[i];
+            state->__rflags = regs.rflags;
+            state->__rip = rip;
+            return;
+        }
+#else
+        greg_t *g = ((ucontext_t *)context)->uc_mcontext.gregs;
         for (int i = 0; i < 16; ++i) regs.gpr[i] = (uint64_t)g[isa_gregs[i]];
         regs.rflags = (uint64_t)g[REG_EFL];
         if (isa_rewrite_trap(isa_table, (uintptr_t)g[REG_RIP] - 1, &regs, &rip)) {
@@ -243,9 +292,16 @@ static void fault(int sig, siginfo_t *info, void *context) {
             g[REG_RIP] = (greg_t)rip;
             return;
         }
+#endif
     }
-    /* GPU page tracking (write-protected guest pages) is resolved first. */
-    if (gpu_enabled && sig == SIGSEGV && gow3gpu_handle_fault(context, info->si_addr)) return;
+    /* GPU page tracking (write-protected guest pages) is resolved first. macOS reports an access
+     * to a protected page as SIGBUS. */
+#ifdef __APPLE__
+    const int tracked = sig == SIGSEGV || sig == SIGBUS;
+#else
+    const int tracked = sig == SIGSEGV;
+#endif
+    if (gpu_enabled && tracked && gow3gpu_handle_fault(context, info->si_addr)) return;
     /* A speculative guest memory read (runtime_memory.c) failed: resume its recovery point. */
     if ((sig == SIGSEGV || sig == SIGBUS) && runtime_fault_recover) {
         sigjmp_buf *recover = runtime_fault_recover;
@@ -258,7 +314,7 @@ static void fault(int sig, siginfo_t *info, void *context) {
     }
     /* The process is terminating: dladdr/snprintf are acceptable here. */
     ucontext_t *uc = context;
-    uintptr_t rip = (uintptr_t)uc->uc_mcontext.gregs[REG_RIP];
+    uintptr_t rip = CONTEXT_RIP(uc);
     char line[512];
     Dl_info where;
     int site = isa_table ? isa_rewrite_site_of_stub(isa_table, rip) : -1;
@@ -293,26 +349,43 @@ static void fault(int sig, siginfo_t *info, void *context) {
 #endif
 #ifndef _WIN32
 /* Watchdog: dump RIP and the rbp frame chain of every thread (guest offsets
- * when inside the image). Reads use process_vm_readv so bad frames cannot fault. */
+ * when inside the image). Reads use process_vm_readv (macOS: mach_vm_read_overwrite) so bad
+ * frames cannot fault. */
 static uintptr_t exe_base;
 static void write_hex(char *out, uint64_t v) {
     const char digits[] = "0123456789abcdef";
     for (int i = 0; i < 16; ++i) out[i] = digits[(v >> (60 - i * 4)) & 15];
 }
+static int read_frame(uintptr_t rbp, uintptr_t frame[2]) {
+#ifdef __APPLE__
+    mach_vm_size_t got=0;
+    return mach_vm_read_overwrite(mach_task_self(),(mach_vm_address_t)rbp,2*sizeof(uintptr_t),
+                                  (mach_vm_address_t)(uintptr_t)frame,&got)==KERN_SUCCESS && got==2*sizeof(uintptr_t);
+#else
+    struct iovec local={frame,2*sizeof(uintptr_t)}, remote={(void *)rbp,2*sizeof(uintptr_t)};
+    return process_vm_readv(getpid(),&local,1,&remote,1,0)==(ssize_t)(2*sizeof(uintptr_t));
+#endif
+}
+static uint64_t thread_id(void) {
+#ifdef __APPLE__
+    return compat_thread_id();
+#else
+    return (uint64_t)gettid();
+#endif
+}
 static void dump_frames(ucontext_t *uc) {
     char line[] = "  tid=0000000000000000 rip=0000000000000000 image-relative=0000000000000000 host-relative=0000000000000000\n";
-    uintptr_t rip=(uintptr_t)uc->uc_mcontext.gregs[REG_RIP], rbp=(uintptr_t)uc->uc_mcontext.gregs[REG_RBP];
-    uint64_t tid=(uint64_t)gettid();
+    uintptr_t rip=CONTEXT_RIP(uc), rbp=CONTEXT_RBP(uc);
+    uint64_t tid=thread_id();
     /* First argument register: the lock address when a thread waits on a futex. */
     char arg[]="  tid=0000000000000000 rdi=0000000000000000\n";
-    write_hex(arg+6,tid); write_hex(arg+27,(uint64_t)uc->uc_mcontext.gregs[REG_RDI]);
+    write_hex(arg+6,tid); write_hex(arg+27,(uint64_t)CONTEXT_RDI(uc));
     { ssize_t written_=write(2,arg,sizeof(arg)-1); (void)written_; }
     for (int depth=0; depth<24; ++depth) {
         write_hex(line+6,tid); write_hex(line+27,rip); write_hex(line+59,rip-(uintptr_t)image); write_hex(line+90,rip-exe_base);
         { ssize_t written_=write(2,line,sizeof(line)-1); (void)written_; }
         uintptr_t frame[2];
-        struct iovec local={frame,sizeof(frame)}, remote={(void *)rbp,sizeof(frame)};
-        if (!rbp || process_vm_readv(getpid(),&local,1,&remote,1,0)!=(ssize_t)sizeof(frame)) break;
+        if (!rbp || !read_frame(rbp,frame)) break;
         if (frame[0]<=rbp) break;
         rbp=frame[0]; rip=frame[1];
     }
@@ -323,6 +396,16 @@ static void watchdog(int sig, siginfo_t *info, void *context) {
     const char head[]="STOP: watchdog timeout; thread stacks:\n";
     { ssize_t written_=write(2,head,sizeof(head)-1); (void)written_; }
     dump_frames(context);
+#ifdef __APPLE__
+    thread_act_array_t list;
+    mach_msg_type_number_t count=0;
+    mach_port_t self=mach_thread_self();
+    if (task_threads(mach_task_self(),&list,&count)==KERN_SUCCESS)
+        for (mach_msg_type_number_t i=0; i<count; ++i) {
+            pthread_t thread=list[i]!=self ? pthread_from_mach_thread_np(list[i]) : NULL;
+            if (thread) { pthread_kill(thread,SIGUSR2); usleep(20000); }
+        }
+#else
     int dir=open("/proc/self/task",O_RDONLY|O_DIRECTORY);
     char buffer[4096];
     long n;
@@ -334,6 +417,7 @@ static void watchdog(int sig, siginfo_t *info, void *context) {
             if (tid>0 && tid!=self) { syscall(SYS_tgkill,getpid(),tid,SIGUSR2); usleep(20000); }
             at+=d->reclen;
         }
+#endif
     usleep(100000);
     _exit(128 + sig);
 }
@@ -581,7 +665,11 @@ void runtime_restart(void) {
     TerminateProcess(GetCurrentProcess(),0);
 #else
     const char *command = getenv("GOW3_RESTART_COMMAND");
+#ifdef __APPLE__
+    for (int fd = 3, last = getdtablesize(); fd < last; ++fd) close(fd); /* no close_range */
+#else
     syscall(SYS_close_range, 3u, ~0u, 0u);
+#endif
     if (command && *command) {
         puts("Runtime: restarting through GOW3_RESTART_COMMAND");
         execl("/bin/sh", "sh", "-c", command, (char *)NULL);
@@ -593,6 +681,26 @@ void runtime_restart(void) {
     _exit(1);
 #endif
 }
+
+#ifdef __APPLE__
+/* Rosetta 2 runs AVX code from macOS 15 on, but reports AVX, F16C, BMI1, MOVBE and LZCNT in
+ * CPUID only to processes started with ROSETTA_ADVERTISE_AVX=1. The game's code and the CPU
+ * check read CPUID, so the loader starts itself again with the variable set. */
+static void advertise_avx(char **argv) {
+    int translated = 0;
+    size_t size = sizeof(translated);
+    if (sysctlbyname("sysctl.proc_translated", &translated, &size, NULL, 0) || !translated) return;
+    const char *set = getenv("ROSETTA_ADVERTISE_AVX");
+    if (set && !strcmp(set, "1")) return;
+    char path[PATH_MAX];
+    uint32_t length = sizeof(path);
+    if (_NSGetExecutablePath(path, &length)) return;
+    setenv("ROSETTA_ADVERTISE_AVX", "1", 1);
+    fflush(NULL);
+    execv(path, argv);
+    perror("Restarting with ROSETTA_ADVERTISE_AVX=1");
+}
+#endif
 
 /* The guest code needs the PS4's instruction sets (#33, #66); GOW3_CPU_CHECK=0 skips this. A
  * missing fatal set prints STOP and returns 0; the rewritable ones go to cpu_missing_sets, named
@@ -611,11 +719,13 @@ static int cpu_supported(char *missing, size_t size) {
     return 1;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv);
+static int probe_main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__APPLE__)
     /* Keep host heap objects handed to the guest (thread handles, TLS) in the
-       non-PIE brk heap, i.e. below 1 TiB: the guest packs pointers into 40 bits. */
+       non-PIE brk heap, i.e. below 1 TiB: the guest packs pointers into 40 bits.
+       (macOS: the loader's allocator, mimalloc, takes its memory bottom-up from 4 GiB.) */
     mallopt(M_ARENA_MAX,1);
     mallopt(M_MMAP_THRESHOLD,32*1024*1024);
 #endif
@@ -632,9 +742,10 @@ int main(int argc, char **argv) {
         runtime_pad_describe();
         return 0;
     }
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
     /* The PS4 user range must stay free of host allocations (GPU driver, heaps), and the guest
-     * TCB needs one of the 64 TEB TLS slots before DLLs (Vulkan drivers) take them. */
+     * TCB needs one of the 64 TEB TLS slots before DLLs (Vulkan drivers) take them. macOS: the
+     * low range for the image and stacks is reserved too, and the TCB gets a pthread key. */
     runtime_memory_reserve();
     runtime_thread_tcb_offset();
 #endif
@@ -910,6 +1021,8 @@ int main(int argc, char **argv) {
     if (gpu_enabled) install_stat_multipliers(segments, ns, size);
 #ifdef _WIN32
     printf("Guest TCB loads redirected to the TEB TLS slot: %" PRIu64 "\n", patch_tcb_loads(segments, ns));
+#elif defined(__APPLE__)
+    printf("Guest TCB loads redirected to the pthread TSD slot: %" PRIu64 "\n", patch_tcb_loads(segments, ns));
 #endif
     if (isa_table) {
         IsaReport r = isa_rewrite_apply(isa_table, image, stubs, isa_sets);
@@ -970,3 +1083,45 @@ int main(int argc, char **argv) {
 #endif
     fail("entry unexpectedly returned");
 }
+#ifdef __APPLE__
+/* Cocoa windows and their events belong to the main thread: the loader, and the game after it,
+ * run on a second thread while the main thread waits to host the game window. */
+typedef struct { int argc; char **argv; } LoaderArgs;
+static void *loader_main(void *p) {
+    const LoaderArgs *args = p;
+    exit(probe_main(args->argc, args->argv));
+}
+int main(int argc, char **argv) {
+    setvbuf(stdout, NULL, _IONBF, 0);
+    advertise_avx(argv);
+    /* The Vulkan driver (KosmicKrisp) needs macOS 26 and an Apple GPU. */
+    char version[32] = "";
+    size_t length = sizeof(version);
+    if (!sysctlbyname("kern.osproductversion", version, &length, NULL, 0) && atoi(version) < 26) {
+        printf("STOP: macOS 26 or newer is needed (this is macOS %s)\n", version);
+        return 20;
+    }
+    /* run.py's questions before a start, answered on the main thread: SDL's gamepad subsystem
+     * pumps Cocoa's events, which belong to it. */
+    if (argc == 2 && (!strcmp(argv[1], "--gamepad") || !strcmp(argv[1], "--cpu-features")))
+        return probe_main(argc, argv);
+    compat_vulkan_driver();
+    /* Processes start with 256 descriptors on macOS (1024 on Linux). */
+    struct rlimit files;
+    if (!getrlimit(RLIMIT_NOFILE, &files) && files.rlim_cur < OPEN_MAX) {
+        files.rlim_cur = files.rlim_max < OPEN_MAX ? files.rlim_max : OPEN_MAX;
+        setrlimit(RLIMIT_NOFILE, &files);
+    }
+    static LoaderArgs args;
+    args = (LoaderArgs){argc, argv};
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, 16 * 1024 * 1024);
+    pthread_t loader;
+    if (pthread_create(&loader, &attr, loader_main, &args)) fail("cannot start the loader thread");
+    pthread_attr_destroy(&attr);
+    gow3gpu_main_loop();
+}
+#else
+int main(int argc, char **argv) { return probe_main(argc, argv); }
+#endif

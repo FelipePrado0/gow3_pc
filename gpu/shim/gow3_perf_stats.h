@@ -45,6 +45,30 @@ inline float CpuPercent(uint64_t process_delta, uint64_t wall_delta, unsigned co
     return std::clamp(float(double(process_delta) * 100.0 / (double(wall_delta) * cores)), 0.0f, 100.0f);
 }
 
+/// The overlay's upscaler item: the temporal upscaler's name when one is chosen, else what brings
+/// the game's image to the window: "MetalFX 720p->1080p" or "FSR 1 720p->1080p" (FSR 1 also
+/// where MetalFX cannot run), "Stretched ..." with upscaling off, "Downscaled ..." for an image
+/// larger than the window, else "Native 1080p". Sizes in pixels, 0 before the first frame.
+inline std::string UpscalerText(const char* temporal, bool fsr1, bool metalfx, int image_w, int image_h,
+                                int window_w, int window_h) {
+    if (temporal && temporal[0]) {
+        return temporal;
+    }
+    if (image_h <= 0 || window_h <= 0) {
+        return "Native";
+    }
+    const bool upscale = image_w < window_w && image_h < window_h;
+    const bool downscale = image_w > window_w || image_h > window_h;
+    const char* how = upscale ? (metalfx ? "MetalFX" : fsr1 ? "FSR 1" : "Stretched") : downscale ? "Downscaled" : nullptr;
+    char text[64];
+    if (how) {
+        std::snprintf(text, sizeof(text), "%s %dp->%dp", how, image_h, window_h);
+    } else {
+        std::snprintf(text, sizeof(text), "Native %dp", image_h);
+    }
+    return text;
+}
+
 /// The overlay text for the items in `mask`: one line each, or one line when `row`.
 inline std::string Format(const Sample& s, unsigned mask, bool row) {
     std::string out;

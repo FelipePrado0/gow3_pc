@@ -10,6 +10,9 @@ typedef gow3_jmp_buf sigjmp_buf;
 #define sigsetjmp(buffer, save) gow3_setjmp(buffer)
 #else
 #include <setjmp.h>
+#ifdef __APPLE__
+#include "compat_mac.h"
+#endif
 #endif
 /* Recovery point for speculative guest memory reads on this thread (probe.c fault handler). */
 extern __thread sigjmp_buf *runtime_fault_recover;
@@ -72,7 +75,8 @@ void runtime_thread_keys_cleanup(void);
 /* Guest-visible errno values are FreeBSD's. */
 int32_t runtime_guest_errno(int host_errno);
 void *runtime_low_map(size_t size, int prot);
-/* Windows: reserves the PS4 user address range as a placeholder (no-op elsewhere). */
+/* Windows: reserves the PS4 user address range as a placeholder. macOS: reserves the user range
+ * and the low range for host objects the guest sees. No-op elsewhere. */
 void runtime_memory_reserve(void);
 uintptr_t runtime_ajm_resolve(const char *name);
 void runtime_ajm_report(void);

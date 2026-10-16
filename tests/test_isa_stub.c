@@ -10,7 +10,9 @@
 #else
 #include <signal.h>
 #include <sys/mman.h>
-#include <ucontext.h>
+#ifndef __APPLE__
+#include <ucontext.h> /* macOS: ucontext_t comes with <signal.h> */
+#endif
 #endif
 #include "isa_rewrite.h"
 
@@ -268,6 +270,20 @@ static void install_trap_handler(void) { assert(AddVectoredExceptionHandler(1, t
 static void trap_handler(int sig, siginfo_t *info, void *context) {
     (void)sig;
     (void)info;
+#ifdef __APPLE__
+    /* macOS: the thread state's registers, as in probe.c. */
+    _STRUCT_X86_THREAD_STATE64 *s = &((ucontext_t *)context)->uc_mcontext->__ss;
+    uint64_t *gpr[16] = {&s->__rax, &s->__rcx, &s->__rdx, &s->__rbx, &s->__rsp, &s->__rbp, &s->__rsi, &s->__rdi,
+                         &s->__r8,  &s->__r9,  &s->__r10, &s->__r11, &s->__r12, &s->__r13, &s->__r14, &s->__r15};
+    IsaRegs regs;
+    for (int i = 0; i < 16; i++) regs.gpr[i] = *gpr[i];
+    regs.rflags = s->__rflags;
+    uintptr_t rip;
+    if (!isa_rewrite_trap(trap_table, (uintptr_t)s->__rip - 1, &regs, &rip)) abort();
+    for (int i = 0; i < 16; i++) *gpr[i] = regs.gpr[i];
+    s->__rflags = regs.rflags;
+    s->__rip = rip;
+#else
     ucontext_t *uc = context;
     greg_t *g = uc->uc_mcontext.gregs;
     static const int index[16] = {REG_RAX, REG_RCX, REG_RDX, REG_RBX, REG_RSP, REG_RBP, REG_RSI, REG_RDI,
@@ -280,6 +296,7 @@ static void trap_handler(int sig, siginfo_t *info, void *context) {
     for (int i = 0; i < 16; i++) g[index[i]] = (greg_t)regs.gpr[i];
     g[REG_EFL] = (greg_t)regs.rflags;
     g[REG_RIP] = (greg_t)rip;
+#endif
 }
 
 static void install_trap_handler(void) {

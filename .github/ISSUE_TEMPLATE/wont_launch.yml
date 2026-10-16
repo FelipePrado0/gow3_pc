@@ -9,6 +9,17 @@ body:
         wrong update version, wrong folder selected). Check the README's setup section before
         filing, it covers the folder layout the launcher expects.
 
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows
+        - Linux (AppImage or source)
+        - macOS (Apple Silicon)
+    validations:
+      required: true
+
   - type: input
     id: version
     attributes:
@@ -45,6 +56,6 @@ body:
     id: log
     attributes:
       label: user/last_run.log
-      description: Attach the file from the port's folder.
+      description: Attach the file from the port's folder; the Mac application keeps it in ~/Library/Application Support/gow3/user/.
     validations:
       required: true

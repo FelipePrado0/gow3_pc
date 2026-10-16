@@ -15,6 +15,11 @@ namespace Gow3Settings {
 
 namespace {
 
+// gow3.ini's upscaler while GOW3_UPSCALER overrides it for the run (run.py: "none" while the
+// temporal upscalers are experimental), else -1. Save writes it back unless the run changed the
+// upscaler itself, so a save from the in-game menu does not turn the launcher's choice to "off".
+int file_upscaler = -1;
+
 const char* Path() {
     const char* env = std::getenv("GOW3_CONFIG");
     return env && env[0] ? env : "gow3.ini";
@@ -101,9 +106,17 @@ void Set(Values& v, const std::string& key, const std::string& value) {
     } else if (key == "async_shaders") {
         v.async_shaders = i != 0;
     } else if (key == "fsr1") {
+#ifdef __APPLE__
+        // gow3 (macOS): upscaling to the window stays a choice on a Mac, where MetalFX does it
+        // (vk_presenter.cpp); the launcher and the menu show it there.
+        v.fsr1 = i != 0;
+#else
         // FSR 1 left the launcher and the in-game menu: a value saved by an older version has no
         // control left to turn it off, so it stays off.
         v.fsr1 = false;
+#endif
+    } else if (key == "screen_upscaler") {
+        v.screen_upscaler = Gow3Graphics::ParseScreenUpscaler(value);
     } else if (key == "rcas") {
         v.rcas = i != 0;
     } else if (key == "rcas_strength") {
@@ -118,6 +131,8 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.deferred_readback = i != 0;
     } else if (key == "stale_readback") {
         v.stale_readback = i != 0;
+    } else if (key == "fewer_gpu_waits") {
+        v.fewer_gpu_waits = i != 0;
     } else if (key == "anisotropy") {
         v.anisotropy = Gow3Graphics::ParseAnisotropy(i);
     } else if (key == "vibration") {
@@ -177,7 +192,9 @@ void Load() {
         std::printf("Settings: %s\n", Path());
     }
     // Environment overrides (scripts, A/B tests).
+    file_upscaler = -1;
     if (const char* env = std::getenv("GOW3_UPSCALER")) {
+        file_upscaler = v.upscaler;
         v.upscaler = UpscalerOff;
         for (int u = 0; u < UpscalerCount; ++u) {
             if (std::strcmp(env, UpscalerName(u)) == 0) v.upscaler = u;
@@ -191,6 +208,7 @@ void Load() {
         {"GOW3_ASYNC_SHADERS", "async_shaders"},      {"GOW3_DEFERRED_READBACK", "deferred_readback"},
         {"GOW3_STALE_READBACK", "stale_readback"},     {"GOW3_FSR1", "fsr1"},
         {"GOW3_RCAS", "rcas"},                        {"GOW3_FRAMES_AHEAD", "frames_queued"},
+        {"GOW3_SCREEN_UPSCALER", "screen_upscaler"},  {"GOW3_FEWER_GPU_WAITS", "fewer_gpu_waits"},
         {"GOW3_ANISOTROPY", "anisotropy"},            {"GOW3_VIBRATION", "vibration"},
     };
     for (const auto& [env, key] : env_keys) {
@@ -210,6 +228,7 @@ void Load() {
                                                  : v.engine_fps.load();
     v.startup_deferred_readback = v.deferred_readback;
     v.startup_stale_readback = v.stale_readback;
+    v.startup_fewer_gpu_waits = v.fewer_gpu_waits;
     v.startup_anisotropy = v.anisotropy;
 }
 
@@ -219,6 +238,7 @@ bool GraphicsNeedRestart() {
            v.engine_fps != v.startup_engine_fps ||
            v.deferred_readback != v.startup_deferred_readback ||
            v.stale_readback != v.startup_stale_readback ||
+           v.fewer_gpu_waits != v.startup_fewer_gpu_waits ||
            v.anisotropy != v.startup_anisotropy;
 }
 
@@ -249,6 +269,19 @@ void ConfigureDlssSupport(bool available, const char* problem) {
     }
 }
 
+void ConfigureMetalFxSupport(bool available, const char* problem) {
+    auto& v = Get();
+    v.metalfx_supported = available;
+    static std::string kept;
+    kept = problem ? problem : "";
+    v.metalfx_problem = available || kept.empty() ? nullptr : kept.c_str();
+    if (v.upscaler == UpscalerMetalFx && !available) {
+        std::printf("Upscaler: MetalFX unavailable (%s); falling back to FSR 3.1\n",
+                    kept.empty() ? "it needs macOS" : kept.c_str());
+        v.upscaler = UpscalerFsr3;
+    }
+}
+
 bool FixedRenderSession() {
     const char* size = std::getenv("GOW3_RENDER_RES");
     return size && size[0];
@@ -271,6 +304,8 @@ bool ResolutionNeedsRestart() {
 
 void Save() {
     const auto& v = Get();
+    const int upscaler =
+        file_upscaler >= 0 && v.upscaler == v.startup_upscaler ? file_upscaler : v.upscaler.load();
     FILE* file = std::fopen(Path(), "w");
     if (!file) {
         std::printf("Settings: cannot write %s\n", Path());
@@ -281,7 +316,7 @@ void Save() {
                  "upscaler=%s\npreset=%d\nsharpen=%d\nsharpness=%.2f\njitter=%d\n"
                  "reactive=%d\nobject_motion=%d\nreactive_scale=%.2f\nreactive_threshold=%.2f\nreactive_max=%.2f\n"
                  "debug_view=%d\nshow_fps=%d\nfsr4_auto_exposure=%d\nfsr4_invert_jitter=%d\n",
-                 UpscalerName(v.upscaler), v.preset.load(), int(v.sharpen.load()),
+                 UpscalerName(upscaler), v.preset.load(), int(v.sharpen.load()),
                  v.sharpness.load(), int(v.jitter.load()), int(v.reactive.load()),
                  int(v.object_motion.load()),
                  v.reactive_scale.load(), v.reactive_threshold.load(), v.reactive_max.load(),
@@ -311,15 +346,17 @@ void Save() {
     const std::vector<std::string> resolution_names = Gow3Graphics::ResolutionNames();
     std::fprintf(file,
                  "display_mode=%s\nvsync=%d\nfps_limit=%d\nasync_shaders=%d\n"
-                 "fsr1=%d\nrcas=%d\nrcas_strength=%d\nframes_queued=%d\n"
+                 "fsr1=%d\nscreen_upscaler=%s\nrcas=%d\nrcas_strength=%d\nframes_queued=%d\n"
                  "render_resolution=%s\nengine_fps=%d\ndeferred_readback=%d\nstale_readback=%d\n"
-                 "restart_unconfirmed=%d\n",
+                 "fewer_gpu_waits=%d\nrestart_unconfirmed=%d\n",
                  Gow3Graphics::DisplayModeKeys[std::clamp(v.display_mode.load(), 0, 2)].data(),
                  int(v.vsync.load()), v.fps_limit.load(), int(v.async_shaders.load()),
-                 int(v.fsr1.load()), int(v.rcas.load()), v.rcas_strength.load(), v.frames_queued.load(),
+                 int(v.fsr1.load()),
+                 Gow3Graphics::ScreenUpscalerKeys[std::clamp(v.screen_upscaler.load(), 0, 1)].data(),
+                 int(v.rcas.load()), v.rcas_strength.load(), v.frames_queued.load(),
                  resolution_names[std::clamp(v.render_resolution.load(), 0, int(resolution_names.size()) - 1)].c_str(),
                  v.engine_fps.load(), int(v.deferred_readback.load()), int(v.stale_readback.load()),
-                 int(v.restart_unconfirmed.load()));
+                 int(v.fewer_gpu_waits.load()), int(v.restart_unconfirmed.load()));
     std::fprintf(file, "anisotropy=%d\nvibration=%d\n", v.anisotropy.load(), v.vibration.load());
     // Read by run.sh at start.
     std::fprintf(file, "live_resolution=%s\n", v.live_resolution < 0 ? "auto"
@@ -339,7 +376,8 @@ const char* PresetName(int preset) {
 }
 
 const char* UpscalerName(int upscaler) {
-    static constexpr const char* names[UpscalerCount] = {"off", "fsr3", "fsr4", "fsr411", "taa", "dlss"};
+    static constexpr const char* names[UpscalerCount] = {"off", "fsr3", "fsr4", "fsr411", "taa", "dlss",
+                                                         "metalfx"};
     return names[std::clamp(upscaler, 0, UpscalerCount - 1)];
 }
 

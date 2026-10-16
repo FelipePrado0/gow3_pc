@@ -2,7 +2,9 @@
 // gow3: frame analyzer. Creating the file named by GOW3_CAPTURE_TRIGGER records the next full
 // frame: every render pass (targets, depth, draw count, shaders, sampled textures) and compute
 // dispatch, in order, plus the buffer that was presented. Input for placing a temporal
-// upscaler (scene color, depth, motion vectors, UI) in the game's frame.
+// upscaler (scene color, depth, motion vectors, UI) in the game's frame. GOW3_CAPTURE_SPAN
+// records across several display passes; GOW3_CAPTURE_DUMP (vk_rasterizer.cpp) writes chosen
+// images as they are before a given pass.
 
 #pragma once
 
@@ -44,6 +46,10 @@ public:
     /// opened the pass.
     static void BeginPass(const VideoCore::ImageInfo* const* colors, u32 num_colors,
                           const VideoCore::ImageInfo* depth, std::string census);
+    /// The index of the pass the last BeginPass started in the recording, or -1 (no new pass).
+    static int NewPassIndex() {
+        return new_pass_index;
+    }
     static void Draw(u64 vs_hash, u64 ps_hash, u32 num_indices, u32 num_instances);
     static void Dispatch(u64 cs_hash, u32 x, u32 y, u32 z);
     static void Sampled(const VideoCore::ImageInfo& info, bool storage);
@@ -62,6 +68,7 @@ private:
     static inline std::atomic<u64> flips{0};
     static inline std::atomic<VAddr> last_presented{0};
     static inline std::atomic<bool> requested{false};
+    static inline int new_pass_index = -1; ///< GPU thread only
 };
 
 } // namespace Vulkan

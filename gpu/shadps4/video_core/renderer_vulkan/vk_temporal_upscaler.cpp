@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <utility>
 
 #include <vk_mem_alloc.h>
 
@@ -21,6 +22,7 @@
 #include "video_core/host_shaders/upscale_reactive_comp.h"
 #include "video_core/host_shaders/taa_comp.h"
 #include "video_core/host_shaders/taa_sharpen_comp.h"
+#include "video_core/host_shaders/taa_sharpen_half_comp.h"
 #include "video_core/host_shaders/taa_sharpen_ldr_comp.h"
 #include "video_core/renderer_vulkan/vk_shader_util.h"
 #include "video_core/renderer_vulkan/vk_camera_motion.h"
@@ -210,6 +212,14 @@ TemporalUpscaler::TemporalUpscaler(const Instance& instance_, Scheduler& schedul
         std::printf("Upscaler: shaderStorageImageWriteWithoutFormat unsupported, FSR 3 off\n");
         enabled = false;
     }
+    {
+        // gow3 (macOS): MetalFX on the images' MTLHeaps (vk_metalfx); null elsewhere.
+        static std::string problem;
+        if (enabled) {
+            metalfx = MetalFxUpscaler::Create(instance, problem);
+        }
+        Gow3Settings::ConfigureMetalFxSupport(metalfx != nullptr, problem.c_str());
+    }
     if (enabled) {
         std::printf("Upscaler: FSR 3.1 available (%s) on scene color before compute shader "
                     "%016llx\n",
@@ -232,14 +242,15 @@ bool TemporalUpscaler::Active() const {
            (Gow3Settings::Get().upscaler == Gow3Settings::UpscalerFsr3 ||
             Gow3Settings::IsFsr4(Gow3Settings::Get().upscaler) ||
             Gow3Settings::Get().upscaler == Gow3Settings::UpscalerTaa ||
-            Gow3Settings::Get().upscaler == Gow3Settings::UpscalerDlss) &&
+            Gow3Settings::Get().upscaler == Gow3Settings::UpscalerDlss ||
+            Gow3Settings::Get().upscaler == Gow3Settings::UpscalerMetalFx) &&
            !Gow3Toggle::Disabled(1u << 24);
 }
 
 bool TemporalUpscaler::ReactiveOn() const {
     // FSR 4 takes no reactive mask: the opaque snapshot and the mask pass would be wasted.
     return Gow3Settings::Get().reactive && !Gow3Toggle::Disabled(1u << 27) && !UseFsr4() && !UseDlss() &&
-           Gow3Settings::Get().upscaler != Gow3Settings::UpscalerTaa;
+           !UseMetalFx() && Gow3Settings::Get().upscaler != Gow3Settings::UpscalerTaa;
 }
 
 void TemporalUpscaler::OnSceneColor(VideoCore::ImageId color) {
@@ -313,7 +324,12 @@ bool TemporalUpscaler::OnFrameStart() {
         fsr4 = std::make_unique<Fsr4Upscaler>(instance, scheduler);
         if (Gow3Settings::IsFsr4(upscaler)) Gow3Settings::Get().fsr4_problem = nullptr;
     }
-    if (applied_upscaler != upscaler) fsr4_failed = false; // retry after a menu change
+    if (applied_upscaler != upscaler) {
+        // Retry after a menu change; MetalFX gets a new scaler (its history and failure go).
+        fsr4_failed = false;
+        metalfx_failed = false;
+        metalfx_ready = false;
+    }
     // Dynamic scene resolution scaling (live preset switching) works on all GPUs.
     // On GPUs without D32S8 blit support, UI depth is cleared instead of copied from scene.
     if (!scaled_session) {
@@ -370,8 +386,8 @@ void TemporalUpscaler::OnDispatch(u64 cs_hash) {
 }
 
 bool TemporalUpscaler::EnsureResources(u32 w, u32 h, u32 ow, u32 oh, bool hdr) {
-    // DLSS, like FSR 4, has its own context: no portable FSR 3 context is made.
-    const bool use_fsr4 = UseFsr4() || UseDlss();
+    // DLSS and MetalFX, like FSR 4, have their own context: no portable FSR 3 context is made.
+    const bool use_fsr4 = UseFsr4() || UseDlss() || UseMetalFx();
     const bool use_taa = Gow3Settings::Get().upscaler == Gow3Settings::UpscalerTaa;
     if (use_taa && (w != ow || h != oh)) {
         std::printf("TAA: remove GOW3_RENDER_RES to use native-resolution TAA\n");
@@ -524,7 +540,10 @@ bool TemporalUpscaler::EnsureResources(u32 w, u32 h, u32 ow, u32 oh, bool hdr) {
         return true;
     }
     if (use_fsr4) {
-        std::printf("Upscaler: FSR 4 inputs %ux%u -> %ux%u\n", w, h, ow, oh);
+        if (!UseMetalFx()) { // MetalFX names its sizes when it configures
+            std::printf("Upscaler: %s inputs %ux%u -> %ux%u\n", UseDlss() ? "DLSS" : "FSR 4", w, h,
+                        ow, oh);
+        }
         return true;
     }
     FfxVkPortableMemoryUsage usage{};
@@ -607,6 +626,9 @@ void TemporalUpscaler::CreatePipelines() {
     storage_layout(2, taa_sharpen_desc_layout, taa_sharpen_pipeline_layout, sizeof(float));
     taa_sharpen_pipeline = compute(TAA_SHARPEN_COMP, *taa_sharpen_pipeline_layout);
     taa_sharpen_ldr_pipeline = compute(TAA_SHARPEN_LDR_COMP, *taa_sharpen_pipeline_layout);
+    if (metalfx) {
+        metalfx_sharpen_pipeline = compute(TAA_SHARPEN_HALF_COMP, *taa_sharpen_pipeline_layout);
+    }
     {
         std::array<vk::DescriptorSetLayoutBinding, 7> bindings{};
         for (u32 i = 0; i < bindings.size(); ++i) {
@@ -997,7 +1019,7 @@ bool TemporalUpscaler::RecordReactive(vk::ImageView color_view) {
 void TemporalUpscaler::Run() {
     if (auto* profiler = GpuProfiler::Get()) {
         const char* label = Gow3Settings::Get().upscaler == Gow3Settings::UpscalerTaa
-            ? "upscaler Run (TAA)" : "upscaler Run (FSR)";
+            ? "upscaler Run (TAA)" : UseMetalFx() ? "upscaler Run (MetalFX)" : "upscaler Run (FSR)";
         profiler->Mark(0xF5A0'0000ull ^ std::hash<std::string_view>{}(label),
                        [label] { return std::string{label}; });
     }
@@ -1041,7 +1063,8 @@ void TemporalUpscaler::Run() {
         input_color_view = c.view;
         input_depth_view = d.view;
     }
-    const auto cmdbuf = scheduler.CommandBuffer();
+    // MetalFX submits the commands so far and continues in a new command buffer.
+    auto cmdbuf = scheduler.CommandBuffer();
 
     const auto own_barrier = [&](vk::Image image, vk::ImageLayout old_layout,
                                  vk::PipelineStageFlags2 src_stage, vk::AccessFlags2 src_access,
@@ -1095,6 +1118,9 @@ void TemporalUpscaler::Run() {
             {input_color, input_color_view, color.info.pixel_format, vk::ImageAspectFlagBits::eColor, w, h},
             {input_depth, input_depth_view, depth_format, vk::ImageAspectFlagBits::eDepth, w, h}, w, h,
             ow, oh, frame_ms, true);
+    } else if (UseMetalFx()) {
+        dispatched = RecordMetalFx(cmdbuf, input_color, color.info.pixel_format, input_depth,
+                                   depth_format, w, h, ow, oh);
     } else {
         FfxVkPortableUpscaleDispatchInfo info{};
         info.structSize = sizeof(info);
@@ -1167,7 +1193,9 @@ void TemporalUpscaler::Run() {
     if (dispatched) {
         reset = false;
         dispatched_last_frame = true;
-        if (Gow3Settings::Get().upscaler != Gow3Settings::UpscalerTaa) {
+        // TAA and MetalFX sharpen with the whole strength themselves.
+        if (Gow3Settings::Get().upscaler != Gow3Settings::UpscalerTaa &&
+            Gow3Settings::Get().upscaler != Gow3Settings::UpscalerMetalFx) {
             ExtraSharpen(cmdbuf, vk::Image(output_image), false, ow, oh);
         }
         // The result replaces the scene color's RGB (its alpha carries data for the post).
@@ -1227,6 +1255,7 @@ void TemporalUpscaler::Run() {
                              sizeof(mode), &mode);
         cmdbuf.dispatch((ow + 7) / 8, (oh + 7) / 8, 1);
     }
+    FinishMetalFx();
 }
 
 vk::ImageView TemporalUpscaler::CachedView(const VideoCore::Image& image, vk::Format format,
@@ -1528,7 +1557,8 @@ void TemporalUpscaler::RunUiOnly(VideoCore::ImageId color_id, VideoCore::ImageId
 void TemporalUpscaler::RunScaled() {
     if (auto* profiler = GpuProfiler::Get()) {
         const char* label = Gow3Settings::Get().upscaler == Gow3Settings::UpscalerTaa
-            ? "upscaler RunScaled (TAA)" : "upscaler RunScaled (FSR)";
+            ? "upscaler RunScaled (TAA)"
+            : UseMetalFx() ? "upscaler RunScaled (MetalFX)" : "upscaler RunScaled (FSR)";
         profiler->Mark(0xF5A0'0000ull ^ std::hash<std::string_view>{}(label),
                        [label] { return std::string{label}; });
     }
@@ -1575,7 +1605,8 @@ void TemporalUpscaler::RunScaled() {
     }
 
     scheduler.EndRendering();
-    const auto cmdbuf = scheduler.CommandBuffer();
+    // MetalFX submits the commands so far and continues in a new command buffer.
+    auto cmdbuf = scheduler.CommandBuffer();
     const auto barrier = [&](vk::Image image, vk::ImageAspectFlags aspect,
                              vk::ImageLayout old_layout, vk::PipelineStageFlags2 src_stage,
                              vk::AccessFlags2 src_access, vk::ImageLayout new_layout,
@@ -1615,13 +1646,17 @@ void TemporalUpscaler::RunScaled() {
     last_frame = now;
 
     // gow3: FSR 4 writes its HDR-format output, copied into the output-size UI image.
-    if (UseFsr4() || UseDlss() || Gow3Settings::Get().upscaler == Gow3Settings::UpscalerTaa) {
+    if (UseFsr4() || UseDlss() || UseMetalFx() ||
+        Gow3Settings::Get().upscaler == Gow3Settings::UpscalerTaa) {
         barrier(vk::Image(output_image), vk::ImageAspectFlagBits::eColor,
                 vk::ImageLayout::eUndefined, all, vk::AccessFlagBits2::eNone,
                 vk::ImageLayout::eGeneral, all, rw);
         bool ok4 = true;
         if (Gow3Settings::Get().upscaler == Gow3Settings::UpscalerTaa) {
             RecordTaa(cmdbuf, color_view, depth_view);
+        } else if (UseMetalFx()) {
+            ok4 = RecordMetalFx(cmdbuf, color_image, color.info.pixel_format, depth_image,
+                                depth_format, w, h, ow, oh);
         } else if (UseDlss()) {
             ok4 = RecordDlss(cmdbuf,
                              {color_image, color_view, color.info.pixel_format,
@@ -1635,7 +1670,8 @@ void TemporalUpscaler::RunScaled() {
                             oh, frame_ms);
         }
         if (ok4) {
-            if (Gow3Settings::Get().upscaler != Gow3Settings::UpscalerTaa) {
+            if (Gow3Settings::Get().upscaler != Gow3Settings::UpscalerTaa &&
+                Gow3Settings::Get().upscaler != Gow3Settings::UpscalerMetalFx) {
                 ExtraSharpen(cmdbuf, vk::Image(output_image), false, ow, oh);
             }
             barrier(vk::Image(output_image), vk::ImageAspectFlagBits::eColor,
@@ -1690,6 +1726,7 @@ void TemporalUpscaler::RunScaled() {
             ui_color = ldr_target;
             ui_depth = camera_motion.Depth();
         }
+        FinishMetalFx();
         return;
     }
 
@@ -2024,6 +2061,155 @@ bool TemporalUpscaler::RecordDlss(vk::CommandBuffer cmdbuf, const Dlss::Resource
         reset = true;
     }
     return ok;
+}
+
+bool TemporalUpscaler::UseMetalFx() const {
+    return Gow3Settings::Get().upscaler == Gow3Settings::UpscalerMetalFx && metalfx &&
+           !metalfx_failed;
+}
+
+bool TemporalUpscaler::RecordMetalFx(vk::CommandBuffer& cmdbuf, vk::Image color,
+                                     vk::Format color_format, vk::Image depth,
+                                     vk::Format depth_format, u32 w, u32 h, u32 ow, u32 oh) {
+    const auto fail = [&](const char* why) {
+        std::printf("Upscaler: MetalFX failed (%s); falling back to FSR 3.1\n", why);
+        Gow3Settings::Get().upscaler = Gow3Settings::UpscalerFsr3;
+        metalfx_failed = true; // EnsureResources creates the FSR 3 context next frame
+        reset = true;
+        return false;
+    };
+    if (!metalfx_ready || !metalfx->Matches(w, h, ow, oh, color_format, depth_format)) {
+        // Submitted work may still use the previous shared images; `cmdbuf` stays open.
+        scheduler.WaitSubmitted();
+        if (!metalfx->Configure(w, h, ow, oh, color_format, depth_format)) {
+            return fail(metalfx->Problem());
+        }
+        metalfx_ready = true;
+        reset = true;
+    } else if (metalfx->Failed()) {
+        return fail("a Metal command buffer did not complete");
+    }
+    const auto in_color = metalfx->Color(), in_depth = metalfx->Depth(),
+               in_motion = metalfx->Motion(), out = metalfx->Output();
+    constexpr auto color_aspect = vk::ImageAspectFlagBits::eColor;
+    const vk::ImageAspectFlags depth_aspects =
+        depth_format == vk::Format::eD32SfloatS8Uint
+            ? vk::ImageAspectFlagBits::eDepth | vk::ImageAspectFlagBits::eStencil
+            : vk::ImageAspectFlagBits::eDepth;
+    // The scene's writes before the copies. The shared images are rewritten whole: MetalFX was
+    // done with them before last frame's FinishMetalFx submission could start.
+    const vk::MemoryBarrier2 scene{
+        .srcStageMask = vk::PipelineStageFlagBits2::eAllCommands,
+        .srcAccessMask = vk::AccessFlagBits2::eMemoryWrite,
+        .dstStageMask = vk::PipelineStageFlagBits2::eCopy,
+        .dstAccessMask = vk::AccessFlagBits2::eTransferRead,
+    };
+    const auto rewrite = [](vk::Image image, vk::ImageAspectFlags aspect,
+                            vk::PipelineStageFlags2 stage, vk::AccessFlags2 access) {
+        return vk::ImageMemoryBarrier2{
+            .srcStageMask = vk::PipelineStageFlagBits2::eAllCommands,
+            .srcAccessMask = vk::AccessFlagBits2::eNone,
+            .dstStageMask = stage,
+            .dstAccessMask = access,
+            .oldLayout = vk::ImageLayout::eUndefined,
+            .newLayout = vk::ImageLayout::eGeneral,
+            .image = image,
+            .subresourceRange = {aspect, 0, 1, 0, 1},
+        };
+    };
+    const std::array<vk::ImageMemoryBarrier2, 4> targets{
+        rewrite(in_color.image, color_aspect, vk::PipelineStageFlagBits2::eCopy,
+                vk::AccessFlagBits2::eTransferWrite),
+        rewrite(in_depth.image, depth_aspects, vk::PipelineStageFlagBits2::eCopy,
+                vk::AccessFlagBits2::eTransferWrite),
+        rewrite(in_motion.image, color_aspect, vk::PipelineStageFlagBits2::eCopy,
+                vk::AccessFlagBits2::eTransferWrite),
+        // Metal writes the output after this submission.
+        rewrite(out.image, color_aspect, vk::PipelineStageFlagBits2::eAllCommands,
+                vk::AccessFlagBits2::eNone),
+    };
+    cmdbuf.pipelineBarrier2({
+        .memoryBarrierCount = 1,
+        .pMemoryBarriers = &scene,
+        .imageMemoryBarrierCount = u32(targets.size()),
+        .pImageMemoryBarriers = targets.data(),
+    });
+    const vk::ImageCopy region{
+        .srcSubresource = {color_aspect, 0, 0, 1},
+        .dstSubresource = {color_aspect, 0, 0, 1},
+        .extent = {w, h, 1},
+    };
+    vk::ImageCopy depth_region = region;
+    depth_region.srcSubresource.aspectMask = vk::ImageAspectFlagBits::eDepth;
+    depth_region.dstSubresource.aspectMask = vk::ImageAspectFlagBits::eDepth;
+    // The scene fills the top-left w x h of its targets (the game aligns their size).
+    cmdbuf.copyImage(color, vk::ImageLayout::eGeneral, in_color.image, vk::ImageLayout::eGeneral,
+                     region);
+    cmdbuf.copyImage(depth, vk::ImageLayout::eGeneral, in_depth.image, vk::ImageLayout::eGeneral,
+                     depth_region);
+    cmdbuf.copyImage(vk::Image(motion_image), vk::ImageLayout::eGeneral, in_motion.image,
+                     vk::ImageLayout::eGeneral, region);
+    const vk::MemoryBarrier2 copied{
+        .srcStageMask = vk::PipelineStageFlagBits2::eCopy,
+        .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
+        .dstStageMask = vk::PipelineStageFlagBits2::eAllCommands,
+        .dstAccessMask = vk::AccessFlagBits2::eMemoryRead,
+    };
+    cmdbuf.pipelineBarrier2({.memoryBarrierCount = 1, .pMemoryBarriers = &copied});
+    // MetalFX starts once this submission has completed (its timeline tick).
+    const u64 tick = scheduler.CurrentTick();
+    scheduler.Flush();
+    // The jitter FSR gets (toggle 1 << 26 flips it): checked with a synthetic scene, MetalFX
+    // takes the same sign.
+    const float sign = Gow3Toggle::Disabled(1u << 26) ? -1.0f : 1.0f;
+    metalfx_wait = metalfx->Submit(scheduler.GetWorkSemaphore()->Handle(), tick,
+                                   {sign * jitter[0], sign * jitter[1], reset});
+    cmdbuf = scheduler.CommandBuffer();
+    // The upscaled frame, sharpened (strength 0: copied) into output_image as TAA's is.
+    const vk::ImageMemoryBarrier2 upscaled{
+        .srcStageMask = vk::PipelineStageFlagBits2::eAllCommands,
+        .srcAccessMask = vk::AccessFlagBits2::eNone, // Metal's write: FinishMetalFx's wait
+        .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+        .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+        .oldLayout = vk::ImageLayout::eGeneral,
+        .newLayout = vk::ImageLayout::eGeneral,
+        .image = out.image,
+        .subresourceRange = {color_aspect, 0, 1, 0, 1},
+    };
+    cmdbuf.pipelineBarrier2({.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &upscaled});
+    const auto& settings = Gow3Settings::Get();
+    const float strength =
+        settings.sharpen ? std::clamp(settings.sharpness.load(), 0.0f, 2.0f) : 0.0f;
+    const std::array<vk::DescriptorImageInfo, 2> infos{{
+        {.imageView = out.view, .imageLayout = vk::ImageLayout::eGeneral},
+        {.imageView = *output_view, .imageLayout = vk::ImageLayout::eGeneral},
+    }};
+    std::array<vk::WriteDescriptorSet, 2> writes{};
+    for (u32 i = 0; i < writes.size(); ++i) {
+        writes[i] = {.dstBinding = i,
+                     .descriptorCount = 1,
+                     .descriptorType = vk::DescriptorType::eStorageImage,
+                     .pImageInfo = &infos[i]};
+    }
+    cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, *metalfx_sharpen_pipeline);
+    cmdbuf.pushDescriptorSetKHR(vk::PipelineBindPoint::eCompute, *taa_sharpen_pipeline_layout, 0,
+                                writes);
+    cmdbuf.pushConstants(*taa_sharpen_pipeline_layout, vk::ShaderStageFlagBits::eCompute, 0,
+                         sizeof(strength), &strength);
+    cmdbuf.dispatch((ow + 7) / 8, (oh + 7) / 8, 1);
+    return true;
+}
+
+void TemporalUpscaler::FinishMetalFx() {
+    if (!metalfx_wait) {
+        return;
+    }
+    // What was recorded since the upscale was queued (its copy into output_image first) waits
+    // for it; later submissions come after this one.
+    SubmitInfo info{};
+    info.AddWait(metalfx->Semaphore(), std::exchange(metalfx_wait, 0),
+                 vk::PipelineStageFlagBits::eAllCommands);
+    scheduler.Flush(info);
 }
 
 } // namespace Vulkan

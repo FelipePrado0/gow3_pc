@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <atomic>
 #include <condition_variable>
+#include <functional>
 #include <boost/asio/io_context.hpp>
 #include "common/polyfill_thread.h"
 #include "video_core/renderdoc.h"
@@ -157,7 +158,12 @@ void AddressSpace::Protect(VAddr virtual_addr, u64 size, MemoryPermission perms)
 }
 boost::icl::interval_set<VAddr> AddressSpace::GetUsableRegions() {
     boost::icl::interval_set<VAddr> set;
+#ifdef __APPLE__
+    // gow3 (macOS): the user range starts above the GPU carveout (runtime_memory.c).
+    set += boost::icl::interval<VAddr>::right_open(0x70'0000'0000ULL, 0xfc'0000'0000ULL);
+#else
     set += boost::icl::interval<VAddr>::right_open(0x10'0000'0000ULL, 0xfc'0000'0000ULL);
+#endif
     return set;
 }
 } // namespace Core
@@ -187,7 +193,24 @@ std::thread g_window_thread;
 std::mutex g_window_mutex;
 std::condition_variable g_window_cv;
 bool g_window_ready;
+#ifdef __APPLE__
+// gow3 (macOS): the window thread is the process's main thread (gow3gpu_main_loop).
+std::function<void()> g_main_task;
+#endif
 } // namespace
+
+#ifdef __APPLE__
+extern "C" void gow3gpu_main_loop(void) {
+    std::function<void()> task;
+    {
+        std::unique_lock lock{g_window_mutex};
+        g_window_cv.wait(lock, [] { return bool(g_main_task); });
+        task = std::move(g_main_task);
+    }
+    task();
+    std::_Exit(0);
+}
+#endif
 
 u32 Gow3DisplayRefreshHz() {
     static const u32 hz = [] {
@@ -232,7 +255,7 @@ extern "C" int gow3gpu_init(const Gow3GpuConfig* config) {
     Core::Emulator::FillElfInfo(*config);
     const std::string title = config->title ? config->title : "God of War III";
     const s32 width = config->width, height = config->height;
-    g_window_thread = std::thread([title, width, height] {
+    auto window_main = [title, width, height] {
         Common::SetCurrentThreadName("gow3:window");
         auto* window = new Frontend::WindowSDL(width, height, title.c_str());
         {
@@ -248,8 +271,17 @@ extern "C" int gow3gpu_init(const Gow3GpuConfig* config) {
         runtime_report();
         std::fflush(stdout);
         std::_Exit(0);
-    });
+    };
+#ifdef __APPLE__
+    {
+        std::scoped_lock lock{g_window_mutex};
+        g_main_task = window_main;
+    }
+    g_window_cv.notify_all();
+#else
+    g_window_thread = std::thread(window_main);
     g_window_thread.detach();
+#endif
     {
         std::unique_lock lock{g_window_mutex};
         g_window_cv.wait(lock, [] { return g_window_ready; });

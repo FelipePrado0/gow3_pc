@@ -472,6 +472,15 @@ private:
         const char* value = std::getenv("GOW3_STALE_READBACK");
         return value && value[0] == '1';
     }();
+    /// gow3: GOW3_FEWER_GPU_WAITS=1 (gow3.ini fewer_gpu_waits; needs stale readbacks). Queuing
+    /// readbacks at a fence does not wait for the guest memory copies in flight: stale watches
+    /// only take write access away and those copies only read guest memory, so none of them can
+    /// fault. Each wait drained the draw recording pipeline, 12 to 14 times a frame in God of
+    /// War III's gameplay (most fences queue no readback).
+    const bool readbacks_skip_copy_wait = stale_readbacks && [] {
+        const char* value = std::getenv("GOW3_FEWER_GPU_WAITS");
+        return value && value[0] == '1';
+    }();
     template <bool track>
     void WatchReadback(VAddr address, u64 size);
     struct ReadbackImageStat {

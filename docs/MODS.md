@@ -4,7 +4,10 @@ O launcher tem a página **Mods & patches**: escolha da pasta, chave geral, ativ
 e setas de ordem de carga. As mudanças valem no próximo início. O mod mais abaixo na lista tem
 prioridade; quando dois mods trocam o mesmo arquivo, o log mostra qual venceu.
 
-A pasta padrão é `mods/` no diretório de dados. Cada mod fica na sua própria pasta:
+A pasta padrão é `mods/` no diretório de dados: ao lado do `God of War III.exe` no Windows,
+`~/.local/share/gow3` no AppImage do Linux, `~/Library/Application Support/gow3` no aplicativo do
+Mac, e a pasta do projeto num build a partir do código (**Advanced → Port folder** abre esse
+diretório). Cada mod fica na sua própria pasta:
 
 ```text
 mods/

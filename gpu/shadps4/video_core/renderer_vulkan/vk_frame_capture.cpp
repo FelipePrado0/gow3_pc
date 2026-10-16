@@ -215,6 +215,7 @@ void FrameCapture::AddDisplayBuffer(VAddr address) {
 
 void FrameCapture::BeginPass(const VideoCore::ImageInfo* const* colors, u32 num_colors,
                              const VideoCore::ImageInfo* depth, std::string census) {
+    new_pass_index = -1;
     std::vector<Target> targets;
     bool display = false;
     {
@@ -231,7 +232,21 @@ void FrameCapture::BeginPass(const VideoCore::ImageInfo* const* colors, u32 num_
     const bool new_pass = !(pass_open && !entries.empty() && !entries.back().compute &&
                             entries.back().colors == targets);
     if (display && new_pass) {
+        // gow3: GOW3_CAPTURE_SPAN=<n> keeps recording across n display passes (default 1): a
+        // scene frame can end in several of them (post-processing, then the HUD).
+        static const u32 span = [] {
+            const char* env = std::getenv("GOW3_CAPTURE_SPAN");
+            return env ? std::max(1, std::atoi(env)) : 1;
+        }();
+        static u32 boundaries = 0;
+        if (state.load(std::memory_order_relaxed) == Recording && ++boundaries < span) {
+            entries.push_back({.compute = false, .colors = targets, .note = "display pass"});
+            new_pass_index = int(entries.size()) - 1;
+            pass_open = true;
+            return;
+        }
         if (state.load(std::memory_order_relaxed) == Recording) {
+            boundaries = 0;
             Write(last_presented.load(std::memory_order_relaxed));
             entries.clear();
             pending_sampled.clear();
@@ -257,6 +272,7 @@ void FrameCapture::BeginPass(const VideoCore::ImageInfo* const* colors, u32 num_
     }
     entries.push_back(
         {.compute = false, .colors = std::move(targets), .depth = d, .state = std::move(census)});
+    new_pass_index = int(entries.size()) - 1;
     pass_open = true;
 }
 

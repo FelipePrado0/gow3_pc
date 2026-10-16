@@ -4,6 +4,9 @@
  * Windows: a pagefile-backed section plays the memfd's part, and the PS4 user range is
  * reserved as one placeholder that views of the section replace (VirtualAlloc2/MapViewOfFile3,
  * as shadPS4 does); see the "host mappings" section below.
+ * macOS: a POSIX shared memory object plays the memfd's part. On Apple Silicon,
+ * [63 GiB, 448 GiB) cannot be mapped (commpage and GPU carveout), so the user range starts
+ * at 448 GiB there, as in shadPS4's macOS build.
  * Guest addresses are placed below 1 TiB (PS4 user range): GPU descriptors
  * encode 40-bit addresses, so host-default 0x7f... addresses would not fit. */
 #define _GNU_SOURCE
@@ -38,8 +41,22 @@ static uint64_t pool_size_bytes(void) {
 #define POOL_SIZE pool_size_bytes()
 #define FLEXIBLE_SIZE (UINT64_C(448) * 1024 * 1024)
 #define PAGE UINT64_C(16384)
+#ifdef __APPLE__
+#define USER_MIN UINT64_C(0x7000000000)
+#else
 #define USER_MIN UINT64_C(0x1000000000)
+#endif
 #define USER_MAX UINT64_C(0xfc00000000)
+/* Host-owned memory the guest can see (image, stacks, trampolines) lives in
+ * [LOW_MIN, LOW_MAX): PS4 code packs pointers into 40-bit fields. macOS: the range ends below
+ * the commpage, and it starts higher to leave [4 GiB, 48 GiB) to the host's own mappings. */
+#ifdef __APPLE__
+#define LOW_MIN UINT64_C(0x0c00000000)
+#define LOW_MAX UINT64_C(0x0fc0000000)
+#else
+#define LOW_MIN UINT64_C(0x0800000000)
+#define LOW_MAX USER_MIN
+#endif
 #define LIMIT 4096
 #define INVALID ((int32_t)UINT32_C(0x80020016))
 #define NO_MEMORY ((int32_t)UINT32_C(0x8002000c))
@@ -241,6 +258,61 @@ static int pool(void) {
     backing_base=MapViewOfFile3(section,GetCurrentProcess(),NULL,0,bytes,0,PAGE_READWRITE,NULL,0);
     return backing_base ? 0 : -1;
 }
+#elif defined(__APPLE__)
+/* ---- host mappings (macOS) ----
+ * macOS places the host's own mappings (heaps, Metal, Rosetta) bottom-up from 4 GiB, so the
+ * guest range and the low range are reserved before anything else runs (probe.c), and
+ * unmapping a guest range returns it to the reservation instead of freeing it. */
+static int reserve(uintptr_t start, uintptr_t end) {
+    void *p=mmap((void *)start,end-start,PROT_NONE,MAP_PRIVATE|MAP_ANON|MAP_NORESERVE,-1,0);
+    if (p==(void *)start) return 0;
+    if (p!=MAP_FAILED) munmap(p,end-start);
+    return -1;
+}
+void runtime_memory_reserve(void) {
+    static int reserved;
+    if (__atomic_load_n(&reserved,__ATOMIC_ACQUIRE)) return;
+    write_lock();
+    if (!reserved) {
+        if (reserve(LOW_MIN,LOW_MAX) || reserve(USER_MIN,USER_MAX)) {
+            fprintf(stderr,"STOP: cannot reserve the PS4 address ranges [%#" PRIx64 ", %#" PRIx64 ") and [%#" PRIx64 ", %#" PRIx64 ")\n",
+                    LOW_MIN,LOW_MAX,USER_MIN,USER_MAX);
+            exit(21);
+        }
+        __atomic_store_n(&reserved,1,__ATOMIC_RELEASE);
+    }
+    write_unlock();
+}
+/* Direct memory occupies [0,POOL_SIZE) of the object, flexible memory [POOL_SIZE,+FLEX_SPAN). */
+static int pool(void) {
+    if (pool_fd>=0) return 0;
+    runtime_memory_reserve();
+    char name[32];
+    snprintf(name,sizeof(name),"/gow3-%d-%08x",(int)getpid(),arc4random());
+    int fd=shm_open(name,O_RDWR|O_CREAT|O_EXCL,0600);
+    if (fd<0) return -1;
+    shm_unlink(name);
+    fcntl(fd,F_SETFD,FD_CLOEXEC);
+    /* The host's own view sits above 1 TiB: only the guest's views need low addresses. */
+    void *view=MAP_FAILED;
+    if (!ftruncate(fd,(off_t)(POOL_SIZE+FLEX_SPAN)))
+        view=mmap((void *)UINT64_C(0x10000000000),POOL_SIZE+FLEX_SPAN,PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
+    if (view==MAP_FAILED) { close(fd); return -1; }
+    pool_fd=fd; backing_base=view;
+    return 0;
+}
+static int host_map(uintptr_t address, uint64_t size, int prot, int reserved, uint64_t phys) {
+    void *mapped = !reserved
+        ? mmap((void *)address,size,prot,MAP_SHARED|MAP_FIXED,pool_fd,(off_t)phys)
+        : mmap((void *)address,size,PROT_NONE,MAP_PRIVATE|MAP_ANON|MAP_NORESERVE|MAP_FIXED,-1,0);
+    return mapped==MAP_FAILED ? -1 : 0;
+}
+static int host_unmap(uintptr_t address, uint64_t size) {
+    return mmap((void *)address,size,PROT_NONE,MAP_PRIVATE|MAP_ANON|MAP_NORESERVE|MAP_FIXED,-1,0)==MAP_FAILED ? -1 : 0;
+}
+static int host_protect(uintptr_t address, uint64_t size, int prot) { return mprotect((void *)address,size,prot); }
+/* Released pages read as zero when reused (shared memory objects cannot punch holes). */
+static void host_discard(uint64_t phys, uint64_t size) { memset(backing_base+phys,0,size); }
 #else
 /* Direct memory occupies [0,POOL_SIZE) of the memfd, flexible memory [POOL_SIZE,+FLEX_SPAN). */
 static int pool(void) {
@@ -663,24 +735,34 @@ uintptr_t runtime_memory_resolve(const char *name) {
     if (!strcmp(name, "cQke9UuBQOk#libkernel")) return (uintptr_t)direct_unmap;
     return RUNTIME_LOOKUP(exports,name);
 }
-/* Host-owned memory the guest can see (image, stacks, trampolines) lives in
- * [LOW_MIN, USER_MIN): PS4 code packs pointers into 40-bit fields. */
-#define LOW_MIN UINT64_C(0x0800000000)
+/* Host-owned memory the guest can see: [LOW_MIN, LOW_MAX) (see the top). */
 static uintptr_t low_next=LOW_MIN;
 void *runtime_low_map(size_t size, int prot) {
     size=align_up(size,PAGE);
+#ifdef __APPLE__
+    runtime_memory_reserve();
+#endif
     write_lock();
 #ifdef _WIN32
     void *p=NULL;
-    while (!p && low_next+size<=USER_MIN) {
+    while (!p && low_next+size<=LOW_MAX) {
         p=VirtualAlloc((void *)low_next,size,MEM_RESERVE|MEM_COMMIT,win_prot(prot));
         low_next+=size+UINT64_C(65536); /* unmapped gap catches overruns; allocation granularity */
     }
     write_unlock();
     return p;
+#elif defined(__APPLE__)
+    /* The range is reserved: mappings replace the reservation, gaps stay inaccessible. */
+    void *p=MAP_FAILED;
+    if (low_next+size<=LOW_MAX) {
+        p=mmap((void *)low_next,size,prot,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED,-1,0);
+        low_next+=size+PAGE; /* unmapped gap catches overruns */
+    }
+    write_unlock();
+    return p==MAP_FAILED ? NULL : p;
 #else
     void *p=MAP_FAILED;
-    while (low_next+size<=USER_MIN) {
+    while (low_next+size<=LOW_MAX) {
         p=mmap((void *)low_next,size,prot,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED_NOREPLACE,-1,0);
         low_next+=size+PAGE; /* unmapped gap catches overruns */
         if (p!=MAP_FAILED) break;

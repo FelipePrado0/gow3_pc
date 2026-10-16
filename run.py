@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Prepares the game image and starts gow3-probe (Windows and Linux; run.sh wraps it on Linux).
+"""Prepares the game image and starts gow3-probe (Windows, Linux and macOS; run.sh wraps it on
+Linux and macOS).
 
 Environment variables (GOW3_GAME_DIR, GOW3_DATA_DIR, GOW3_PATCHES, GOW3_MODS_*,
 GOW3_USER_DIR, ...). Extra arguments go to gow3-probe.
@@ -53,6 +54,15 @@ def no_console():
     if not WINDOWS:
         return 0
     return 0 if ctypes.windll.kernel32.GetConsoleWindow() else subprocess.CREATE_NO_WINDOW
+
+
+# macOS runs the x86-64 loader through Rosetta 2, which a new Mac does not have yet.
+ROSETTA_MESSAGE = ('The game needs Rosetta 2. Install it in Terminal with:\n'
+                   '  softwareupdate --install-rosetta --agree-to-license')
+
+
+def rosetta_missing(error):
+    return sys.platform == 'darwin' and getattr(error, 'errno', None) == 86  # EBADARCH
 
 
 def parse_cpu_features(output):
@@ -193,8 +203,13 @@ def main():
             env['PATH'] = f'{clang64}{os.pathsep}{env.get("PATH", "")}'
     # Instruction sets this CPU lacks (MOVBE, BMI1, LZCNT): the ISA rewrite covers them; exit 20
     # is a set nothing covers.
-    features = subprocess.run([str(probe), '--cpu-features'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                              text=True, creationflags=no_console())
+    try:
+        features = subprocess.run([str(probe), '--cpu-features'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                  text=True, creationflags=no_console())
+    except OSError as error:  # the first start of the x86-64 loader
+        if rosetta_missing(error):
+            fail(ROSETTA_MESSAGE)
+        raise
     if features.returncode == 20:
         print(features.stdout, end='', flush=True)
         sys.exit(20)
@@ -328,7 +343,12 @@ def main():
                    '--user', str(user_dir),
                    '--timeout', env.get('GOW3_TIMEOUT', '0'), *isa_args, *glyph_args, *args]
         # No stdin: an inherited pipe (shells such as Git Bash) cost the game its console output.
-        process = subprocess.Popen(command, stdin=subprocess.DEVNULL, creationflags=no_console())
+        try:
+            process = subprocess.Popen(command, stdin=subprocess.DEVNULL, creationflags=no_console())
+        except OSError as error:
+            if rosetta_missing(error):
+                fail(ROSETTA_MESSAGE)
+            raise
         presence = None
         try:
             try:

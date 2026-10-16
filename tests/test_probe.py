@@ -23,9 +23,10 @@ def package(code, relocs=(), names=(), capabilities=None):
 
 
 def native_package(name='fixture-native', binding_address=4112, binding_kind=1,
-                   lib_flags=5, init=b'\x31\xc0\xc3', native=b'\xc3', metadata=None):
+                   lib_flags=5, init=b'\x31\xc0\xc3', native=b'\xc3', metadata=None, code=None):
     # Main calls an import then tail-jumps to the terminal diagnostic import.
-    code = b'\x48\x83\xec\x08\xff\x15\x16\0\0\0\x48\x83\xc4\x08\xff\x25\x14\0\0\0'
+    if code is None:
+        code = b'\x48\x83\xec\x08\xff\x15\x16\0\0\0\x48\x83\xc4\x08\xff\x25\x14\0\0\0'
     image = code.ljust(4096,b'\0') + init.ljust(16,b'\0') + native
     image = image.ljust(12288,b'\0')
     header=struct.pack('<8s6Q',b'G3PROBE3',len(image),0,3,2,2,1)
@@ -67,6 +68,17 @@ class LoaderTests(unittest.TestCase):
         self.assertEqual(r.returncode,20,r.stdout+r.stderr)
         self.assertIn('Module 0 initializer returned 0',r.stdout)
         self.assertIn('first unsupported PS4 import: after-native',r.stdout)
+
+    def test_guest_tcb_load_reads_the_thread_control_block(self):
+        # mov rax, gs:[0] (link_*.py's form of `mov rax, fs:[0]`; the loader points it at the
+        # thread's TCB); mov rdi, [rax]; sub rdi, rax (tcb_self: 0); add rdi, 0x1234; then
+        # jmp [rip+12] to the terminal import at +40, which reports rdi.
+        code = (b'\x65\x48\x8b\x04\x25\0\0\0\0' + b'\x48\x8b\x38' + b'\x48\x29\xc7' +
+                b'\x48\x81\xc7\x34\x12\0\0' + b'\xff\x25\x0c\0\0\0')
+        r=self.run_image(native_package(code=code))
+        self.assertEqual(r.returncode,20,r.stdout+r.stderr)
+        self.assertIn('first unsupported PS4 import: after-native',r.stdout)
+        self.assertIn('first argument: 0x1234',r.stdout)
 
     def test_host_contract_takes_priority_over_native_export(self):
         r=self.run_image(native_package(name='bzQExy189ZI#libc',native=b'\x0f\x0b'))

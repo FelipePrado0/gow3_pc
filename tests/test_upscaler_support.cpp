@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Saved FSR 4 choices must be safe before the first rendered frame on older GPUs.
+// Saved FSR 4 choices must be safe before the first rendered frame on older GPUs, and saved
+// MetalFX choices where MetalFX cannot run.
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <initializer_list>
+#include <string>
 #include <unistd.h>
 #include "gow3_settings.h"
 
@@ -54,6 +56,27 @@ int main() {
             }
         }
     }
+    // MetalFX (macOS): a saved choice runs FSR 3.1 when MetalFX or its Vulkan interop is missing.
+    for (bool available : {false, true}) {
+        s.upscaler = UpscalerMetalFx;
+        ConfigureMetalFxSupport(available, available ? "" : "no VK_EXT_external_memory_metal");
+        assert(s.upscaler == (available ? UpscalerMetalFx : UpscalerFsr3));
+        assert(s.metalfx_supported == available);
+        assert(bool(s.metalfx_problem.load()) == !available);
+    }
+    s.upscaler = UpscalerFsr4;
+    ConfigureMetalFxSupport(false, "MetalFX needs macOS");
+    assert(s.upscaler == UpscalerFsr4); // other choices stay
+    s.upscaler = UpscalerMetalFx;
+    Save();
+    s.upscaler = UpscalerOff;
+    Load();
+    assert(s.upscaler == UpscalerMetalFx && std::string{UpscalerName(s.upscaler)} == "metalfx");
+    setenv("GOW3_UPSCALER", "metalfx", 1);
+    s.upscaler = UpscalerFsr3;
+    Load();
+    assert(s.upscaler == UpscalerMetalFx);
+    unsetenv("GOW3_UPSCALER");
     s.startup_preset = Quality;
     s.startup_upscaler = UpscalerFsr3;
     s.upscaler = UpscalerFsr3;
@@ -78,5 +101,5 @@ int main() {
     assert(!FixedRenderSession() && !ResolutionNeedsRestart());
     unsetenv("GOW3_RENDER_RES");
     std::remove(path);
-    std::puts("Upscaler support: saved choices and FSR 3.1 fallback PASS");
+    std::puts("Upscaler support: saved choices, FSR 3.1 and MetalFX fallbacks PASS");
 }

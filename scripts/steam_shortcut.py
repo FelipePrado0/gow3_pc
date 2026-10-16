@@ -14,6 +14,7 @@ from pathlib import Path
 import shutil
 import struct
 import subprocess
+import sys
 
 APP_NAME = 'God of War III Remastered'
 CAPSULE = (600, 900)    # vertical capsule: <id>p.png
@@ -22,9 +23,13 @@ HERO = (1920, 620)      # library background: <id>_hero.png
 GOLD = (233, 214, 164)
 
 WINDOWS = os.name == 'nt'
+MACOS = sys.platform == 'darwin'
 LINUX_ROOTS = ('~/.local/share/Steam', '~/.steam/steam', '~/.var/app/com.valvesoftware.Steam/.local/share/Steam')
 WINDOWS_ROOTS = ('C:/Program Files (x86)/Steam', 'C:/Program Files/Steam')
+MACOS_ROOTS = ('~/Library/Application Support/Steam',)
 FONTS = ('C:/Windows/Fonts/georgiab.ttf', 'C:/Windows/Fonts/timesbd.ttf',
+         '/System/Library/Fonts/Supplemental/Georgia Bold.ttf',
+         '/System/Library/Fonts/Supplemental/Times New Roman Bold.ttf',
          '/usr/share/fonts/TTF/DejaVuSerif-Bold.ttf', '/usr/share/fonts/dejavu/DejaVuSerif-Bold.ttf',
          '/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf', '/usr/share/fonts/noto/NotoSerif-Bold.ttf',
          '/usr/share/fonts/truetype/noto/NotoSerif-Bold.ttf')
@@ -102,7 +107,8 @@ def steam_running():
         result = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq steam.exe', '/NH'], capture_output=True,
                                 text=True, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         return 'steam.exe' in result.stdout.lower()
-    return subprocess.run(['pgrep', '-x', 'steam'], capture_output=True).returncode == 0
+    # The Mac client's process is steam_osx.
+    return subprocess.run(['pgrep', '-x', 'steam_osx' if MACOS else 'steam'], capture_output=True).returncode == 0
 
 
 def steam_roots():
@@ -116,7 +122,7 @@ def steam_roots():
         except OSError:
             pass
         return roots + [Path(p) for p in WINDOWS_ROOTS]
-    return [Path(os.path.expanduser(p)) for p in LINUX_ROOTS]
+    return [Path(os.path.expanduser(p)) for p in (MACOS_ROOTS if MACOS else LINUX_ROOTS)]
 
 
 def account_folders(root=None):

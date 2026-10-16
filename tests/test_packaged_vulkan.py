@@ -18,7 +18,7 @@ class PackagedVulkanTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name).resolve()  # the long name: the driver paths come back resolved
+        self.root = Path(self.tmp.name).resolve()  # the long name: the driver paths come back resolved (macOS: /var is /private/var)
         self.icds = self.root / "icds"
         self.libs = self.root / "host-libs"
         self.icds.mkdir()

@@ -7,6 +7,17 @@ body:
       value: |
         Before opening: search existing issues for your GPU/error first, it may already be tracked.
 
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows
+        - Linux (AppImage or source)
+        - macOS (Apple Silicon)
+    validations:
+      required: true
+
   - type: input
     id: version
     attributes:
@@ -20,7 +31,8 @@ body:
     id: gpu
     attributes:
       label: GPU and driver version
-      placeholder: "RX 6600, Adrenalin 26.8.1"
+      description: On a Mac, the chip and the macOS version.
+      placeholder: "RX 6600, Adrenalin 26.8.1 / Apple M4 Pro, macOS 26.1"
     validations:
       required: true
 
@@ -55,7 +67,7 @@ body:
     id: log
     attributes:
       label: user/last_run.log
-      description: Attach the file from the port's folder (drag and drop it here). Required for crashes, black screens, graphics glitches and performance issues.
+      description: Attach the file from the port's folder (drag and drop it here); the Mac application keeps it in ~/Library/Application Support/gow3/user/. Required for crashes, black screens, graphics glitches and performance issues.
     validations:
       required: false
 

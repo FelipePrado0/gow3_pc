@@ -97,6 +97,17 @@ inline bool FsrPassRuns(bool fsr1, bool rcas, int in_w, int in_h, int out_w, int
     return (fsr1 && upscale) || (rcas && same);
 }
 
+/// What enlarges a game image smaller than the window when upscaling (fsr1) is on: FSR 1, or on
+/// macOS MetalFX's spatial scaler (vk_metalfx.h), which falls back to FSR 1 where it cannot run.
+enum ScreenUpscaler : int { ScreenFsr1 = 0, ScreenMetalFx = 1, ScreenUpscalerCount };
+inline constexpr std::array<std::string_view, ScreenUpscalerCount> ScreenUpscalerKeys = {"fsr1",
+                                                                                         "metalfx"};
+inline constexpr std::array<const char*, ScreenUpscalerCount> ScreenUpscalerNames = {
+    "FSR 1", "MetalFX (Apple)"};
+inline int ParseScreenUpscaler(std::string_view text) {
+    return IndexOf(ScreenUpscalerKeys, text, ScreenFsr1);
+}
+
 /// What the present limit really allows: the engine ceiling caps it.
 inline int EffectiveFps(int limit, int engine_fps) {
     return limit == 0 || limit > engine_fps ? engine_fps : limit;

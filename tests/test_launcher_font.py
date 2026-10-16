@@ -16,6 +16,10 @@ class FontFileTest(unittest.TestCase):
         self.assertEqual(launcher.FONT_FILE, launcher.PORT_DIR / 'launcher' / 'gowfont.ttf')
         self.assertTrue(launcher.FONT_FILE.is_file())
 
+    def test_macos_package_ships_the_font(self):
+        script = (ROOT / 'packaging' / 'macos' / 'package.sh').read_text(encoding='utf-8')
+        self.assertIn('launcher/gowfont.ttf "$res/launcher/"', script)
+
     def test_windows_package_ships_the_font(self):
         script = (ROOT / 'packaging' / 'windows' / 'package.sh').read_text(encoding='utf-8')
         copies = [line for line in script.splitlines()
@@ -54,6 +58,12 @@ class RegisterFontTest(unittest.TestCase):
         with mock.patch.object(launcher, 'WINDOWS', False), \
                 mock.patch.object(launcher.ctypes, 'CDLL', side_effect=OSError('no fontconfig')):
             self.assertFalse(launcher.register_font(launcher.FONT_FILE))
+
+
+    @unittest.skipUnless(sys.platform == 'darwin', 'Core Text font registration')
+    def test_core_text_registers_the_font_and_refuses_other_files(self):
+        self.assertTrue(launcher.register_font(launcher.FONT_FILE))
+        self.assertFalse(launcher.register_font(Path(launcher.__file__)))
 
 
 class HeadingFontTest(unittest.TestCase):

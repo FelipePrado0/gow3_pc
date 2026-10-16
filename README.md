@@ -4,10 +4,10 @@
   <a href="https://trendshift.io/repositories/299469?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-299469" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/299469/daily?language=C%2B%2B" alt="FelipePrado0%2Fgow3_pc | Trendshift" width="250" height="55"/></a>
 </div>
 
-**English** | [Português (Brasil)](https://github.com/FelipePrado0/gow3_pc/blob/main/README.pt-BR.md) | [Español](https://github.com/FelipePrado0/gow3_pc/blob/main/README.es.md)
+**English** | [Português (Brasil)](README.pt-BR.md) | [Español](README.es.md) | [Bahasa Indonesia](README.id.md)
 
-A PC port of **God of War III Remastered** (PlayStation 4) for Windows 10/11 and Linux
-(experimental AppImage).
+A PC port of **God of War III Remastered** (PlayStation 4) for Windows 10/11, Linux
+(experimental AppImage) and Macs with Apple Silicon ([experimental](#macos-apple-silicon-experimental)).
 
 > **No game files are included.** You need a dump from your own PS4 (tested: CUSA01623 and
 > CUSA01715, versions 01.00 and 01.02).
@@ -20,21 +20,25 @@ A PC port of **God of War III Remastered** (PlayStation 4) for Windows 10/11 and
   - [Contents](#contents)
   - [Download and play](#download-and-play)
   - [Linux (AppImage, experimental)](#linux-appimage-experimental)
+  - [macOS (Apple Silicon, experimental)](#macos-apple-silicon-experimental)
   - [What works](#what-works)
   - [Feature availability](#feature-availability)
   - [Settings](#settings)
   - [Keyboard controls](#keyboard-controls)
   - [Importing shadPS4 saves](#importing-shadps4-saves)
   - [Third-party overlays (Windows)](#third-party-overlays-windows)
+  - [Overlays on a Mac](#overlays-on-a-mac)
   - [Troubleshooting](#troubleshooting)
   - [Performance and compatibility](#performance-and-compatibility)
   - [Building from source](#building-from-source)
     - [Windows](#windows)
     - [Linux (Ubuntu 24.04)](#linux-ubuntu-2404)
+    - [macOS](#macos)
   - [Tests](#tests)
     - [Python](#python)
     - [Windows C++ tests (MSYS2 CLANG64)](#windows-c-tests-msys2-clang64)
     - [Linux C/C++ tests](#linux-cc-tests)
+    - [macOS C/C++ tests](#macos-cc-tests)
     - [Checks using a prepared game](#checks-using-a-prepared-game)
   - [How it works](#how-it-works)
   - [Credits](#credits)
@@ -121,7 +125,7 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
 - **Steam:** **Advanced → Add to Steam** adds "God of War III Remastered" as a non-Steam game, with
   the icon, the vertical and horizontal capsules, the library background and the logo made from the
   dump's pictures. Close Steam first (it rewrites its shortcuts when it exits). The button is also in
-  the Windows launcher (not tested there yet).
+  the Windows and Mac launchers (not tested with Steam there yet).
 - **Steam Deck / SteamOS (Gaming Mode):** if Steam tries to launch the AppImage with Proton, open
   the shortcut's **Properties → Compatibility** and select **Steam Linux Runtime** instead of Proton.
   The AppImage is a native Linux application.
@@ -129,6 +133,61 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
   the launcher and the game window show their icon in the dock; **Advanced → Linux** turns it off and
   removes the entry. When another tool (Gear Lever, AppImageLauncher…) already made an entry that
   starts the same file, it makes none and removes its own, so there are no duplicates.
+
+## macOS (Apple Silicon, experimental)
+
+The macOS build runs the same native runtime under Rosetta 2, with the graphics on Mesa's
+KosmicKrisp Vulkan driver (Vulkan on Metal). It was tested on an M4 Pro (macOS 27) through the
+opening and the first fights; it has not been played through yet. Details and what differs from
+Linux: [packaging/macos/README.md](packaging/macos/README.md).
+
+**You need:** a Mac with Apple Silicon (M1 or newer), macOS 26 (Tahoe) or newer, Rosetta 2 and
+your own game dump. Intel Macs are not supported. When Rosetta 2 is missing the **Log** page says
+so; install it in Terminal with `softwareupdate --install-rosetta --agree-to-license`. Python, the
+libraries and the Vulkan driver are inside the application.
+
+**Download and play**
+
+1. Download `gow3-macos.dmg` from the
+   [releases page](https://github.com/FelipePrado0/gow3_pc/releases/latest).
+2. Open it and drag **God of War III** onto **Applications**.
+3. The application is not signed with an Apple Developer ID, so macOS blocks it. Allow it once in
+   Terminal:
+   ```bash
+   xattr -dr com.apple.quarantine "/Applications/God of War III.app"
+   ```
+4. Open **God of War III** and choose your game folder (an update dumped apart from the game goes
+   in **Update folder**), click **Save**, then **PLAY**. The first start takes longer: Rosetta
+   translates the game's code and the shaders are compiled.
+
+For more FPS on a 1080p screen: **Performance → Render resolution → 720p** (or 480p) and
+**Graphics → Upscaling → Upscale to the window** with **Upscaler → MetalFX (Apple)**. Every render
+resolution smaller than the window is enlarged, and the performance overlay then says
+"MetalFX 720p->1080p". On an M4 Pro that is about 52 FPS in the first fight, against 32 at native
+1080p. At 480p bright areas blow out (a known bug of the game at that resolution).
+
+- **Menu key:** **`** (the key left of 1) opens the port's menu, as a Mac keyboard has no Insert
+  key; R3 + L2 works as on the other systems.
+- **Files:** saves, settings, the shader cache and the log are in
+  `~/Library/Application Support/gow3` (**Advanced → Port folder** opens it); the launcher's own
+  settings are in `~/.config/gow3-launcher`. Start the application from Applications, Launchpad or
+  the Dock.
+- **Updates:** **Advanced → Check for updates** asks this repository's latest release
+  and downloads its `gow3-macos.dmg` (or opens the release page when it has none): drag the new
+  application over the old one. Saves and settings are kept.
+- **Steam:** **Advanced → Add to Steam**, as on Linux (`~/Library/Application Support/Steam`), with
+  Steam closed; Steam then starts the game without the launcher.
+- **Advanced → macOS → Metal performance HUD:** Apple's overlay with frame rate, frame times and
+  memory on the game window, the Mac's counterpart of MangoHud.
+- **Graphics → Upscaling → Fewer GPU waits (experimental):** less CPU load where readbacks stop the
+  draws; on the M4 Pro it does not raise the FPS, which the GPU side limits.
+- **Performance overlay:** GPU use is the whole GPU's (macOS has no counter per process) and RAM is
+  Activity Monitor's figure.
+- **Performance → GPU data** has no graphics card or stream buffer memory choice: a Mac has one GPU
+  that shares the system's memory.
+- **Without the launcher's window:**
+  `"/Applications/God of War III.app/Contents/MacOS/God of War III" --play` starts the game with the
+  saved settings.
 
 ## What works
 
@@ -158,30 +217,34 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
   quick settings on the home page, graphics,
   performance, game folder and save backups, patches, mods (order, presets and conflicts),
   controls with PlayStation or Xbox button icons, updates and diagnostics.
-- **In-game menu** (Insert on the keyboard, R3+L2 on the controller), with four tabs:
+- **In-game menu** (Insert on the keyboard, ` on a Mac, R3+L2 on the controller), with four tabs:
   - **Game:** cheats (infinite health, magic, item meter, Rage of Sparta, max red orbs);
     multipliers from 0.1x to 100x for red, green (health), blue (magic) and gold (Rage of
     Sparta) orbs and for damage dealt and taken; an enemy health bar.
-  - **Image:** display mode (windowed, borderless, fullscreen), VSync and RCAS sharpening.
+  - **Image:** display mode (windowed, borderless, fullscreen), VSync and RCAS sharpening; on a
+    Mac also upscaling to the window with FSR 1 or Apple's MetalFX.
   - **Performance:** frame rate limit (30 to unlimited), frames queued, background shader
     compiling; render resolution, engine frame rate and GPU readback options apply with one
     "Apply and restart" button.
   - **Overlay:** a performance overlay with FPS, frametime, upscaler, GPU (name and use), CPU,
     RAM and VRAM, each optional, with font size, corner, background opacity and layout. The
-    numbers are the game's own use, not the whole system's.
+    numbers are the game's own use, not the whole system's (on a Mac the GPU use is the whole
+    GPU's). Its upscaler item says what enlarges the image, such as "MetalFX 720p->1080p".
 
 ## Feature availability
 
 Availability checked against [release 2.2.0](https://github.com/FelipePrado0/gow3_pc/releases/tag/windows-v2.2.0) and the source on October 14, 2026.
 
-| Feature | Published 2.2.0 packages | Current source |
-|---|---|---|
-| Windows ZIP / experimental Linux AppImage | Available | Build scripts available |
-| Startup black-screen patch / controller button icons | Included | Included |
-| Discord Rich Presence | Not included | Optional under Advanced, off by default; game name and elapsed time |
-| RADV sparse-queue fix | Not included | Merged into `main` |
-| FSR 1, FSR 3.1, FSR 4, TAA, DLSS | Disabled | Disabled in the launcher/game settings path |
-| RCAS sharpening | Available | Available |
+| Feature | Published 2.2.0 packages | Current source | macOS (this repository) |
+|---|---|---|---|
+| Windows ZIP / experimental Linux AppImage | Available | Build scripts available | Mac application and `gow3-macos.dmg` (`packaging/macos/package.sh`) |
+| Startup black-screen patch / controller button icons | Included | Included | Included |
+| Discord Rich Presence | Not included | Optional under Advanced, off by default; game name and elapsed time | Same option (not tested on a Mac) |
+| RADV sparse-queue fix | Not included | Merged into `main` | Not applicable (KosmicKrisp) |
+| FSR 1, FSR 3.1, FSR 4, TAA, DLSS | Disabled | Disabled in the launcher/game settings path | FSR 1 and Apple's MetalFX upscale to the window (Graphics → Upscaling); the temporal upscalers stay off; no DLSS (NVIDIA) |
+| RCAS sharpening | Available | Available | Available (with FSR 1; MetalFX sharpens by itself) |
+| Check for updates / Add to Steam | Windows / both | Windows / both | Both (a new disk image; Steam's Mac folder) |
+| MangoHud / GameMode / Wayland-X11 choice | Linux | Linux | Metal performance HUD in MangoHud's place |
 
 The Linux AppImage was rebuilt on October 14 for glibc 2.39 or newer. The Windows and Linux
 packages can use different source revisions. Check the release notes for changes to later downloads.
@@ -190,9 +253,11 @@ packages can use different source revisions. Check the release notes for changes
 
 Settings are kept in `gow3.ini` (the game and the in-game menu) and in
 `%APPDATA%\gow3-launcher\settings.json` (the launcher). Saves, the shader cache and
-`last_run.log` go to the project's `user` folder.
+`last_run.log` go to the project's `user` folder. On Linux and macOS the launcher's file is
+`~/.config/gow3-launcher/settings.json`; the Mac application keeps the rest in
+`~/Library/Application Support/gow3`.
 
-On **Performance → GPU data → Stream buffer memory**, choose **System RAM (cached, default)**,
+On **Performance → GPU data → Stream buffer memory** (Windows and Linux), choose **System RAM (cached, default)**,
 **System RAM (uncached)** or **GPU memory (previous behavior)**. System RAM can improve frame
 rates on NVIDIA laptops. The choice is saved and applies on the next game launch, including
 when using `Play God of War III.exe` or `--play`. Choose GPU memory to restore the previous
@@ -229,7 +294,7 @@ Defaults; change them in the launcher's **Game** page, **Controls** section.
 | Enter | Options |
 | Tab | left touchpad click (photo mode) |
 | Backspace | right touchpad click (pause menu) |
-| Insert | the port's menu (R3+L2 on the controller) |
+| Insert (` on a Mac) | the port's menu (R3+L2 on the controller) |
 
 On a controller without a touchpad (Xbox and others), View opens the pause menu (the right
 touchpad click) and L1 + View opens photo mode (the left click). On a DualSense the touchpad
@@ -243,7 +308,8 @@ your game folder. A new controller is picked up after a restart. Without the lau
 `GOW3_GLYPH_STYLE` to `auto`, `xbox` or `nintendo` before starting `run.py`.
 
 In the menu: L1/R1 or Q/E switch tabs. In the save list: arrows or the d-pad choose, Enter or
-Cross confirm, Esc or Circle cancel.
+Cross confirm, Esc or Circle cancel. A Mac keyboard has no Insert key: there **`** (the key left of
+1) opens the menu, and Insert still works on a keyboard that has one.
 
 ## Importing shadPS4 saves
 
@@ -252,10 +318,13 @@ from the PS3 game and will not work. Use the same title ID (this example uses `C
 
 1. Close the game and shadPS4. Back up both save folders.
 2. Find the source in shadPS4's data folder: `user\savedata\1\CUSA01623\` in older
-   versions, or `home\<user-id>\savedata\CUSA01623\` in newer versions.
+   versions, or `home\<user-id>\savedata\CUSA01623\` in newer versions. On a Mac, shadPS4's
+   data folder is usually `~/Library/Application Support/shadPS4`.
 3. The destination is **`user\savedata\1\CUSA01623\` next to `God of War III.exe`**.
    Example: `C:\Games\gow3-windows\user\savedata\1\CUSA01623\`. With a custom
-   **Saves folder** in the launcher, use `<custom folder>\savedata\1\CUSA01623\`.
+   **Saves folder** in the launcher, use `<custom folder>\savedata\1\CUSA01623\`. On a Mac
+   (the application): `~/Library/Application Support/gow3/user/savedata/1/CUSA01623/`; from a
+   source build, `user/savedata/1/CUSA01623/` in the project folder.
 4. Copy each slot folder there, keeping its name and game files. Do not nest another
    `CUSA01623` folder. Exclude the slot's internal `sce_sys` folder from the game data.
 5. Beside each slot, create `<slot name>.sce_sys` if it does not exist. You can copy
@@ -280,6 +349,13 @@ If the overlay still does not appear, report the port and overlay versions, the 
 working port version, and attach `user\last_run.log`. These checks do not confirm a fix
 for every overlay configuration.
 
+## Overlays on a Mac
+
+RTSS, Afterburner and ReShade do not exist for macOS. Apple's Metal performance HUD takes their
+place: **Advanced → macOS → Metal performance HUD** in the launcher, or `MTL_HUD_ENABLED=1` for a
+start without it (Command-F9 toggles it). The game process is `gow3-probe` (in the application:
+`God of War III.app/Contents/Resources/bin/gow3-probe`), the name Activity Monitor shows too.
+
 ## Troubleshooting
 
 - Black screen at start: use the latest release, which includes the startup deadlock patch.
@@ -290,6 +366,10 @@ for every overlay configuration.
   With a custom **Saves folder**, `last_run.log` is in that folder instead.
 - Yellow/orange/white textures or wrong lighting: try disabling **Performance → GPU data →
   Deferred GPU readbacks**, then restart. This workaround can cause stutters.
+- On a Mac, "God of War III is damaged" or "cannot be opened": run the `xattr` line of the
+  [macOS steps](#macos-apple-silicon-experimental) again. "The game needs Rosetta 2": install it
+  with `softwareupdate --install-rosetta --agree-to-license`. `STOP: macOS 26 or newer is needed`:
+  the Vulkan driver (KosmicKrisp) needs macOS 26 (Tahoe).
 - GPU-specific rendering failures, crashes, audio problems and progress blockers remain under
   investigation. Check the [release notes](https://github.com/FelipePrado0/gow3_pc/releases/latest)
   and [issues](https://github.com/FelipePrado0/gow3_pc/issues) before reporting; include a save
@@ -304,6 +384,11 @@ not a benchmark of every release or a guarantee for other systems.
 **Tested and playable from start to finish** at native 1080p with the 240 FPS engine frame
 rate on the test system. Texture corruption, crashes and progress blockers have also been
 reported on other setups, including at 1080p. See the known issues in the release notes.
+
+On a Mac mini with an M4 Pro (macOS 27, VSync off), the first fight runs at about 52 FPS at 720p
+with MetalFX and about 32 FPS at native 1080p; the GPU side limits it
+([measurements](packaging/macos/README.md#fewer-gpu-waits-experimental)). Other Macs have not been
+tested.
 
 ## Building from source
 
@@ -381,6 +466,27 @@ can require a newer glibc; public release builds use Ubuntu 24.04. From the repo
 `out/venv/bin/python launcher/gow3_launcher_win.py --play` for saved launcher settings, or
 `GOW3_GAME_DIR=/path/to/CUSA01623 out/venv/bin/python run.py` for a direct launch.
 
+### macOS
+
+You need the Xcode command line tools (`xcode-select --install`), Homebrew's
+`brew install cmake ninja pkg-config`, Rosetta 2, and Python 3 with Tk and Pillow for the launcher
+(`brew install python python-tk`, then `python3 -m pip install pillow`). The first build fetches
+and builds the x86-64 libraries the game links (about 5 minutes; `packaging/macos/deps.sh`).
+
+```bash
+git clone --recursive https://github.com/FelipePrado0/gow3_pc && cd gow3_pc
+./play-mac.sh                      # builds, finds the dump in ~/Downloads, ~/Desktop or ~/Documents, plays
+./play-mac.sh /path/to/CUSA01623   # that folder (eboot.bin, sce_module, sce_sys)
+./play-mac.sh --launcher           # the launcher: settings, saves, mods
+bash packaging/macos/package.sh    # dist/gow3-macos.dmg and dist/God of War III.app: a release
+```
+
+From the repository, saves, `gow3.ini`, the shader cache and `user/last_run.log` are in the
+project folder; `python3 launcher/gow3_launcher_win.py --play` starts with the saved launcher
+settings, and `GOW3_GAME_DIR=/path/to/CUSA01623 python3 run.py` without the launcher. From the
+repository, **Advanced → Desktop shortcut** puts an application on the desktop that opens the
+launcher.
+
 ## Tests
 
 Run these from the repository root after the build. The first C++ checks below do not need a game dump.
@@ -413,7 +519,18 @@ out/gpu/warmup-inbox-test
 out/gpu/graphics-settings-test
 ```
 
-`bash build.sh --test` runs the additional C runtime tests on Linux only. On Windows the build exits before that block; use the Ninja targets above.
+`bash build.sh --test` runs the additional C runtime tests on Linux and macOS. On Windows the build exits before that block; use the Ninja targets above.
+
+### macOS C/C++ tests
+
+```bash
+bash build.sh --test
+source packaging/macos/env.sh   # the x86-64 compiler and libraries for ninja
+ninja -C out/gpu perf-overlay-test warmup-inbox-test graphics-settings-test
+out/gpu/perf-overlay-test
+out/gpu/warmup-inbox-test
+out/gpu/graphics-settings-test
+```
 
 ### Checks using a prepared game
 
@@ -426,8 +543,8 @@ out/gpu/stat-multipliers-test.exe out/eboot.elf
 out/gow3-probe.exe out/boot-linked.bin --app0 "D:/Games/CUSA01623" --check-imports
 ```
 
-On Linux, use `out/gpu/stat-multipliers-test` and `out/gow3-probe` without `.exe`, and a Linux
-game path. `--check-imports` checks system imports and exits without starting gameplay.
+On Linux and macOS, use `out/gpu/stat-multipliers-test` and `out/gow3-probe` without `.exe`, and
+a path of that system. `--check-imports` checks system imports and exits without starting gameplay.
 More test targets are listed in [gpu/CMakeLists.txt](https://github.com/FelipePrado0/gow3_pc/blob/main/gpu/CMakeLists.txt).
 
 ## How it works
@@ -439,7 +556,9 @@ system libraries, without CPU emulation. The graphics are translated: they run o
 and shaders to Vulkan, with the God of War III rendering fixes from
 [cuesta4's `eltutz` branch](https://github.com/cuesta4/shadPS4/tree/eltutz). Running the game code
 directly on the CPU is also how shadPS4 works; what this project changes is the system layer and
-the game-specific work (patches, background shader cache, launcher and in-game menu).
+the game-specific work (patches, background shader cache, launcher and in-game menu). On a Mac,
+Apple's Rosetta 2 translates that x86-64 code for Apple Silicon, and the graphics reach Metal
+through Mesa's KosmicKrisp Vulkan driver.
 It is a fork of [Supermedo's Windows port](https://github.com/Supermedo/bloodborne_pc) of
 [deadinside28's bloodborne_pc](https://github.com/deadinside28/bloodborne_pc) (see
 [Credits](#credits)).
@@ -458,6 +577,7 @@ It is a fork of [Supermedo's Windows port](https://github.com/Supermedo/bloodbor
 | In-game menu | `gpu/shim/gow3_overlay.cpp` | The Dear ImGui menu and performance overlay; settings in `gpu/shim/gow3_settings.cpp` |
 | Patches | `patches/God_of_War_III_Remastered.xml`, `scripts/patches.py` | Applied in memory at start, without changing the game files |
 | Launcher | `launcher/gow3_launcher_win.py` | Settings, patches, mods, controls and the play button |
+| macOS | `src/compat_mac.c`, `packaging/macos/` | Rosetta 2, the Mac's memory layout and thread state, KosmicKrisp; MetalFX upscaling (`host_passes/metalfx_pass.cpp`, `vk_metalfx.mm`); the application and its disk image |
 
 More documentation: [mods](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/MODS.md), [frame map and historical upscaler research](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/upscaler.md)
 and [parallel GPU work](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/parallel_gpu.md).
@@ -491,6 +611,9 @@ Also used: [LibAtrac9](https://github.com/Thealexbarney/LibAtrac9), [FFmpeg](htt
 [Vulkan Memory Allocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator),
 [FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) and the AMD FidelityFX SDK,
 [MSYS2](https://www.msys2.org), [LLVM](https://llvm.org) and [Pillow](https://python-pillow.org).
+On macOS: [Mesa](https://mesa3d.org)'s KosmicKrisp Vulkan driver (from shadPS4's macOS release),
+Apple's MetalFX, [mimalloc](https://github.com/microsoft/mimalloc) and
+[PyInstaller](https://pyinstaller.org) for the application.
 
 ## License
 

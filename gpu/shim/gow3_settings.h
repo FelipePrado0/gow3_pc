@@ -13,7 +13,7 @@
 namespace Gow3Settings {
 
 enum Upscaler : int { UpscalerOff = 0, UpscalerFsr3 = 1, UpscalerFsr4 = 2, UpscalerFsr411 = 3,
-                      UpscalerTaa = 4, UpscalerDlss = 5, UpscalerCount };
+                      UpscalerTaa = 4, UpscalerDlss = 5, UpscalerMetalFx = 6, UpscalerCount };
 /// FSR 4 v07 or FSR 4.1.1: the same inputs, settings and placement in the frame.
 inline bool IsFsr4(int upscaler) {
     return upscaler == UpscalerFsr4 || upscaler == UpscalerFsr411;
@@ -64,6 +64,11 @@ struct Values {
     std::atomic<int> fps_limit{0};
     std::atomic<bool> async_shaders{true};
     std::atomic<bool> fsr1{false};
+    /// Gow3Graphics::ScreenUpscaler: FSR 1, or MetalFX on macOS, when fsr1 (upscaling) is on.
+    std::atomic<int> screen_upscaler{0};
+    /// Set by the presenter: MetalFX enlarged the last frame, or why it cannot (FSR 1 does then).
+    std::atomic<bool> screen_metalfx_applied{false};
+    std::atomic<const char*> screen_metalfx_problem{nullptr};
     std::atomic<bool> rcas{true};
     std::atomic<int> rcas_strength{75};
     /// Set by the presenter: sharpening ran on the last frame (it needs FSR 1 when the game's
@@ -79,6 +84,8 @@ struct Values {
     std::atomic<int> engine_fps{120};
     std::atomic<bool> deferred_readback{true};
     std::atomic<bool> stale_readback{true};
+    /// Readbacks queue without waiting for guest memory copies (texture_cache.h, GOW3_FEWER_GPU_WAITS).
+    std::atomic<bool> fewer_gpu_waits{false};
     /// Gow3Graphics::Anisotropies; the samplers read startup_anisotropy.
     std::atomic<int> anisotropy{0};
     int startup_anisotropy = 0;
@@ -89,7 +96,7 @@ struct Values {
     /// The engine rate this launch really runs at (run.py's GOW3_ENGINE_FPS): 60 when the frame
     /// rate patch does not apply to this game build.
     std::atomic<int> applied_engine_fps{120};
-    bool startup_deferred_readback = true, startup_stale_readback = true;
+    bool startup_deferred_readback = true, startup_stale_readback = true, startup_fewer_gpu_waits = false;
     // FSR 4 checks (menu): the provider's auto exposure, the jitter sign it is given.
     std::atomic<bool> fsr4_auto_exposure{true};
     std::atomic<bool> fsr4_invert_jitter{false};
@@ -104,6 +111,9 @@ struct Values {
     /// DLSS (gow3_dlss.dll, NVIDIA RTX) is ready, or why not (null before the device exists).
     std::atomic<bool> dlss_supported{false};
     std::atomic<const char*> dlss_problem{nullptr};
+    /// MetalFX (macOS: Apple's upscaler, through Metal) is ready, or why not.
+    std::atomic<bool> metalfx_supported{false};
+    std::atomic<const char*> metalfx_problem{nullptr};
 
     /// Startup settings for the explicit GOW3_RENDER_RES compatibility patch only.
     int startup_preset = NativeAA;
@@ -121,6 +131,9 @@ void Load();
 void ConfigureUpscalerSupport(bool fsr4, bool fsr411);
 /// After device creation: DLSS availability; a DLSS setting falls back to FSR 3.1 without it.
 void ConfigureDlssSupport(bool available, const char* problem);
+/// After device creation: MetalFX availability (macOS); a MetalFX setting falls back to FSR 3.1
+/// without it.
+void ConfigureMetalFxSupport(bool available, const char* problem);
 /// Startup-patched scene dimensions cannot change until run.sh prepares a new image.
 bool FixedRenderSession();
 int RenderPreset();

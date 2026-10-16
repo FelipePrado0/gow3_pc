@@ -12,6 +12,13 @@
 #include <pdh.h>
 #include <pdhmsg.h>
 #include <psapi.h>
+#elif defined(__APPLE__)
+#include <cstdio>
+#include <CoreFoundation/CoreFoundation.h>
+#include <IOKit/IOKitLib.h>
+#include <mach/mach.h>
+#include <sys/resource.h>
+#include <sys/sysctl.h>
 #endif
 
 namespace Gow3PerfStats {
@@ -110,6 +117,100 @@ void Run(const Vulkan::Instance* instance) {
             s.vram_total_gb = double(instance->GetDeviceMemoryBudgetNow()) / GiB;
         }
         s.gpu_percent = gpu.Percent();
+        {
+            std::scoped_lock lock{mutex};
+            latest = std::move(s);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+}
+#elif defined(__APPLE__)
+// gow3 (macOS): the GPU's use as Activity Monitor shows it, from the accelerator's
+// PerformanceStatistics. It is the whole GPU's: macOS has no counter per process. Negative
+// without the value.
+float GpuPercent() {
+    io_iterator_t iterator = 0;
+    if (IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOAccelerator"), &iterator) !=
+        KERN_SUCCESS) {
+        return -1.0f;
+    }
+    float percent = -1.0f;
+    while (const io_registry_entry_t entry = IOIteratorNext(iterator)) {
+        if (const CFTypeRef stats = IORegistryEntryCreateCFProperty(entry, CFSTR("PerformanceStatistics"),
+                                                                   kCFAllocatorDefault, 0)) {
+            if (CFGetTypeID(stats) == CFDictionaryGetTypeID()) {
+                const void* value =
+                    CFDictionaryGetValue(static_cast<CFDictionaryRef>(stats), CFSTR("Device Utilization %"));
+                int64_t number = 0;
+                if (value && CFGetTypeID(value) == CFNumberGetTypeID() &&
+                    CFNumberGetValue(static_cast<CFNumberRef>(value), kCFNumberSInt64Type, &number)) {
+                    percent = std::max(percent, float(number));
+                }
+            }
+            CFRelease(stats);
+        }
+        IOObjectRelease(entry);
+    }
+    IOObjectRelease(iterator);
+    return percent < 0.0f ? -1.0f : std::clamp(percent, 0.0f, 100.0f);
+}
+
+// Activity Monitor's "Memory" for this process (its physical footprint), in bytes; 0 without it.
+uint64_t Footprint() {
+    task_vm_info_data_t info{};
+    mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+    if (task_info(mach_task_self(), TASK_VM_INFO, reinterpret_cast<task_info_t>(&info), &count) != KERN_SUCCESS) {
+        return 0;
+    }
+    return info.phys_footprint;
+}
+
+uint64_t CpuMicros() {
+    rusage usage{};
+    getrusage(RUSAGE_SELF, &usage);
+    const auto micros = [](const timeval& t) { return uint64_t(t.tv_sec) * 1000000 + uint64_t(t.tv_usec); };
+    return micros(usage.ru_utime) + micros(usage.ru_stime);
+}
+
+void Run(const Vulkan::Instance* instance) {
+    uint64_t last_cpu = 0;
+    std::chrono::steady_clock::time_point last_wall{};
+    const unsigned cores = std::max(1u, std::thread::hardware_concurrency());
+    constexpr double GiB = 1024.0 * 1024.0 * 1024.0;
+    uint64_t installed = 0;
+    size_t size = sizeof(installed);
+    sysctlbyname("hw.memsize", &installed, &size, nullptr, 0);
+    bool reported = false;
+    while (true) {
+        Sample s;
+        s.gpu_name = std::string(instance->GetModelName());
+        const auto now = std::chrono::steady_clock::now();
+        const uint64_t cpu = CpuMicros();
+        if (last_wall != std::chrono::steady_clock::time_point{}) {
+            const auto wall = std::chrono::duration_cast<std::chrono::microseconds>(now - last_wall).count();
+            s.cpu_percent = CpuPercent(cpu - last_cpu, uint64_t(wall), cores);
+        }
+        last_cpu = cpu;
+        last_wall = now;
+        if (const uint64_t used = Footprint()) {
+            s.ram_used_gb = double(used) / GiB;
+        }
+        if (installed) {
+            s.ram_total_gb = double(installed) / GiB;
+        }
+        if (instance->CanReportMemoryUsage()) {
+            s.vram_used_gb = double(instance->GetDeviceMemoryUsage()) / GiB;
+            s.vram_total_gb = double(instance->GetDeviceMemoryBudgetNow()) / GiB;
+        }
+        s.gpu_percent = GpuPercent();
+        if (!reported && s.cpu_percent >= 0.0f) {
+            // Once, for reports: what the overlay's measured items read.
+            std::printf("Performance overlay: GPU %.0f%% (whole GPU), CPU %.0f%%, RAM %.1f / %.1f GB, VRAM %.1f / %.1f GB\n",
+                        s.gpu_percent, s.cpu_percent, s.ram_used_gb, s.ram_total_gb, s.vram_used_gb,
+                        s.vram_total_gb);
+            std::fflush(stdout);
+            reported = true;
+        }
         {
             std::scoped_lock lock{mutex};
             latest = std::move(s);

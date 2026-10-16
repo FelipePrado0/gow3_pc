@@ -950,6 +950,28 @@ EXTRA = {
             'Permite pular qualquer cinemática com o botão X. Agradecimentos a illusion0001, também conhecido como illusionyy, pelo patch do PS3 que tornou isso muito fácil.',
         'Fixes the black screen at startup with the FPS counter running: the frame pacing index starts at 2 instead of 0, so the second frame no longer waits for a flip that only it can trigger.':
             'Corrige a tela preta na inicialização com o contador de FPS rodando: o índice de ritmo dos quadros começa em 2 em vez de 0, então o segundo quadro não espera mais por um flip que só ele pode disparar.',
+        # macOS (packaging/macos): upscaling to the window, MetalFX, the Metal HUD, updates.
+        'macOS': 'macOS',
+        'Upscale to the window': 'Ampliar para a janela',
+        'Enlarges every game image smaller than the window: with Render resolution 720p or 480p (Home or Performance) it raises the FPS; at the size of the window it does nothing.':
+            'Amplia toda imagem do jogo menor que a janela: com Render resolution 720p ou 480p (Home ou Performance) aumenta o FPS; no tamanho da janela não faz nada.',
+        'FSR 1 (AMD) or MetalFX (Apple, on the GPU through Metal): both enlarge the finished image, and MetalFX also sharpens it. Where MetalFX cannot run, the game uses FSR 1.':
+            'FSR 1 (AMD) ou MetalFX (Apple, na GPU via Metal): os dois ampliam a imagem pronta, e o MetalFX também aplica nitidez. Onde o MetalFX não roda, o jogo usa FSR 1.',
+        'Render resolution is Native (1080p), as tall as this screen: there is nothing to enlarge. Every lower render resolution is enlarged:':
+            'A resolução de renderização é Native (1080p), da altura desta tela: não há nada para ampliar. Toda resolução menor é ampliada:',
+        'Fewer GPU waits (experimental)': 'Menos esperas pela GPU (experimental)',
+        'The game keeps preparing draws while small images are read back for it, instead of stopping each time: less CPU load, and more FPS where the CPU limits it. Needs "Game reads GPU data without waiting" (Performance).':
+            'O jogo continua preparando os desenhos enquanto imagens pequenas são lidas para ele, em vez de parar a cada vez: menos carga na CPU e mais FPS onde a CPU limita. Precisa de "Game reads GPU data without waiting" (Performance).',
+        'Its upscaler item says what enlarges the image, such as "MetalFX 720p->1080p", or "Native 1080p" without upscaling. Items, size and corner: in-game menu (Insert / R3+L2) > Overlay.':
+            'O item do upscaler diz o que amplia a imagem, como "MetalFX 720p->1080p", ou "Native 1080p" sem ampliação. Itens, tamanho e canto: menu do jogo (Insert / R3+L2) > Overlay.',
+        'The same settings as on the Graphics and Performance pages: a change here is a change there.':
+            'As mesmas configurações das telas Graphics e Performance: mudar aqui é mudar lá.',
+        'When the display supports HDR.': 'Quando o monitor suporta HDR.',
+        'Metal performance HUD': 'HUD de desempenho do Metal',
+        "Apple's overlay on the game window: frame rate, frame times and memory, measured by Metal itself.":
+            'O overlay da Apple na janela do jogo: FPS, tempos de quadro e memória, medidos pelo próprio Metal.',
+        'Download': 'Baixar',
+        'No release has been published yet: {}': 'Nenhuma release foi publicada ainda: {}',
     },
     'es': {
         'Show Discord Rich Presence': 'Mostrar Discord Rich Presence',
@@ -1173,6 +1195,28 @@ EXTRA = {
             'Guarda la imagen del juego, sin el overlay, como PNG en la carpeta screenshots de las partidas.',
         'Vibration': 'Vibración',
         "Strength of the gamepad's vibration; 0% turns it off.": 'Fuerza de la vibración del mando; 0% la desactiva.',
+        # macOS (packaging/macos): upscaling to the window, MetalFX, the Metal HUD, updates.
+        'macOS': 'macOS',
+        'Upscale to the window': 'Agrandar a la ventana',
+        'Enlarges every game image smaller than the window: with Render resolution 720p or 480p (Home or Performance) it raises the FPS; at the size of the window it does nothing.':
+            'Agranda toda imagen del juego menor que la ventana: con Render resolution 720p o 480p (Home o Performance) sube los FPS; al tamaño de la ventana no hace nada.',
+        'FSR 1 (AMD) or MetalFX (Apple, on the GPU through Metal): both enlarge the finished image, and MetalFX also sharpens it. Where MetalFX cannot run, the game uses FSR 1.':
+            'FSR 1 (AMD) o MetalFX (Apple, en la GPU mediante Metal): ambos agrandan la imagen terminada, y MetalFX además la enfoca. Donde MetalFX no puede correr, el juego usa FSR 1.',
+        'Render resolution is Native (1080p), as tall as this screen: there is nothing to enlarge. Every lower render resolution is enlarged:':
+            'La resolución de render es Native (1080p), tan alta como esta pantalla: no hay nada que agrandar. Toda resolución menor se agranda:',
+        'Fewer GPU waits (experimental)': 'Menos esperas a la GPU (experimental)',
+        'The game keeps preparing draws while small images are read back for it, instead of stopping each time: less CPU load, and more FPS where the CPU limits it. Needs "Game reads GPU data without waiting" (Performance).':
+            'El juego sigue preparando el dibujado mientras se leen imágenes pequeñas para él, en lugar de detenerse cada vez: menos carga de CPU y más FPS donde la CPU limita. Necesita "Game reads GPU data without waiting" (Performance).',
+        'Its upscaler item says what enlarges the image, such as "MetalFX 720p->1080p", or "Native 1080p" without upscaling. Items, size and corner: in-game menu (Insert / R3+L2) > Overlay.':
+            'Su ítem de escalador dice qué agranda la imagen, por ejemplo "MetalFX 720p->1080p", o "Native 1080p" sin agrandado. Ítems, tamaño y esquina: menú del juego (Insert / R3+L2) > Overlay.',
+        'The same settings as on the Graphics and Performance pages: a change here is a change there.':
+            'Los mismos ajustes que en las páginas Graphics y Performance: cambiarlos aquí los cambia allí.',
+        'When the display supports HDR.': 'Cuando la pantalla admite HDR.',
+        'Metal performance HUD': 'HUD de rendimiento de Metal',
+        "Apple's overlay on the game window: frame rate, frame times and memory, measured by Metal itself.":
+            'El overlay de Apple en la ventana del juego: FPS, tiempos de cuadro y memoria, medidos por el propio Metal.',
+        'Download': 'Descargar',
+        'No release has been published yet: {}': 'Todavía no se publicó ninguna release: {}',
     },
 }
 

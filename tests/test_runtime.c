@@ -252,6 +252,28 @@ static void rw_lifecycle(void) {
     lock=(void *)(uintptr_t)0xdead;
     assert((uint32_t)rw_tryread(&lock)==0x80020016);
 }
+#ifdef __APPLE__
+/* macOS has no pthread barriers: a counting barrier for the fixtures below. */
+typedef struct { pthread_mutex_t lock; pthread_cond_t turn; unsigned count, waiting, round; } pthread_barrier_t;
+#define PTHREAD_BARRIER_SERIAL_THREAD (-1)
+static int pthread_barrier_init(pthread_barrier_t *b, const void *attr, unsigned count) {
+    (void)attr;
+    *b=(pthread_barrier_t){.count=count};
+    return pthread_mutex_init(&b->lock,NULL) || pthread_cond_init(&b->turn,NULL);
+}
+static int pthread_barrier_destroy(pthread_barrier_t *b) {
+    return pthread_cond_destroy(&b->turn) || pthread_mutex_destroy(&b->lock);
+}
+static int pthread_barrier_wait(pthread_barrier_t *b) {
+    pthread_mutex_lock(&b->lock);
+    const unsigned round=b->round;
+    int last=++b->waiting==b->count;
+    if (last) { b->waiting=0; ++b->round; pthread_cond_broadcast(&b->turn); }
+    else while (round==b->round) pthread_cond_wait(&b->turn,&b->lock);
+    pthread_mutex_unlock(&b->lock);
+    return last ? PTHREAD_BARRIER_SERIAL_THREAD : 0;
+}
+#endif
 typedef struct {
     void *lock;
     pthread_barrier_t ready, release, writer_ready;

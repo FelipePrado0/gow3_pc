@@ -4,13 +4,22 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#ifdef _WIN32
 #include <windows.h>
+#else
+#include <sys/mman.h>
+#endif
 #include "../src/actor_hook.h"
 #include "gow3_actors.h"
 
 // The stub ends with a jump to its resume address; here that is a `ret` back to the test.
 extern "C" void actor_hook_return();
-asm(".globl actor_hook_return\nactor_hook_return:\n    ret\n");
+#ifdef __APPLE__
+#define ACTOR_HOOK_RETURN "_actor_hook_return" /* Mach-O names carry a leading underscore */
+#else
+#define ACTOR_HOOK_RETURN "actor_hook_return"
+#endif
+asm(".globl " ACTOR_HOOK_RETURN "\n" ACTOR_HOOK_RETURN ":\n    ret\n");
 
 alignas(64) static Gow3ActorSlot slots[2];
 
@@ -33,9 +42,15 @@ int main() {
     assert(!gow3_actor_signature_match(other, sizeof(other)));
     assert(!gow3_actor_signature_match(gow3_actor_original, GOW3_ACTOR_HOOK_LENGTH - 1));
 
+#ifdef _WIN32
     auto* stub = static_cast<unsigned char*>(
         VirtualAlloc(nullptr, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
     assert(stub);
+#else
+    void* page = mmap(nullptr, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    assert(page != MAP_FAILED);
+    auto* stub = static_cast<unsigned char*>(page);
+#endif
     const unsigned n = gow3_actor_build_stub(stub, reinterpret_cast<uintptr_t>(slots),
                                              reinterpret_cast<uintptr_t>(&actor_hook_return));
     assert(n < 256);
@@ -57,5 +72,9 @@ int main() {
     assert(!Gow3Actors::Valid(NAN, 100.0f) && !Gow3Actors::Valid(10.0f, 0.0f));
     assert(!Gow3Actors::Valid(-1.0f, 100.0f) && !Gow3Actors::Valid(200.0f, 100.0f));
     assert(!Gow3Actors::Valid(1.0f, 1e9f) && Gow3Actors::Fraction(NAN, 1.0f) == 0.0f);
+#ifdef _WIN32
     VirtualFree(stub, 0, MEM_RELEASE);
+#else
+    munmap(stub, 4096);
+#endif
 }

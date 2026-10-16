@@ -9,6 +9,9 @@
 #ifdef _WIN32
 #include <windows.h>
 #undef near
+#elif defined(__APPLE__)
+#include <signal.h>
+#include <unistd.h>
 #else
 #include <ucontext.h>
 #include <unistd.h>
@@ -93,6 +96,9 @@ extern "C" void gow3gpu_dump_guest_writes(void* ucontext) {
     // The loader passes EXCEPTION_POINTERS (see signal_context.cpp).
     const CONTEXT* c = static_cast<const EXCEPTION_POINTERS*>(ucontext)->ContextRecord;
     const std::uint64_t regs[] = {c->Rax, c->Rbx, c->Rcx, c->Rdx, c->Rsi, c->Rdi, c->R14, c->R15};
+#elif defined(__APPLE__)
+    const auto& g = static_cast<const ucontext_t*>(ucontext)->uc_mcontext->__ss;
+    const std::uint64_t regs[] = {g.__rax, g.__rbx, g.__rcx, g.__rdx, g.__rsi, g.__rdi, g.__r14, g.__r15};
 #else
     const auto* uc = static_cast<const ucontext_t*>(ucontext);
     const auto* g = uc->uc_mcontext.gregs;

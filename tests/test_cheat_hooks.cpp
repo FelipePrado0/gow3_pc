@@ -34,6 +34,8 @@ int main(int argc, char** argv) {
             assert(hook.offset + hook.length <= image.size());
             assert(gow3_cheat_signature_match(&hook, image.data() + hook.offset, image.size() - hook.offset));
         }
+        // The stat stores below; Very Hard and the jumps run in test_cheat_hook.cpp.
+        if (hook.id > GOW3_CHEAT_ORBS) continue;
 #ifdef _WIN32
         auto* executable = static_cast<unsigned char*>(VirtualAlloc(nullptr, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
 #else

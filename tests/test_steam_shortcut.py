@@ -59,6 +59,15 @@ class PlatformTests(unittest.TestCase):
             self.assertTrue(steam.steam_running())
         self.assertEqual(run.call_args.args[0][0], 'pgrep')
 
+    def test_a_mac_looks_in_application_support_for_steam_osx(self):
+        with mock.patch.object(steam, 'WINDOWS', False), mock.patch.object(steam, 'MACOS', True):
+            self.assertEqual(steam.steam_roots(), [Path.home() / 'Library' / 'Application Support' / 'Steam'])
+            with mock.patch.object(steam.subprocess, 'run', return_value=mock.Mock(returncode=1)) as run:
+                self.assertFalse(steam.steam_running())
+        self.assertEqual(run.call_args.args[0], ['pgrep', '-x', 'steam_osx'])
+        with mock.patch.object(steam, 'WINDOWS', False), mock.patch.object(steam, 'MACOS', False):
+            self.assertIn(Path.home() / '.steam' / 'steam', steam.steam_roots())
+
 
 @unittest.skipIf(Image is None, 'Pillow is needed for the pictures')
 class LogoTests(unittest.TestCase):
