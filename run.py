@@ -143,6 +143,21 @@ def glyph_mounts(env, probe, game, out):
     return [part for guest, path in mounts.items() for part in ('--mount', f'{guest}={path}')], style
 
 
+def pause_menu_args(game, out, mounts):
+    """Probe arguments for the copy of R_UI.WAD with the pause menu's Exit to Desktop row
+    (scripts/pause_menu.py), made from the glyphs' copy when `mounts` has one. The probe mounts it
+    over both once its hook is in (src/menu_hook.h). The game folder is never written."""
+    import pause_menu
+    guest = '/app0/' + pause_menu.WAD
+    source = next((part.split('=', 1)[1] for part in mounts if part.startswith(guest + '=')), None)
+    try:
+        made = pause_menu.build(game, out, source)
+    except OSError as error:
+        print(f'Pause menu: {error}; no Exit to Desktop row', flush=True)
+        return []
+    return [part for path in made.values() for part in ('--pause-menu', str(path))]
+
+
 def main():
     args = sys.argv[1:]
     if len(args) >= 2 and args[0] == '--after':
@@ -298,6 +313,7 @@ def main():
         if glyph_style:  # the in-game menu names the buttons the same way
             env['GOW3_GLYPHS'] = glyph_style
             derived.append('GOW3_GLYPHS')
+        mount_args = glyph_args + pause_menu_args(game, out, glyph_args)
         env['GOW3_DERIVED'] = ','.join(derived)
         # The guest memory pool is committed in full at start: a resolution patch above 1080p
         # can need more than 16 GB of RAM, and the game then closes when the page file cannot grow.
@@ -326,7 +342,7 @@ def main():
         command = [*launch_prefix(env), str(probe), str(out / 'boot-linked.bin'), '--content-profile', str(out / 'content.bin'),
                    '--patches', str(out / 'patches.bin'), '--app0', str(game),
                    '--user', str(user_dir),
-                   '--timeout', env.get('GOW3_TIMEOUT', '0'), *isa_args, *glyph_args, *args]
+                   '--timeout', env.get('GOW3_TIMEOUT', '0'), *isa_args, *mount_args, *args]
         # No stdin: an inherited pipe (shells such as Git Bash) cost the game its console output.
         process = subprocess.Popen(command, stdin=subprocess.DEVNULL, creationflags=no_console())
         presence = None
