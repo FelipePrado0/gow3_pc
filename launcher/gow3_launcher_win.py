@@ -11,8 +11,10 @@ Frozen with PyInstaller (packaging/windows/package.sh) the same God of War III.e
 game without the window (`--play`), run.py (`--run`) and the preparation scripts (`--script`),
 so a packaged port needs no Python installation.
 """
+import base64
 import contextlib
 import glob
+import io
 import json
 import os
 from pathlib import Path
@@ -166,6 +168,7 @@ def list_gpus():
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import button_icons  # noqa: E402
 import gow3_lang  # noqa: E402
+import gow3_trophies  # noqa: E402
 
 LANG = 'en'
 FONT_LOADED = False  # set by main() for the window; the command-line roles never need the font
@@ -295,8 +298,9 @@ DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), (
 ANISOTROPY = [('0', ('Game default',)), ('2', ('2x',)), ('4', ('4x',)), ('8', ('8x',)), ('16', ('16x',))]
 FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('120', ('120',)), ('240', ('240',)), ('0', ('Unlimited',))]
 # The sidebar's pages, top to bottom, and the methods that refresh a page's lists when it is shown.
-PAGES = ('home', 'graphics', 'performance', 'game', 'advanced')
-PAGE_REFRESH = {'home': ('refresh_status',), 'game': ('refresh_lists', 'refresh_game_patches')}
+PAGES = ('home', 'graphics', 'performance', 'game', 'trophies', 'advanced')
+PAGE_REFRESH = {'home': ('refresh_status',), 'game': ('refresh_lists', 'refresh_game_patches'),
+                'trophies': ('refresh_trophies',)}
 APP_DEFAULTS = {'ui_language': 'en', 'game_dir': os.environ.get('GOW3_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623') if WINDOWS else ''), 'update_dir': '', 'experimental_upscaler': False,
                 'video_backend': 'auto', 'gamemode': False, 'mangohud': False, 'desktop_integration': True, 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
@@ -774,8 +778,32 @@ def game_profile_of(folder):
     return title_id, game_profile_for(folder)
 
 
+def write_trophy_texts(folder):
+    """user/trophy_texts.txt: the trophy names, descriptions and labels the game shows, in the launcher's
+    language (the game reads it at start: the notice and the list of F8 / R3+R2). A failure is harmless."""
+    labels = (('heading', _('Trophies', 'Трофеи')), ('notice', _('TROPHY UNLOCKED', 'ТРОФЕЙ ПОЛУЧЕН')),
+              ('unlocked', _('UNLOCKED', 'ПОЛУЧЕН')), ('locked', _('LOCKED', 'ЗАКРЫТ')),
+              ('all', _('All trophies', 'Все')), ('only_unlocked', _('Unlocked', 'Получены')),
+              ('only_locked', _('Locked', 'Закрыты')),
+              ('counter', _('{} of {} unlocked', '{} из {} получено')),
+              ('hint', _('Up/Down: scroll   Left/Right: filter   F8 / R3+R2 / Esc: close',
+                         'Вверх/Вниз: прокрутка   Влево/Вправо: фильтр   F8 / R3+R2 / Esc: закрыть')))
+    lines = [f'# Written by the launcher on every start (language: {LANG}); do not edit.']
+    lines += [f'@{key}={" ".join(text.split())}' for key, text in labels]
+    for trophy in range(gow3_trophies.TROPHY_COUNT):
+        name, description = gow3_trophies.text(LANG, trophy)
+        lines.append(f'{trophy}={name} | {description}')
+    try:
+        folder = Path(folder)
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / 'trophy_texts.txt').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+    except OSError:
+        pass
+
+
 def game_environment(s):
     env = dict(os.environ)
+    write_trophy_texts(Path(s.get('user_dir') or DATA_DIR / 'user'))
     env['GOW3_GAME_DIR'] = s['game_dir']
     env.pop('GOW3_PATCH_DIR', None)
     # Temporal upscaling is parked (build_graphics): a switch saved on by 2.1.8 has no control left to
@@ -882,6 +910,11 @@ def window_icon(root, tk, game_icon, own_icon, ico_file):
         except (tk.TclError, OSError):
             continue
     return None
+
+
+# ---- trophies -------------------------------------------------------------------------------
+TROPHY_TIERS = {'platinum': ('Platinum', 'Платина', '#8fd3e8'), 'gold': ('Gold', 'Золото', '#e0b43a'),
+                'silver': ('Silver', 'Серебро', '#c4c4c8'), 'bronze': ('Bronze', 'Бронза', '#cd7f32')}
 
 
 class Launcher:
@@ -1170,7 +1203,8 @@ class Launcher:
         self.side = side
         self.nav, self.current_page = {}, None
         titles = {'home': _('Home'), 'graphics': _('Graphics', 'Графика'), 'performance': _('Performance'),
-                  'game': _('Game', 'Игра'), 'advanced': _('Advanced', 'Дополнительно')}
+                  'game': _('Game', 'Игра'), 'trophies': _('Trophies', 'Трофеи'),
+                  'advanced': _('Advanced', 'Дополнительно')}
         for name in PAGES:
             item = tk.Label(side, text='    ' + titles[name], bg=BG, fg=TEXT, anchor='w',
                             font=heading_font(11, UI_FONT),
@@ -1207,6 +1241,7 @@ class Launcher:
         self.build_graphics()
         self.build_performance()
         self.build_game()
+        self.build_trophies()
         self.build_advanced()
         self.root.bind_all('<MouseWheel>', self.wheel)
         if not WINDOWS:  # X11 (Tk 8.6): the wheel arrives as buttons 4 and 5; on Windows those are side buttons
@@ -1439,6 +1474,106 @@ class Launcher:
 
     def user_dir(self):
         return Path(self.var('user_dir', 'app').get() or DATA_DIR / 'user')
+
+    # ---- trophies ----------------------------------------------------------------------------
+    def build_trophies(self):
+        tk, ttk = self.tk, self.ttk
+        f = self.scrolled_page('trophies', _('Trophies', 'Трофеи'),
+                               _('The trophies this port recorded while you played.',
+                                 'Трофеи, которые порт записал во время игры.'))
+        self.trophy_images = []
+        head = ttk.Frame(f)
+        head.grid(row=0, column=0, columnspan=2, sticky='we', pady=(4, 0))
+        self.trophy_summary = ttk.Label(head, text='', font=(UI_FONT, 13, 'bold'))
+        self.trophy_summary.pack(side='left')
+        ttk.Button(head, text=_('Refresh', 'Обновить'), command=self.refresh_trophies).pack(side='right')
+        self.trophy_filter = ttk.Combobox(head, state='readonly', width=14,
+                                          values=[_('All trophies', 'Все'), _('Unlocked', 'Получены'), _('Locked', 'Закрыты')])
+        self.trophy_filter.current(0)
+        self.trophy_filter.bind('<<ComboboxSelected>>', lambda _e: self.refresh_trophies())
+        self.trophy_filter.pack(side='right', padx=(0, 8))
+        self.trophy_list = tk.Frame(f, bg=PANEL)
+        self.trophy_list.grid(row=1, column=0, columnspan=2, sticky='we', pady=(10, 0))
+        self.note(f, _('Only trophies unlocked with this port are listed; the ones earned on a PlayStation are not '
+                       'known to it.',
+                       'Показаны только трофеи, полученные через этот порт; полученные на PlayStation ему '
+                       'неизвестны.'))
+
+    def trophy_package(self):
+        """The game's trophy00.trp: in the update folder when it has one, else in the game folder."""
+        for key in ('update_dir', 'game_dir'):
+            folder = self.var(key, 'app').get()
+            path = Path(folder) / 'sce_sys' / 'trophy' / 'trophy00.trp' if folder else None
+            if path and path.is_file():
+                return path
+        return None
+
+    def trophy_photo(self, png, locked):
+        """The icon as a 56 px (DPI-scaled) image; dimmed grey when the trophy is not unlocked."""
+        tk = self.tk
+        size = self.px(56)
+        photo = None
+        try:
+            from PIL import Image, ImageTk
+            image = Image.open(io.BytesIO(png)).convert('RGB').resize((size, size), Image.LANCZOS)
+            if locked:
+                image = image.convert('L').point(lambda v: int(v * 0.5)).convert('RGB')
+            photo = ImageTk.PhotoImage(image)
+        except (ImportError, OSError):
+            try:
+                photo = tk.PhotoImage(data=base64.b64encode(png))
+                factor = max(1, round(photo.width() / size))
+                photo = photo.subsample(factor) if factor > 1 else photo
+            except tk.TclError:
+                photo = tk.PhotoImage(width=size, height=size)
+        self.trophy_images.append(photo)  # Tk drops an image nobody references
+        return photo
+
+    def refresh_trophies(self):
+        tk = self.tk
+        for child in self.trophy_list.winfo_children():
+            child.destroy()
+        self.trophy_images = []
+        package = self.trophy_package()
+        icons = gow3_trophies.read_trp_icons(package) if package else {}
+        if not icons:
+            self.trophy_summary.configure(text='')
+            tk.Label(self.trophy_list, text=_('No trophy list: choose the game folder on the Game page (its '
+                                              'sce_sys/trophy/trophy00.trp is read).',
+                                              'Нет списка трофеев: выберите папку игры на странице «Игра» '
+                                              '(читается sce_sys/trophy/trophy00.trp).'),
+                     bg=PANEL, fg=MUTED, font=(UI_FONT, 10), justify='left', anchor='w',
+                     wraplength=self.px(680)).pack(anchor='w')
+            return
+        user = self.user_dir()
+        unlocked = gow3_trophies.read_unlocked_trophies(user / 'trophies.dat')
+        ids = sorted(icons)
+        self.trophy_summary.configure(text=_('{} of {} unlocked', '{} из {} получено').format(
+            sum(1 for i in ids if i in unlocked), len(ids)))
+        show = self.trophy_filter.current()  # 0 all, 1 unlocked, 2 locked
+        for trophy in ids:
+            got = trophy in unlocked
+            if (show == 1 and not got) or (show == 2 and got):
+                continue
+            card = tk.Frame(self.trophy_list, bg=CARD, highlightthickness=1,
+                            highlightbackground=ACCENT if got else LINE)
+            card.pack(fill='x', pady=3)
+            tk.Label(card, image=self.trophy_photo(icons[trophy], not got), bg=CARD).pack(
+                side='left', padx=(10, 12), pady=8)
+            text = tk.Frame(card, bg=CARD)
+            text.pack(side='left', fill='x', expand=True)
+            name, description = gow3_trophies.text(LANG, trophy)
+            tk.Label(text, text=name or _('Trophy {}', 'Трофей {}').format(trophy), bg=CARD,
+                     fg=TEXT if got else MUTED, font=(UI_FONT, 11, 'bold'), anchor='w').pack(fill='x')
+            if description:
+                tk.Label(text, text=description, bg=CARD, fg=TEXT if got else MUTED,
+                         font=(UI_FONT, 10), anchor='w', justify='left', wraplength=self.px(560)).pack(fill='x')
+            tier = gow3_trophies.trophy_tier(icons[trophy])
+            label, colour = (_(*TROPHY_TIERS[tier][:2]), TROPHY_TIERS[tier][2]) if tier else ('', MUTED)
+            tk.Label(text, text=f'ID {trophy}' + (f'  ·  {label}' if label else ''), bg=CARD,
+                     fg=colour if got else MUTED, font=(UI_FONT, 9), anchor='w').pack(fill='x')
+            tk.Label(card, text=_('UNLOCKED', 'ПОЛУЧЕН') if got else _('LOCKED', 'ЗАКРЫТ'), bg=CARD,
+                     fg=ACCENT_HI if got else MUTED, font=(UI_FONT, 9, 'bold')).pack(side='right', padx=16)
 
     def build_save_backups(self, f):
         """run.py backs the saves up before every start; one of them can be restored here."""

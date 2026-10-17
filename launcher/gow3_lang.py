@@ -1176,6 +1176,12 @@ EXTRA = {
     },
 }
 
+# The Trophies page: its texts (and the trophy names) live in gow3_trophies.py.
+import gow3_trophies  # noqa: E402
+
+for _language, _texts in gow3_trophies.UI.items():
+    EXTRA.setdefault(_language, {}).update(_texts)
+
 _tables = {}
 
 
