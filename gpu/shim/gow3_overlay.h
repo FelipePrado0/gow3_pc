@@ -32,6 +32,11 @@ void UpdateTextInput(SDL_Window* window);
 void SetLoading(bool active, u32 done, u32 total);
 /// Background cache warm-up: a small corner note while the game runs; `total` 0 hides it.
 void SetBackgroundLoading(u32 done, u32 total);
+/// Saved shaders read into memory at start (any thread): a lower-right note; `total` 0 hides it.
+void SetShaderPrefetch(u32 done, u32 total);
+/// GPU thread, when shader translations start or finish: `pending` still running, `started`
+/// new since the last call. A lower-right note shows while any run and 2 s after.
+void NoteShaderCompiles(u32 pending, u32 started);
 
 /// Whether anything is drawn this frame (menu open or FPS counter on).
 bool Visible();

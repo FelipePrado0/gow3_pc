@@ -58,4 +58,17 @@ int main() {
         published_released += entry.valid && !entry.watched;  // still published, no watcher left
     });
     assert(watched == 2 && published_released == 1);
+
+    // Exact overlap: an image upload or free next to a pending copy, on a shared page but not
+    // its bytes, neither waits for nor cancels it.
+    queue.Push(0x30000c00, 256, 11, 8);         // 8x8 image at the end of a page
+    assert(queue.RequiredTick(0x30000000, 0xc00) == 11);
+    assert(queue.RequiredTick(0x30000000, 0xc00, true) == 0);
+    assert(queue.RequiredTick(0x30000000, 0xc01, true) == 11);
+    canceled = 0;
+    queue.Cancel(0x30000000, 0xc00, [&](auto&) { ++canceled; }, true);
+    assert(canceled == 0);
+    published.clear();
+    queue.Retire([](auto) { return true; }, complete);
+    assert((published == std::vector<int>{8}));
 }

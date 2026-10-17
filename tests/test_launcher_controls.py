@@ -88,6 +88,12 @@ class ControlMapTest(unittest.TestCase):
         self.assertEqual(env['GOW3_PERF_DIAG'], '0')
         self.assertEqual(env['GOW3_PARTIAL_HEIGHT_VIEWS'], '1')
         self.assertEqual(launcher.game_environment({**settings, 'partial_height_views': False})['GOW3_PARTIAL_HEIGHT_VIEWS'], '0')
+        self.assertEqual((env['GOW3_DISK_SHADERS'], env['GOW3_SHADER_PREFETCH'], env['GOW3_SHADER_NOTES']),
+                         ('1', '1', '1'))
+        off = launcher.game_environment({**settings, 'disk_shaders': False, 'shader_prefetch': False,
+                                         'shader_notes': False})
+        self.assertEqual((off['GOW3_DISK_SHADERS'], off['GOW3_SHADER_PREFETCH'], off['GOW3_SHADER_NOTES']),
+                         ('0', '0', '0'))
         self.assertNotIn('GOW3_FRAME_CAPTURE_KEY', {k for k in env if k not in __import__('os').environ})
         self.assertEqual(launcher.game_environment({**settings, 'frame_capture_key': True})['GOW3_FRAME_CAPTURE_KEY'], '1')
         # Graphics options live in gow3.ini (run.py and the in-game menu), not in the environment.

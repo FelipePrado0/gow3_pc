@@ -269,10 +269,53 @@ void TestRealDriver(const std::filesystem::path& directory) {
 }
 } // namespace
 
+extern "C" uint64_t runtime_disabled_optimizations;
+
 int main(int argc, char** argv) {
 #ifdef _WIN32
     _set_error_mode(_OUT_TO_STDERR);
 #endif
+    // GOW3_TEST_TOGGLES: Gow3Toggle bits for this run (2305843009213693952: version 1 files).
+    if (const char* toggles = std::getenv("GOW3_TEST_TOGGLES")) {
+        runtime_disabled_optimizations = std::strtoull(toggles, nullptr, 10);
+    }
+    if (argc == 4 && std::string_view(argv[1]) == "--verify") { // original and converted copies
+        using namespace Vulkan::PipelineBinaryCache;
+        unsigned files = 0, same = 0;
+        for (const auto& entry : std::filesystem::directory_iterator(argv[2])) {
+            std::ifstream stream(entry.path(), std::ios::binary);
+            std::vector<u8> bytes((std::istreambuf_iterator<char>(stream)), {});
+            // Header: magic, version, graphics hash, then the global and pipeline key blobs.
+            u64 hash;
+            u32 size;
+            std::memcpy(&hash, bytes.data() + 8, 8);
+            std::memcpy(&size, bytes.data() + 16, 4);
+            const Key global(bytes.begin() + 20, bytes.begin() + 20 + size);
+            u32 pipeline_size;
+            std::memcpy(&pipeline_size, bytes.data() + 20 + size, 4);
+            const Key pipeline(bytes.begin() + 24 + size, bytes.begin() + 24 + size + pipeline_size);
+            const auto original = Load(entry.path(), global, pipeline, hash);
+            const auto converted =
+                Load(std::filesystem::path(argv[3]) / entry.path().filename(), global, pipeline, hash);
+            ++files;
+            if (original && converted && original->size() == converted->size()) {
+                bool equal = true;
+                for (size_t i = 0; i < original->size(); ++i) {
+                    equal &= (*original)[i].key == (*converted)[i].key &&
+                             (*original)[i].data == (*converted)[i].data;
+                }
+                same += equal;
+            }
+        }
+        std::printf("verified %u of %u files identical\n", same, files);
+        return same == files ? 0 : 1;
+    }
+    if (argc == 3 && std::string_view(argv[1]) == "--convert") { // a copy of a real folder
+        const auto [files, freed] = Vulkan::PipelineBinaryCache::ConvertToShared(argv[2]);
+        std::printf("converted %llu files, %lld bytes freed\n",
+                    static_cast<unsigned long long>(files), static_cast<long long>(freed));
+        return 0;
+    }
     if (argc == 3 && std::string_view(argv[1]) == "--gpu") {
         TestRealDriver(argv[2]);
         return 0;
@@ -334,6 +377,35 @@ int main(int argc, char** argv) {
         corrupt << "broken";
     }
     assert(!Load(file, global, pipeline, 42));
+    // Shared storage: two pipelines with a common binary store it once; both read back whole.
+    const auto shared_dir = root / "shared-test";
+    const Binary big{{7}, std::vector<u8>(4096, 0x5a)};
+    assert(StoreShared(shared_dir / "a.bin", global, {3, 4}, 0, {big, binaries[0]}));
+    assert(StoreShared(shared_dir / "b.bin", global, {3, 5}, 0, {big, binaries[1]}));
+    unsigned shared_files = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(shared_dir / "shared")) {
+        shared_files += entry.path().extension() == ".bin";
+    }
+    assert(shared_files == 3);
+    assert(std::filesystem::file_size(shared_dir / "a.bin") < 100);
+    const auto a = Load(shared_dir / "a.bin", global, {3, 4}, 0);
+    assert(a && a->size() == 2 && (*a)[0].data == big.data && (*a)[1].data == binaries[0].data);
+    // A missing shared binary is a miss, not a pipeline without it.
+    // The driver can reuse a binary key for other data: each pipeline must get its own.
+    const Binary same_key{{7}, std::vector<u8>(64, 0x11)};
+    assert(StoreShared(shared_dir / "d.bin", global, {3, 7}, 0, {same_key}));
+    assert(Load(shared_dir / "a.bin", global, {3, 4}, 0)->front().data == big.data);
+    assert(Load(shared_dir / "d.bin", global, {3, 7}, 0)->front().data == same_key.data);
+    std::filesystem::remove(SharedPath(shared_dir, global, binaries[1].key,
+                                       XXH3_64bits(binaries[1].data.data(), binaries[1].data.size())));
+    assert(!Load(shared_dir / "b.bin", global, {3, 5}, 0));
+    // Version 1 files are converted in place, with the same contents.
+    assert(Save(shared_dir / "c.bin", Encode(global, {3, 6}, 0, {big, binaries[1]})));
+    const auto [converted, freed] = ConvertToShared(shared_dir);
+    assert(converted == 1 && freed > 0);
+    const auto c = Load(shared_dir / "c.bin", global, {3, 6}, 0);
+    assert(c && c->size() == 2 && (*c)[0].data == big.data && (*c)[1].data == binaries[1].data);
+    assert(ConvertToShared(shared_dir).first == 0);
     TestDriverFallback(root / "driver");
     std::filesystem::remove_all(root);
     std::puts("pipeline-binary-cache-test: passed");

@@ -6,21 +6,28 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
+#include <cstring>
+#include <string>
 #include <deque>
 #include <mutex>
 #include <shared_mutex>
 #include <thread>
+#include <unordered_set>
 #include <unordered_map>
 #include <fstream>
 #include <map>
 #ifdef _WIN32
 #include <windows.h>
 #endif
+#include "common/elf_info.h"
+#include "common/path_util.h"
+#include "common/hash.h"
 #include "common/serdes.h"
 #include "common/scope_exit.h"
 #include "video_core/renderer_vulkan/vk_pipeline_serialization.h"
 #include "common/thread.h"
 #include "gow3_overlay.h"
+#include "gow3_toggles.h"
 #include "core/emulator_settings.h"
 #include "shader_recompiler/frontend/fetch_shader.h"
 #include "shader_recompiler/info.h"
@@ -56,8 +63,11 @@ namespace PipelineBinaryCache {
 bool ValidKey(const Key& key) {
     return !key.empty() && key.size() <= VK_MAX_PIPELINE_BINARY_KEY_SIZE_KHR;
 }
-std::vector<u8> Encode(const Key& global, const Key& pipeline, u64 graphics_hash,
-                       const std::vector<Binary>& binaries) {
+namespace {
+// Version 1 holds the driver binaries; version 2 (gow3) their keys and content hashes, each
+// binary being stored once in shared/ (StoreShared): one ~2 MB binary was in thousands of files.
+std::vector<u8> EncodeVersion(const Key& global, const Key& pipeline, u64 graphics_hash,
+                              const std::vector<Binary>& binaries, u32 version) {
     if (!ValidKey(global) || !ValidKey(pipeline) || binaries.empty() ||
         binaries.size() > MaxBinaries) {
         return {};
@@ -72,26 +82,37 @@ std::vector<u8> Encode(const Key& global, const Key& pipeline, u64 graphics_hash
         bytes.insert(bytes.end(), data.begin(), data.end());
     };
     append(u32{0x31425047}); // GPB1, little-endian Windows/Linux cache format.
-    append(u32{1});
+    append(version);
     append(graphics_hash);
     blob(global);
     blob(pipeline);
     append(u32(binaries.size()));
     for (const auto& binary : binaries) {
-        if (!ValidKey(binary.key) || binary.data.empty() || binary.data.size() > MaxFileSize ||
-            bytes.size() + binary.key.size() + binary.data.size() + 16 > MaxFileSize) {
+        const size_t data = version == 1 ? binary.data.size() : 0;
+        if (!ValidKey(binary.key) || (version == 1 && binary.data.empty()) ||
+            data > MaxFileSize || bytes.size() + binary.key.size() + data + 16 > MaxFileSize) {
             return {};
         }
         blob(binary.key);
-        blob(binary.data);
+        if (version == 1) {
+            blob(binary.data);
+        } else {
+            append(u64{XXH3_64bits(binary.data.data(), binary.data.size())});
+        }
     }
     append(u64{XXH3_64bits(bytes.data(), bytes.size())});
     return bytes;
 }
-std::optional<std::vector<Binary>> Decode(std::span<const u8> bytes, const Key& global,
-                                          const Key& pipeline, u64 graphics_hash) {
-    if (bytes.size() < 8 || bytes.size() > MaxFileSize || !ValidKey(global) ||
-        !ValidKey(pipeline)) {
+
+struct Parsed {
+    u32 version;
+    u64 graphics_hash;
+    Key global, pipeline;
+    std::vector<Binary> binaries; ///< version 2: keys only
+};
+
+std::optional<Parsed> Parse(std::span<const u8> bytes) {
+    if (bytes.size() < 8 || bytes.size() > MaxFileSize) {
         return std::nullopt;
     }
     u64 checksum;
@@ -118,22 +139,72 @@ std::optional<std::vector<Binary>> Decode(std::span<const u8> bytes, const Key& 
         offset += size;
         return true;
     };
-    u32 magic, version, count;
-    u64 stored_hash;
-    Key stored_global, stored_pipeline;
-    if (!read(magic) || magic != 0x31425047 || !read(version) || version != 1 ||
-        !read(stored_hash) || stored_hash != graphics_hash || !blob(stored_global, 32) ||
-        stored_global != global || !blob(stored_pipeline, 32) || stored_pipeline != pipeline ||
-        !read(count) || !count || count > MaxBinaries) {
+    Parsed parsed{};
+    u32 magic, count;
+    if (!read(magic) || magic != 0x31425047 || !read(parsed.version) ||
+        (parsed.version != 1 && parsed.version != 2) || !read(parsed.graphics_hash) ||
+        !blob(parsed.global, 32) || !blob(parsed.pipeline, 32) || !read(count) || !count ||
+        count > MaxBinaries) {
         return std::nullopt;
     }
-    std::vector<Binary> binaries(count);
-    for (auto& binary : binaries) {
-        if (!blob(binary.key, 32) || !blob(binary.data, MaxFileSize)) {
+    parsed.binaries.resize(count);
+    for (auto& binary : parsed.binaries) {
+        if (!blob(binary.key, 32) || (parsed.version == 1 && !blob(binary.data, MaxFileSize)) ||
+            (parsed.version == 2 && !read(binary.content))) {
             return std::nullopt;
         }
     }
-    return offset == bytes.size() ? std::optional{std::move(binaries)} : std::nullopt;
+    return offset == bytes.size() ? std::optional{std::move(parsed)} : std::nullopt;
+}
+
+std::optional<std::vector<u8>> ReadFile(const std::filesystem::path& file) {
+    std::ifstream stream(file, std::ios::binary | std::ios::ate);
+    if (!stream) {
+        return std::nullopt;
+    }
+    const auto size = stream.tellg();
+    if (size <= 0 || size > std::streamoff(MaxFileSize)) {
+        return std::nullopt;
+    }
+    std::vector<u8> bytes(static_cast<size_t>(size));
+    stream.seekg(0);
+    if (!stream.read(reinterpret_cast<char*>(bytes.data()), bytes.size())) {
+        return std::nullopt;
+    }
+    return bytes;
+}
+} // namespace
+
+std::atomic<u64> shared_written{}, shared_reused{}, shared_bytes{};
+
+std::vector<u8> Encode(const Key& global, const Key& pipeline, u64 graphics_hash,
+                       const std::vector<Binary>& binaries) {
+    return EncodeVersion(global, pipeline, graphics_hash, binaries, 1);
+}
+std::vector<u8> EncodeShared(const Key& global, const Key& pipeline, u64 graphics_hash,
+                             const std::vector<Binary>& binaries) {
+    return EncodeVersion(global, pipeline, graphics_hash, binaries, 2);
+}
+std::optional<std::vector<Binary>> Decode(std::span<const u8> bytes, const Key& global,
+                                          const Key& pipeline, u64 graphics_hash) {
+    if (!ValidKey(global) || !ValidKey(pipeline)) {
+        return std::nullopt;
+    }
+    auto parsed = Parse(bytes);
+    if (!parsed || parsed->graphics_hash != graphics_hash || parsed->global != global ||
+        parsed->pipeline != pipeline) {
+        return std::nullopt;
+    }
+    return std::move(parsed->binaries);
+}
+std::filesystem::path SharedPath(const std::filesystem::path& directory, const Key& global,
+                                 const Key& binary, u64 content) {
+    Key name = global;
+    name.insert(name.end(), binary.begin(), binary.end());
+    const auto* bytes = reinterpret_cast<const u8*>(&content);
+    name.insert(name.end(), bytes, bytes + sizeof(content));
+    return directory / "shared" /
+           fmt::format("{:016x}.bin", XXH3_64bits(name.data(), name.size()));
 }
 bool Save(const std::filesystem::path& file, std::span<const u8> bytes) {
     if (bytes.empty() || bytes.size() > MaxFileSize) {
@@ -176,20 +247,85 @@ bool Save(const std::filesystem::path& file, std::span<const u8> bytes) {
 }
 std::optional<std::vector<Binary>> Load(const std::filesystem::path& file, const Key& global,
                                         const Key& pipeline, u64 graphics_hash) {
-    std::ifstream stream(file, std::ios::binary | std::ios::ate);
-    if (!stream) {
+    const auto bytes = ReadFile(file);
+    auto binaries = bytes ? Decode(*bytes, global, pipeline, graphics_hash) : std::nullopt;
+    if (!binaries) {
         return std::nullopt;
     }
-    const auto size = stream.tellg();
-    if (size <= 0 || size > std::streamoff(MaxFileSize)) {
-        return std::nullopt;
+    // Version 2: each binary from its shared file, which holds it under its own key.
+    for (auto& binary : *binaries) {
+        if (!binary.data.empty()) {
+            continue;
+        }
+        auto shared = Load(SharedPath(file.parent_path(), global, binary.key, binary.content),
+                           global, binary.key, 0);
+        if (!shared || shared->size() != 1 || (*shared)[0].key != binary.key ||
+            (*shared)[0].data.empty() ||
+            XXH3_64bits((*shared)[0].data.data(), (*shared)[0].data.size()) != binary.content) {
+            return std::nullopt;
+        }
+        binary.data = std::move((*shared)[0].data);
     }
-    std::vector<u8> bytes(static_cast<size_t>(size));
-    stream.seekg(0);
-    if (!stream.read(reinterpret_cast<char*>(bytes.data()), bytes.size())) {
-        return std::nullopt;
+    return binaries;
+}
+// gow3: each binary is written once to shared/ (kept when it already reads back the same),
+// then the pipeline file with the keys only.
+bool StoreShared(const std::filesystem::path& file, const Key& global, const Key& pipeline,
+                 u64 graphics_hash, const std::vector<Binary>& binaries) {
+    for (const auto& binary : binaries) {
+        const auto shared =
+            SharedPath(file.parent_path(), global, binary.key,
+                       XXH3_64bits(binary.data.data(), binary.data.size()));
+        if (const auto existing = Load(shared, global, binary.key, 0);
+            existing && existing->size() == 1 && (*existing)[0].data == binary.data) {
+            ++shared_reused;
+            continue;
+        }
+        const auto encoded = Encode(global, binary.key, 0, {binary});
+        if (!Save(shared, encoded)) {
+            return false;
+        }
+        ++shared_written;
+        shared_bytes += encoded.size();
     }
-    return Decode(bytes, global, pipeline, graphics_hash);
+    return Save(file, EncodeShared(global, pipeline, graphics_hash, binaries));
+}
+bool Store(const std::filesystem::path& file, const Key& global, const Key& pipeline,
+           u64 graphics_hash, const std::vector<Binary>& binaries) {
+    if (Gow3Toggle::Disabled(Gow3Toggle::SharedBinaries)) {
+        return Save(file, Encode(global, pipeline, graphics_hash, binaries));
+    }
+    return StoreShared(file, global, pipeline, graphics_hash, binaries);
+}
+std::pair<u64, s64> ConvertToShared(const std::filesystem::path& directory,
+                                    const std::function<bool()>& stop) {
+    u64 files = 0;
+    s64 freed = 0;
+    std::error_code error;
+    for (std::filesystem::directory_iterator it(directory, error), end; !error && it != end;
+         it.increment(error)) {
+        if (stop && stop()) {
+            break;
+        }
+        std::error_code status;
+        if (it->path().extension() != ".bin" || !it->is_regular_file(status)) {
+            continue;
+        }
+        const auto bytes = ReadFile(it->path());
+        auto parsed = bytes ? Parse(*bytes) : std::nullopt;
+        if (!parsed || parsed->version != 1) {
+            continue;
+        }
+        const u64 shared_before = shared_bytes;
+        if (!StoreShared(it->path(), parsed->global, parsed->pipeline, parsed->graphics_hash,
+                         parsed->binaries)) {
+            continue;
+        }
+        ++files;
+        freed += s64(bytes->size()) - s64(std::filesystem::file_size(it->path(), status)) -
+                 s64(shared_bytes - shared_before);
+    }
+    return {files, freed};
 }
 } // namespace PipelineBinaryCache
 
@@ -262,6 +398,9 @@ void ReportPipelineBinaryCache() {
                 static_cast<unsigned long long>(binary_errors.load()),
                 binary_restore_ns.load() / 1e6 / std::max(u64{1}, binary_restore_calls.load()),
                 binary_compile_ns.load() / 1e6 / std::max(u64{1}, binary_compile_calls.load()));
+    std::printf("Pipeline binaries: %llu shared binaries written, %llu already shared\n",
+                static_cast<unsigned long long>(PipelineBinaryCache::shared_written.load()),
+                static_cast<unsigned long long>(PipelineBinaryCache::shared_reused.load()));
 }
 
 vk::ResultValue<vk::UniquePipeline> CreateCachedGraphicsPipeline(
@@ -336,7 +475,7 @@ vk::ResultValue<vk::UniquePipeline> CreateCachedGraphicsPipeline(
         if (!binaries) {
             binaries = LoadLegacyBinary(directory, name, global, pipeline_id);
             if (binaries) {
-                Save(file, Encode(global, pipeline_id, 0, *binaries));
+                Store(file, global, pipeline_id, 0, *binaries);
             }
         }
         binary_load_ns += ElapsedNs(load_started);
@@ -446,8 +585,7 @@ vk::ResultValue<vk::UniquePipeline> CreateCachedGraphicsPipeline(
             binary.data.resize(size);
             binaries.push_back(std::move(binary));
         }
-        const auto encoded = Encode(global, pipeline_id, 0, binaries);
-        if (Save(file, encoded)) {
+        if (Store(file, global, pipeline_id, 0, binaries)) {
             ++binary_saved;
         } else {
             ++binary_errors;
@@ -1005,9 +1143,304 @@ void PipelineCache::WarmUp(const std::function<void(u32, u32)>& progress) {
 }
 
 void PipelineCache::StartOnDemand() {
-    CheckCacheProfile();
-    Storage::DataBase::Instance().FinishPreload();
-    std::printf("Pipeline startup: on demand, no bulk warm-up\n");
+    const bool compatible = CheckCacheProfile();
+    auto& db = Storage::DataBase::Instance();
+    // Launcher: "Reuse compiled shaders from disk" (GOW3_DISK_SHADERS), on by default.
+    const bool disk_on = EmulatorSettingsImpl::Flag("GOW3_DISK_SHADERS", true) &&
+                         !Gow3Toggle::Disabled(Gow3Toggle::DiskShaders);
+    if (db.IsOpened() && db.ConcurrentReads() && !disk_on) {
+        // This session numbers permutations by first use again: the store is rebuilt at the
+        // next start with the bit on.
+        db.Save(Storage::BlobType::ShaderProfile, "disk_shaders", std::vector<u8>{0});
+    } else if (db.IsOpened() && db.ConcurrentReads()) {
+        std::vector<u8> marker;
+        if (compatible) {
+            db.Load(Storage::BlobType::ShaderProfile, "disk_shaders", marker);
+        }
+        if (marker != std::vector<u8>{1}) {
+            // Earlier on-demand sessions numbered permutations by first use and overwrote the
+            // files by name, so a name may hold another session's shader: rebuilt once.
+            db.Clear();
+            std::vector<u8> profile_data(sizeof(profile));
+            std::memcpy(profile_data.data(), &profile, sizeof(profile));
+            db.Save(Storage::BlobType::ShaderProfile, "profile", std::move(profile_data));
+            db.Save(Storage::BlobType::ShaderProfile, "disk_shaders", std::vector<u8>{1});
+            std::printf("Pipeline startup: shader store rebuilt for on-demand reads\n");
+        } else {
+            IndexDiskShaders();
+            // Launcher: "Read the shader cache into memory at start" (GOW3_SHADER_PREFETCH).
+            if (EmulatorSettingsImpl::Flag("GOW3_SHADER_PREFETCH", true)) {
+                StartDiskPrefetch();
+            }
+        }
+        disk_shaders = true;
+    }
+    db.FinishPreload();
+    StartBinaryConversion();
+    std::printf("Pipeline startup: on demand, no bulk warm-up (%zu saved programs)\n",
+                disk_permutations.size());
+}
+
+bool PipelineCache::DiskShadersActive() const {
+    return disk_shaders && !Gow3Toggle::Disabled(Gow3Toggle::DiskShaders);
+}
+
+void PipelineCache::IndexDiskShaders() {
+    auto& db = Storage::DataBase::Instance();
+    for (const auto& name : db.ListBlobs(Storage::BlobType::ShaderBinary)) {
+        const auto sep = name.rfind('_');
+        if (sep == std::string::npos) {
+            continue;
+        }
+        const u64 hash = std::strtoull(name.substr(0, sep).c_str(), nullptr, 16);
+        const auto idx = std::strtoul(name.c_str() + sep + 1, nullptr, 10);
+        if (hash && idx < 64) {
+            disk_permutations[hash].push_back(u32(idx));
+        }
+    }
+    for (auto& [hash, indices] : disk_permutations) {
+        std::ranges::sort(indices);
+    }
+    for (auto& name : db.ListBlobs(Storage::BlobType::PipelineKey)) {
+        disk_pipeline_keys.insert(std::move(name));
+    }
+}
+
+// gow3: the saved files of one program, read off the GPU thread (DiskPrefetch) or on it.
+struct DiskBlob {
+    u32 idx;
+    std::vector<u8> meta;
+    std::vector<u32> spv;
+};
+
+static std::vector<DiskBlob> ReadDiskProgram(u64 hash, const std::vector<u32>& indices) {
+    auto& db = Storage::DataBase::Instance();
+    std::vector<DiskBlob> blobs;
+    for (const u32 idx : indices) {
+        DiskBlob blob{idx};
+        db.Load(Storage::BlobType::ShaderMeta, fmt::format("{:#018x}", HashCombine(hash, u64{idx})),
+                blob.meta);
+        db.Load(Storage::BlobType::ShaderBinary, fmt::format("{:#018x}_{}", hash, idx), blob.spv);
+        if (!blob.meta.empty() && !blob.spv.empty()) {
+            blobs.push_back(std::move(blob));
+        }
+    }
+    return blobs;
+}
+
+// gow3: one low-priority thread reads every saved program into memory at startup (a few MB),
+// so the GPU thread only deserializes and creates the modules. A program the GPU thread needs
+// first is claimed and read there instead.
+struct PipelineCache::DiskPrefetch {
+    std::mutex mutex;
+    std::unordered_map<u64, std::vector<DiskBlob>> ready;
+    std::unordered_set<u64> claimed;
+    std::jthread thread;
+};
+
+void PipelineCache::StartDiskPrefetch() {
+    std::vector<std::pair<u64, std::vector<u32>>> work(disk_permutations.begin(),
+                                                       disk_permutations.end());
+    if (work.empty()) {
+        return;
+    }
+    disk_prefetch = new DiskPrefetch;
+    disk_prefetch->thread = std::jthread{[prefetch = disk_prefetch, work = std::move(work)](
+                                             std::stop_token stop) {
+        Common::SetCurrentThreadName("gow3:ShaderPrefetch");
+        Common::SetCurrentThreadPriority(Common::ThreadPriority::Low);
+        const auto started = std::chrono::steady_clock::now();
+        const u32 total = u32(work.size());
+        u32 done = 0;
+        u64 programs = 0, bytes = 0;
+        for (const auto& [hash, indices] : work) {
+            if (stop.stop_requested()) {
+                Gow3Overlay::SetShaderPrefetch(0, 0);
+                return;
+            }
+            Gow3Overlay::SetShaderPrefetch(done++, total);
+            {
+                std::scoped_lock lock{prefetch->mutex};
+                if (prefetch->claimed.contains(hash)) {
+                    continue;
+                }
+            }
+            auto blobs = ReadDiskProgram(hash, indices);
+            for (const auto& blob : blobs) {
+                bytes += blob.meta.size() + blob.spv.size() * sizeof(u32);
+            }
+            std::scoped_lock lock{prefetch->mutex};
+            if (!prefetch->claimed.contains(hash)) {
+                prefetch->ready.emplace(hash, std::move(blobs));
+                ++programs;
+            }
+        }
+        Gow3Overlay::SetShaderPrefetch(total, total);
+        std::printf("Disk shaders: prefetch read %llu programs (%.1f MB) in %.0f ms\n",
+                    static_cast<unsigned long long>(programs), bytes / 1048576.0,
+                    std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() -
+                                                              started)
+                        .count());
+    }};
+}
+
+// gow3 (Gow3Toggle::SharedBinaries): files written before shared storage (or with the bit off)
+// are rewritten once, on a lowest-priority thread, so the folder shrinks without a cache loss.
+struct PipelineCache::BinaryConversion {
+    std::jthread thread;
+};
+
+void PipelineCache::StartBinaryConversion() {
+    if (Gow3Toggle::Disabled(Gow3Toggle::SharedBinaries) ||
+        !instance.GetPipelineBinaryGlobalKey().keySize ||
+        !EmulatorSettings.IsPipelineCacheEnabled()) {
+        return;
+    }
+    const auto directory = Common::FS::GetUserPath(Common::FS::PathType::CacheDir) /
+                           Common::ElfInfo::Instance().GameSerial() / "pipeline-binaries";
+    binary_conversion = new BinaryConversion;
+    binary_conversion->thread = std::jthread{[directory](std::stop_token stop) {
+        Common::SetCurrentThreadName("gow3:BinaryConvert");
+        Common::SetCurrentThreadPriority(Common::ThreadPriority::Low);
+        const auto started = std::chrono::steady_clock::now();
+        const auto [files, freed] = PipelineBinaryCache::ConvertToShared(
+            directory, [&stop] { return stop.stop_requested(); });
+        if (files) {
+            std::printf("Pipeline binaries: %llu files moved to shared storage, %.0f MB freed "
+                        "in %.1f s\n",
+                        static_cast<unsigned long long>(files), freed / 1048576.0,
+                        std::chrono::duration<double>(std::chrono::steady_clock::now() - started)
+                            .count());
+        }
+    }};
+}
+
+void PipelineCache::StopBinaryConversion() {
+    delete binary_conversion; // the jthread member asks the thread to stop and joins it
+    binary_conversion = nullptr;
+}
+
+void PipelineCache::StopDiskPrefetch() {
+    delete disk_prefetch; // the jthread member asks the thread to stop and joins it
+    disk_prefetch = nullptr;
+}
+
+// gow3: GPU thread, once per program: every saved permutation at its saved index, so names and
+// pipeline keys stay those of the store. Rejected metas (other versions, motion vertex
+// shaders) leave their slot empty for the next compile (NewPermutationIndex).
+bool PipelineCache::LoadDiskProgram(u64 hash) {
+    const auto found = disk_permutations.find(hash);
+    if (found == disk_permutations.end()) {
+        return false;
+    }
+    const auto started = std::chrono::steady_clock::now();
+    std::optional<std::vector<DiskBlob>> blobs;
+    if (disk_prefetch) {
+        std::scoped_lock lock{disk_prefetch->mutex};
+        if (const auto it = disk_prefetch->ready.find(hash); it != disk_prefetch->ready.end()) {
+            blobs = std::move(it->second);
+            disk_prefetch->ready.erase(it);
+        } else {
+            disk_prefetch->claimed.insert(hash);
+        }
+    }
+    if (!blobs) {
+        blobs = ReadDiskProgram(hash, found->second);
+    }
+    auto program = std::make_unique<Program>();
+    bool have_info = false;
+    size_t inserted = 0;
+    for (auto& blob : *blobs) {
+        Serialization::Archive meta_ar{std::move(blob.meta)};
+        Shader::Info info{};
+        Shader::StageSpecialization spec{};
+        std::optional<Shader::Gcn::FetchShaderData> fetch;
+        size_t perm_idx{};
+        if (!LoadShaderMeta(meta_ar, info, fetch, spec, perm_idx) || perm_idx != blob.idx ||
+            info.pgm_hash != hash) {
+            continue;
+        }
+        const auto module = CompileSPV(blob.spv, instance.GetDevice());
+        if (!module) {
+            continue;
+        }
+        if (!have_info) {
+            program->info = std::move(info);
+            have_info = true;
+        }
+        spec.info = &program->info;
+        program->InsertPermut(module, std::move(spec), blob.idx);
+        disk_modules_unused.insert(module);
+        ++inserted;
+        ++disk_stats.permutations;
+    }
+    if (inserted) {
+        program->modules.resize(std::max<size_t>(program->modules.size(), found->second.back() + 1));
+        program->info_template = std::make_unique<Shader::Info>(program->info);
+        std::unique_lock lock{programs_mutex};
+        program_cache.emplace(hash, std::move(program));
+        ++disk_stats.programs;
+    } else {
+        for (const auto& module : program->modules) {
+            if (module.module) {
+                instance.GetDevice().destroyShaderModule(module.module);
+            }
+        }
+    }
+    disk_permutations.erase(found);
+    disk_stats.load_ns += u64(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                  std::chrono::steady_clock::now() - started)
+                                  .count());
+    return inserted != 0;
+}
+
+size_t PipelineCache::NewPermutationIndex(const Program& program) const {
+    if (DiskShadersActive()) {
+        const auto hole = std::ranges::find(program.modules, vk::ShaderModule{}, &Program::Module::module);
+        if (hole != program.modules.end()) {
+            return std::distance(program.modules.begin(), hole);
+        }
+    }
+    return program.modules.size();
+}
+
+bool PipelineCache::NewPipelineKey(const std::string& name) {
+    if (!DiskShadersActive()) {
+        return true;
+    }
+    if (!disk_pipeline_keys.insert(name).second) {
+        ++disk_stats.keys_skipped;
+        return false;
+    }
+    ++disk_stats.keys_written;
+    return true;
+}
+
+void PipelineCache::ReportDiskShaders() {
+    if (disk_shaders && !disk_store_untrusted && Gow3Toggle::Disabled(Gow3Toggle::DiskShaders)) {
+        // Switched off live: later permutations follow first-use order again (see StartOnDemand).
+        Storage::DataBase::Instance().Save(Storage::BlobType::ShaderProfile, "disk_shaders",
+                                           std::vector<u8>{0});
+        disk_store_untrusted = true;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (!disk_shaders || now - disk_report < std::chrono::seconds(5)) {
+        return;
+    }
+    disk_report = now;
+    const auto& s = disk_stats;
+    if (std::memcmp(&s, &disk_reported, sizeof(s)) == 0) {
+        return;
+    }
+    disk_reported = s;
+    std::printf("Disk shaders: %llu programs, %llu permutations read (%.1f ms GPU thread); "
+                "%llu used, %llu compiled; pipeline keys %llu written, %llu already saved\n",
+                static_cast<unsigned long long>(s.programs),
+                static_cast<unsigned long long>(s.permutations), s.load_ns / 1e6,
+                static_cast<unsigned long long>(s.matched),
+                static_cast<unsigned long long>(s.compiled),
+                static_cast<unsigned long long>(s.keys_written),
+                static_cast<unsigned long long>(s.keys_skipped));
 }
 
 // gow3: one cached shader stage read by the background warm-up, shared by every cached

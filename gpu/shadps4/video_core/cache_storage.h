@@ -49,6 +49,8 @@ public:
     [[nodiscard]] bool ConcurrentReads() const;
     /// gow3: number of blobs ForEachBlob visits (the loading screen's total).
     size_t CountBlobs(BlobType type);
+    /// gow3: names (without extension) of the blobs of `type`; empty for the zip archive.
+    std::vector<std::string> ListBlobs(BlobType type);
 
 private:
     std::jthread io_worker{};

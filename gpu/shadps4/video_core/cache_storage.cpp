@@ -258,6 +258,21 @@ size_t DataBase::CountBlobs(BlobType type) {
     return count;
 }
 
+std::vector<std::string> DataBase::ListBlobs(BlobType type) {
+    std::vector<std::string> names;
+    if (!opened || EmulatorSettings.IsPipelineCacheArchived()) {
+        return names;
+    }
+    const auto ext = "." + GetBlobFileExtension(type);
+    std::error_code error;
+    for (const auto& entry : std::filesystem::directory_iterator{cache_path, error}) {
+        if (entry.path().extension() == ext) {
+            names.push_back(entry.path().stem().string());
+        }
+    }
+    return names;
+}
+
 bool DataBase::ConcurrentReads() const {
     return !EmulatorSettings.IsPipelineCacheArchived();
 }
