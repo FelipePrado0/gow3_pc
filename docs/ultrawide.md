@@ -44,7 +44,7 @@ They come from the game, which is built for 16:9, and are already known; they wi
 Choose a size in **Render resolution** (launcher, **Home** and **Performance**) or in the in-game menu (Insert or
 R3+L2 → Performance → Render resolution). Each one shows its exact size and aspect ratio, for example
 `3440 × 1440 · 21:9 (beta)`. Pick one and **PLAY** (in the game menu: "Apply and restart"). The **Engine frame
-rate** (60, 120 or 240) is a separate choice that works with any resolution.
+rate** (60, 100, 120 or 240) is a separate choice that works with any resolution.
 
 **Older versions (before 2.4.0):** put `Ultrawide.zip` (made with `python tools/zip_mod.py extras/mods/Ultrawide`)
 or the `Ultrawide` folder in the mods folder; a zip is unpacked by itself when the launcher or the game starts. The
@@ -134,7 +134,7 @@ embaixo, então essas entradas mudam apenas a resolução e o aspect ratio.
 **Como usar:** escolha um tamanho em **Resolução de renderização** (launcher, páginas **Início** e
 **Desempenho**) ou no menu do jogo (Insert ou R3+L2 → Performance → Render resolution). Cada opção mostra a
 resolução exata e a proporção, por exemplo `3440 × 1440 · 21:9 (beta)`. Escolha e clique em **JOGAR**. A **Taxa
-de quadros do motor** (60, 120 ou 240) é uma escolha à parte e vale com qualquer resolução. **Versões antigas
+de quadros do motor** (60, 100, 120 ou 240) é uma escolha à parte e vale com qualquer resolução. **Versões antigas
 (antes da 2.4.0):** coloque o `Ultrawide.zip` (gerado com `python tools/zip_mod.py extras/mods/Ultrawide`) ou a
 pasta `Ultrawide` na pasta de mods; o zip é extraído sozinho ao abrir o launcher ou o jogo.
 

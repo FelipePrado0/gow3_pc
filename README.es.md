@@ -145,7 +145,7 @@ La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 
   autoguardado también funciona. El launcher hace una copia de seguridad de las partidas antes de
   cada inicio.
 - Parches: resolución de render de 480p, 720p, 1440p, 1800p o 4K, corrección de texturas corruptas
-  y saltar videos con el botón X (comunidad); tasa de cuadros del motor de 120 FPS (kvicken) o 240
+  y saltar videos con el botón X (comunidad); tasa de cuadros del motor de 120 FPS (kvicken), 100 FPS (para pantallas de 100 Hz) o 240
   FPS (adaptado por Felipe Prado).
 - **Ultrawide (beta):** resoluciones 21:9, 32:9 y 16:10 (3440x1440 probada) con un campo de visión más ancho en
   lugar de una imagen con zoom, ya incluidas: elige una en **Resolución de render**, donde cada opción muestra la
@@ -499,7 +499,8 @@ deadinside28:
 Parches: kvicken y cuesta4 (resolución, corrección de texturas, 120 FPS y saltar videos, sobre los
 parches de PS3 de illusion0001), publicados para shadPS4 en
 [shadps4-emu/ps4_cheats#145](https://github.com/shadps4-emu/ps4_cheats/pull/145) y adaptados a este
-ejecutable. El parche de 240 FPS fue adaptado por Felipe Prado a partir del de 120 FPS.
+ejecutable. El parche de 240 FPS fue adaptado por Felipe Prado a partir del de 120 FPS; el de 100 FPS es el mismo
+parche con 100.
 Trucos: adaptados de los [GoldHEN cheats](https://github.com/GoldHEN/GoldHEN_Cheat_Repository) de
 Celogamez.
 

@@ -21,7 +21,7 @@ int main() {
     assert(G::ParseDisplayMode("borderless") == G::Borderless && G::ParseDisplayMode("bogus") == G::Windowed);
     assert(G::ParseFpsLimit(240) == 240 && G::ParseFpsLimit(75) == 0);
     assert(G::ParseResolution("1440p") == 3 && G::ParseResolution("8K") == 0);
-    assert(G::ParseEngineFps(240) == 240 && G::ParseEngineFps(90) == 120);
+    assert(G::ParseEngineFps(240) == 240 && G::ParseEngineFps(100) == 100 && G::ParseEngineFps(90) == 120);
     assert(G::ParseFramesQueued(2) == 2 && G::ParseFramesQueued(0) == 0 && G::ParseFramesQueued(5) == 1);
     assert(G::ParseRcasStrength(100) == 100 && G::ParseRcasStrength(101) == 75 && G::ParseRcasStrength(-1) == 75);
     assert(G::RcasAttenuation(100) == 0.0f && G::RcasAttenuation(0) == 2.0f && G::RcasAttenuation(75) == 0.5f);

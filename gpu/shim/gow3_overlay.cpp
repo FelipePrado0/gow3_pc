@@ -469,7 +469,7 @@ void PerformanceTab() {
         }
         ChoiceRow("Render resolution", s.render_resolution, resolution_labels.data(), nullptr,
                   int(resolution_labels.size()), "The resolution the game draws at. Higher is sharper and slower.");
-        static const char* const engine_labels[] = {"60 (original)", "120", "240"};
+        static const char* const engine_labels[] = {"60 (original)", "100", "120", "240"};
         ChoiceRow("Engine frame rate", s.engine_fps, engine_labels, G::EngineFps.data(), int(G::EngineFps.size()),
                   "The highest frame rate the game itself runs at.");
         CheckRow("Game reads GPU data without waiting", s.stale_readback,

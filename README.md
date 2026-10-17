@@ -141,8 +141,8 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
 - Saving and loading: the save list is shown on screen, as on the PS4. Autosave works too. The
   launcher backs the saves up before every start.
 - Patches: render resolution of 480p, 720p, 1440p, 1800p or 4K, corrupted texture fix and skip
-  videos with the X button (community); engine frame rate of 120 FPS (kvicken) or 240 FPS
-  (adapted by Felipe Prado).
+  videos with the X button (community); engine frame rate of 120 FPS (kvicken), 100 FPS (for 100 Hz displays) or 240
+  FPS (adapted by Felipe Prado).
 - **Ultrawide (beta):** 21:9, 32:9 and 16:10 render resolutions (3440x1440 tested) with a wider field of view
   instead of a zoomed-in picture, built in: choose one in **Render resolution**, where every size shows its exact
   resolution and aspect ratio. Cutscenes keep their 16:9 borders (see [docs/ultrawide.md](docs/ultrawide.md)).
@@ -481,7 +481,8 @@ This project is a fork of Supermedo's Windows port, which builds on deadinside28
 Patches: kvicken and cuesta4 (resolution, texture fix, 120 FPS and skip videos, building on the
 PS3 patches by illusion0001), published for shadPS4 in
 [shadps4-emu/ps4_cheats#145](https://github.com/shadps4-emu/ps4_cheats/pull/145) and adapted to
-this executable. The 240 FPS patch was adapted by Felipe Prado from the 120 FPS patch.
+this executable. The 240 FPS patch was adapted by Felipe Prado from the 120 FPS patch; the 100 FPS one is the same
+patch with 100.
 Cheats: adapted from Celogamez's [GoldHEN cheats](https://github.com/GoldHEN/GoldHEN_Cheat_Repository).
 
 Also used: [LibAtrac9](https://github.com/Thealexbarney/LibAtrac9), [FFmpeg](https://ffmpeg.org),

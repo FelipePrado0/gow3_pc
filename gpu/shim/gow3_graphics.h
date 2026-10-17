@@ -40,8 +40,8 @@ inline std::vector<std::string> ResolutionNames() {
     }
     return names;
 }
-/// Engine frame rate ceilings: 60 is the game's own, 120 and 240 are frame rate patches.
-inline constexpr std::array<int, 3> EngineFps = {60, 120, 240};
+/// Engine frame rate ceilings: 60 is the game's own, 100 (for 100 Hz displays), 120 and 240 are frame rate patches.
+inline constexpr std::array<int, 4> EngineFps = {60, 100, 120, 240};
 
 template <typename T, std::size_t N>
 constexpr int IndexOf(const std::array<T, N>& values, const T& value, int fallback) {

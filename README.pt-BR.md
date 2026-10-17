@@ -141,7 +141,7 @@ A corrupção gráfica no Steam Deck/RADV é um problema conhecido do AppImage 2
 - Salvar e carregar: a lista de saves aparece na tela, como no PS4. O autosave também funciona.
   O launcher faz backup dos saves antes de cada partida.
 - Patches: resolução de renderização de 480p, 720p, 1440p, 1800p ou 4K, correção de texturas
-  corrompidas e pular vídeos com o botão X (comunidade); FPS do motor de 120 (kvicken) ou 240
+  corrompidas e pular vídeos com o botão X (comunidade); FPS do motor de 120 (kvicken), 100 (para telas de 100 Hz) ou 240
   (adaptado por Felipe Prado).
 - **Ultrawide (beta):** resoluções 21:9, 32:9 e 16:10 (3440x1440 testada) com campo de visão mais largo, em vez de
   uma imagem com zoom, já embutidas: escolha em **Resolução de renderização**, onde cada opção mostra a resolução
@@ -492,7 +492,8 @@ Este projeto é um fork do port para Windows de Supermedo, que parte do original
 Patches: kvicken e cuesta4 (resolução, correção de texturas, 120 FPS e pular vídeos, a partir
 dos patches de PS3 de illusion0001), publicados para o shadPS4 em
 [shadps4-emu/ps4_cheats#145](https://github.com/shadps4-emu/ps4_cheats/pull/145) e adaptados a
-este executável. O patch de 240 FPS foi adaptado por Felipe Prado a partir do de 120 FPS.
+este executável. O patch de 240 FPS foi adaptado por Felipe Prado a partir do de 120 FPS; o de 100 FPS é o mesmo
+patch com 100.
 Trapaças: adaptadas dos [cheats GoldHEN](https://github.com/GoldHEN/GoldHEN_Cheat_Repository) de
 Celogamez.
 

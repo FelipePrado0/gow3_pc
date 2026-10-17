@@ -851,7 +851,7 @@ def pad_labels(style):
 
 
 RESOLUTION_CHOICES = [(name, (graphics_options.resolution_label(name),)) for name in graphics_options.RESOLUTIONS]
-ENGINE_FPS_CHOICES = [('60', ('60 (original)',)), ('120', ('120',)), ('240', ('240',))]
+ENGINE_FPS_CHOICES = [('60', ('60 (original)',)), ('100', ('100',)), ('120', ('120',)), ('240', ('240',))]
 
 
 def window_icon(root, tk, game_icon, own_icon, ico_file):

@@ -336,6 +336,13 @@
         </PatchList>
         <Target Name="sixty" Address="0x006fc0d8" Pattern="c5 fa 59 85 9c fd ff ff c5 fa 59 05 ?? ?? ?? ?? e8 ?? ?? ?? ?? c5 f9 70 c0 00" At="12" Ref="1" Tail="0"/>
     </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Frame Rate Patch - 100 FPS" Note="The 120 FPS patch with the engine maximum framerate at 100 FPS (frametime clamp of 1/100 second), for 100 Hz displays: with VSync every frame is shown at the original speed. Same swing energy correction. Requires setting VBlank to 100 FPS." Author="kvicken, gow3_pc" PatchVer="1.1" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x0048ff1a" Value="488d05{rel:sixty:0}" Pattern="c5 fa 11 85 98 fb ff ff 48 8d 05 ?? ?? ?? ?? c5 fa 10 00" At="8"/>
+            <Line Type="bytes" Address="0x0075dbe4" Value="0000c842" Pattern="00 00 80 3f 00 00 48 42 8f c2 6f 42 00 00 c8 42 00 00 00 5f" At="8"/>
+        </PatchList>
+        <Target Name="sixty" Address="0x006fc0d8" Pattern="c5 fa 59 85 9c fd ff ff c5 fa 59 05 ?? ?? ?? ?? e8 ?? ?? ?? ?? c5 f9 70 c0 00" At="12" Ref="1" Tail="0"/>
+    </Metadata>
     <Metadata Title="God of War III Remastered" Name="Frame Rate Patch - 240 FPS" Note="The 120 FPS patch with the engine maximum framerate at 240 FPS (frametime clamp of 1/240 second), adapted by Felipe Prado. Same swing energy correction. Requires setting VBlank to 240 FPS." Author="kvicken, gow3_pc" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
         <PatchList>
             <Line Type="bytes" Address="0x0048ff1a" Value="488d05{rel:sixty:0}" Pattern="c5 fa 11 85 98 fb ff ff 48 8d 05 ?? ?? ?? ?? c5 fa 10 00" At="8"/>
