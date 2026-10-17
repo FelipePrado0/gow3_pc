@@ -96,3 +96,5 @@ linhas `mask` (busca por padrão) ou com endereço fora do eboot é ignorado int
 log. Os patches de terceiros são aplicados depois dos embutidos
 (`patches/God_of_War_III_Remastered.xml`): onde os dois escrevem, vence o de terceiros. Pelo
 terminal: `GOW3_PATCHES_DIR=/caminho GOW3_PATCHES_CONFIG=/caminho/patches.json python run.py`.
+
+Arquivos de voz (troca de falas por outras gravações, pela pasta de Update): veja [VOICE_REPLACEMENT.md](VOICE_REPLACEMENT.md).
