@@ -22,8 +22,12 @@ its proportions, and the vertical view is the same as at 16:9.
 | 5120 × 1440 | 32:9 | **Tested in game** |
 | 1920 × 1200 | 16:10 | **Tested in game** (taller than 16:9: no field of view change) |
 | 2560 × 1600 | 16:10 | **Tested in game** (taller than 16:9: no field of view change) |
+| 1280 × 800 | 16:10 | **Not tested** (the Steam Deck's screen; same as the other 16:10 sizes) |
+| 1280 × 960, 1440 × 1080, 1920 × 1440, 2048 × 1536, 2560 × 1920 | 4:3 | **1280 × 960 tested** (menu and gameplay, on a 5:4 monitor); the others are not (taller than 16:9, but the game letterboxes on exactly 4:3: the patch avoids that) |
+| 1440 × 900 | 16:10 | **Not tested** (like the other 16:10 sizes) |
+| 1360 × 768 | 16:9 | **Not tested** (the shape of the original picture; no aspect ratio or field of view change) |
 
-Every size was tested in game: all six on an RX 6700 XT (Windows 11, reference build `d85c8135…`), and
+Every size but 1280x800, 1440x900, 1360x768 and the 4:3 ones except 1280x960 was tested in game: all six on an RX 6700 XT (Windows 11, reference build `d85c8135…`), and
 3440x1440, 5120x1440, 1920x1200 and 2560x1600 also by players in issue #180 (thank you!). They stay marked
 "(beta)" until more screens and GPUs confirm them. **If something looks wrong on yours, please say how it looks**
 (an issue): the resolution, your GPU, and whether anything is cropped, stretched or missing at the edges.
@@ -68,7 +72,7 @@ What you get:
 
 The camera keeps the horizontal view, so on a taller screen the picture simply shows more at the top and
 bottom, without distortion. The 16:10 entries therefore only set the resolution and the aspect ratio
-(`k = 1`: no field of view change, no caves). 4:3 is not included.
+(`k = 1`: no field of view change, no caves). 4:3: the game letterboxes its picture to 16:9 when the second aspect float is exactly 4/3 (function at `0x56fc60`), so the 4:3 entries write that float one unit above (`tools/make_ultrawide_patch.py`, `aspect_floats`).
 
 ## What it changes (wider than 16:9)
 
@@ -124,7 +128,7 @@ mexer na câmera só corta a imagem de 16:9 em cima e embaixo, e ela parece com 
 `Resolution Patch - <largura>x<altura>` corrige isso: a imagem enche a tela, o mundo mantém as proporções e a
 visão vertical é a mesma do 16:9.
 
-**Todas as resoluções foram testadas no jogo:** as seis numa RX 6700 XT (Windows 11, build de referência
+**Todas as resoluções, menos a 1280x800 (a tela do Steam Deck), 1440x900, 1360x768 e as 4:3 (menos a 1280x960, testada no menu e no gameplay), ainda sem teste, foram testadas no jogo:** as seis numa RX 6700 XT (Windows 11, build de referência
 `d85c8135…`), e 3440x1440, 5120x1440, 1920x1200 e 2560x1600 também por jogadores na issue #180. Elas continuam
 marcadas como "(beta)" até mais telas e placas confirmarem; se algo parecer errado na sua, conte numa issue (a
 resolução, a placa de vídeo e o que aparece cortado, esticado ou faltando nas bordas). Os tamanhos 16:10

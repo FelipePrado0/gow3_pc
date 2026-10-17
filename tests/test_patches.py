@@ -337,10 +337,13 @@ class ModPatchTests(unittest.TestCase):
 
     # 16:10, taller than 16:9: only the resolution and the aspect ratio (the camera's fixed horizontal view
     # already shows more at the top and bottom), so no field of view change.
-    TALLER = {(1920, 1200): 3072, (2560, 1600): 4608}
+    TALLER = {(1920, 1200): 3072, (2560, 1600): 4608, (1280, 800): 3072,
+              (1440, 900): 3072, (1360, 768): 3072,
+              (1280, 960): 3072, (1440, 1080): 3072, (1920, 1440): 3072, (2048, 1536): 3072, (2560, 1920): 4608}
 
     def test_the_ultrawide_mod_lists_its_resolutions_and_memory_needs(self):
-        self.assertEqual(resolution_names([ULTRAWIDE]), ['1920x1200', '2560x1080', '2560x1600', '3440x1440',
+        self.assertEqual(resolution_names([ULTRAWIDE]), ['1280x800', '1360x768', '1280x960', '1440x900', '1440x1080', '1920x1200',
+                                                         '1920x1440', '2560x1080', '2048x1536', '2560x1600', '2560x1920', '3440x1440',
                                                          '3840x1600', '5120x1440'])
         for (width, height), dmem in self.TALLER.items():
             name = f'Resolution Patch - {width}x{height}'
@@ -376,7 +379,11 @@ class ModPatchTests(unittest.TestCase):
     def test_taller_than_16_9_changes_no_camera(self):
         for (width, height) in self.TALLER:
             writes = dict(compile_patches(ULTRAWIDE, [f'Resolution Patch - {width}x{height}'], '01.02', SEGMENTS))
-            self.assertEqual(writes[0x1f0c77], struct.pack('<f', width / height) * 2)  # the aspect ratio
+            aspect = struct.pack('<f', width / height)
+            # the aspect ratio, twice; for 4:3 the second float is one unit above 4/3, which the game's letterbox
+            # test (function at 0x56fc60, "== 4/3") does not match
+            second = struct.pack('<I', struct.unpack('<I', aspect)[0] + 1) if aspect == struct.pack('<f', 4 / 3) else aspect
+            self.assertEqual(writes[0x1f0c77], aspect + second)
             # the resolution (these lines keep the built-in entries' Address values, the reference build's)
             self.assertEqual(writes[0x1f0b3b], struct.pack('<I', width))
             self.assertEqual(writes[0x1f0b43], struct.pack('<I', height))

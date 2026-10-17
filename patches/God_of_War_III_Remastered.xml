@@ -329,6 +329,166 @@
             <Line Type="bytes" Address="0x005f0b57" Value="cdcccc3fcdcccc3f" Pattern="48 b8 39 8e e3 3f 39 8e e3 3f 49 89 45 00 b9 00 00 01 00" At="2"/>
         </PatchList>
     </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 1280x800" Note="1280x800 (1.600:1). Sets the game output resolution and the display aspect ratio; the horizontal field of view is the game's own, so this taller picture shows more at the top and bottom and sets the Video Arena to 2.75 GiB. Requires setting DMEM to 3072 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix. Not tested in game yet: please report how it looks." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0b3b" Value="00050000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>
+            <Line Type="bytes" Address="0x005f0b43" Value="20030000" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="4"/>
+            <Line Type="bytes" Address="0x005f0b4c" Value="0005" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="13"/>
+            <Line Type="bytes" Address="0x005f0b53" Value="2003" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="20"/>
+            <Line Type="bytes" Address="0x005643f3" Value="20030000" Pattern="c7 04 24 38 04 00 00 48 8d 3d ?? ?? ?? ?? 41 b9 80 07 00 00" At="3"/>
+            <Line Type="bytes" Address="0x00564400" Value="00050000" Pattern="41 b9 80 07 00 00 4c 89 f9 4d 89 e0 e8 ?? ?? ?? ??" At="2"/>
+            <Line Type="bytes" Address="0x005ff769" Value="00050000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="6"/>
+            <Line Type="bytes" Address="0x005ff76f" Value="20030000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="12"/>
+            <Line Type="bytes" Address="0x007c46b4" Value="00050000" Pattern="ff ff ff ff 01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x007c46b8" Value="20030000" Pattern="01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x0056bb82" Value="20030000" Pattern="e8 ?? ?? ?? ?? 4c 89 24 24 ba 01 00 00 00 41 b8 38 04 00 00" At="16"/>
+            <Line Type="bytes" Address="0x0060953d" Value="20030000" Pattern="83 39 00 74 19 48 8b 78 38 ba 38 04 00 00 48 89 de" At="10"/>
+            <Line Type="bytes" Address="0x007f2a3c" Value="80020000" Pattern="00 00 00 00 0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a40" Value="90010000" Pattern="0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00 00 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007cd918" Value="000000b0" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8"/>
+            <Line Type="bytes" Address="0x005f0b57" Value="cdcccc3fcdcccc3f" Pattern="48 b8 39 8e e3 3f 39 8e e3 3f 49 89 45 00 b9 00 00 01 00" At="2"/>
+        </PatchList>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 2560x1920" Note="2560x1920 (1.333:1). Sets the game output resolution and the display aspect ratio; the horizontal field of view is the game's own, so this taller picture shows more at the top and bottom and sets the Video Arena to 3.25 GiB. Requires setting DMEM to 4608 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix. Not tested in game yet: please report how it looks." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0b3b" Value="000a0000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>
+            <Line Type="bytes" Address="0x005f0b43" Value="80070000" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="4"/>
+            <Line Type="bytes" Address="0x005f0b4c" Value="000a" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="13"/>
+            <Line Type="bytes" Address="0x005f0b53" Value="8007" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="20"/>
+            <Line Type="bytes" Address="0x005643f3" Value="80070000" Pattern="c7 04 24 38 04 00 00 48 8d 3d ?? ?? ?? ?? 41 b9 80 07 00 00" At="3"/>
+            <Line Type="bytes" Address="0x00564400" Value="000a0000" Pattern="41 b9 80 07 00 00 4c 89 f9 4d 89 e0 e8 ?? ?? ?? ??" At="2"/>
+            <Line Type="bytes" Address="0x005ff769" Value="000a0000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="6"/>
+            <Line Type="bytes" Address="0x005ff76f" Value="80070000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="12"/>
+            <Line Type="bytes" Address="0x007c46b4" Value="000a0000" Pattern="ff ff ff ff 01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x007c46b8" Value="80070000" Pattern="01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x0056bb82" Value="80070000" Pattern="e8 ?? ?? ?? ?? 4c 89 24 24 ba 01 00 00 00 41 b8 38 04 00 00" At="16"/>
+            <Line Type="bytes" Address="0x0060953d" Value="80070000" Pattern="83 39 00 74 19 48 8b 78 38 ba 38 04 00 00 48 89 de" At="10"/>
+            <Line Type="bytes" Address="0x007f2a3c" Value="00050000" Pattern="00 00 00 00 0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a40" Value="c0030000" Pattern="0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00 00 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007cd918" Value="000000d0" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8"/>
+            <Line Type="bytes" Address="0x005f0b57" Value="abaaaa3facaaaa3f" Pattern="48 b8 39 8e e3 3f 39 8e e3 3f 49 89 45 00 b9 00 00 01 00" At="2"/>
+        </PatchList>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 2048x1536" Note="2048x1536 (1.333:1). Sets the game output resolution and the display aspect ratio; the horizontal field of view is the game's own, so this taller picture shows more at the top and bottom and sets the Video Arena to 2.75 GiB. Requires setting DMEM to 3072 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix. Not tested in game yet: please report how it looks." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0b3b" Value="00080000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>
+            <Line Type="bytes" Address="0x005f0b43" Value="00060000" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="4"/>
+            <Line Type="bytes" Address="0x005f0b4c" Value="0008" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="13"/>
+            <Line Type="bytes" Address="0x005f0b53" Value="0006" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="20"/>
+            <Line Type="bytes" Address="0x005643f3" Value="00060000" Pattern="c7 04 24 38 04 00 00 48 8d 3d ?? ?? ?? ?? 41 b9 80 07 00 00" At="3"/>
+            <Line Type="bytes" Address="0x00564400" Value="00080000" Pattern="41 b9 80 07 00 00 4c 89 f9 4d 89 e0 e8 ?? ?? ?? ??" At="2"/>
+            <Line Type="bytes" Address="0x005ff769" Value="00080000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="6"/>
+            <Line Type="bytes" Address="0x005ff76f" Value="00060000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="12"/>
+            <Line Type="bytes" Address="0x007c46b4" Value="00080000" Pattern="ff ff ff ff 01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x007c46b8" Value="00060000" Pattern="01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x0056bb82" Value="00060000" Pattern="e8 ?? ?? ?? ?? 4c 89 24 24 ba 01 00 00 00 41 b8 38 04 00 00" At="16"/>
+            <Line Type="bytes" Address="0x0060953d" Value="00060000" Pattern="83 39 00 74 19 48 8b 78 38 ba 38 04 00 00 48 89 de" At="10"/>
+            <Line Type="bytes" Address="0x007f2a3c" Value="00040000" Pattern="00 00 00 00 0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a40" Value="00030000" Pattern="0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00 00 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007cd918" Value="000000b0" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8"/>
+            <Line Type="bytes" Address="0x005f0b57" Value="abaaaa3facaaaa3f" Pattern="48 b8 39 8e e3 3f 39 8e e3 3f 49 89 45 00 b9 00 00 01 00" At="2"/>
+        </PatchList>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 1920x1440" Note="1920x1440 (1.333:1). Sets the game output resolution and the display aspect ratio; the horizontal field of view is the game's own, so this taller picture shows more at the top and bottom and sets the Video Arena to 2.75 GiB. Requires setting DMEM to 3072 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix. Not tested in game yet: please report how it looks." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0b3b" Value="80070000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>
+            <Line Type="bytes" Address="0x005f0b43" Value="a0050000" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="4"/>
+            <Line Type="bytes" Address="0x005f0b4c" Value="8007" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="13"/>
+            <Line Type="bytes" Address="0x005f0b53" Value="a005" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="20"/>
+            <Line Type="bytes" Address="0x005643f3" Value="a0050000" Pattern="c7 04 24 38 04 00 00 48 8d 3d ?? ?? ?? ?? 41 b9 80 07 00 00" At="3"/>
+            <Line Type="bytes" Address="0x00564400" Value="80070000" Pattern="41 b9 80 07 00 00 4c 89 f9 4d 89 e0 e8 ?? ?? ?? ??" At="2"/>
+            <Line Type="bytes" Address="0x005ff769" Value="80070000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="6"/>
+            <Line Type="bytes" Address="0x005ff76f" Value="a0050000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="12"/>
+            <Line Type="bytes" Address="0x007c46b4" Value="80070000" Pattern="ff ff ff ff 01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x007c46b8" Value="a0050000" Pattern="01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x0056bb82" Value="a0050000" Pattern="e8 ?? ?? ?? ?? 4c 89 24 24 ba 01 00 00 00 41 b8 38 04 00 00" At="16"/>
+            <Line Type="bytes" Address="0x0060953d" Value="a0050000" Pattern="83 39 00 74 19 48 8b 78 38 ba 38 04 00 00 48 89 de" At="10"/>
+            <Line Type="bytes" Address="0x007f2a3c" Value="c0030000" Pattern="00 00 00 00 0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a40" Value="d0020000" Pattern="0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00 00 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007cd918" Value="000000b0" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8"/>
+            <Line Type="bytes" Address="0x005f0b57" Value="abaaaa3facaaaa3f" Pattern="48 b8 39 8e e3 3f 39 8e e3 3f 49 89 45 00 b9 00 00 01 00" At="2"/>
+        </PatchList>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 1440x1080" Note="1440x1080 (1.333:1). Sets the game output resolution and the display aspect ratio; the horizontal field of view is the game's own, so this taller picture shows more at the top and bottom and sets the Video Arena to 2.75 GiB. Requires setting DMEM to 3072 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix. Not tested in game yet: please report how it looks." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0b3b" Value="a0050000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>
+            <Line Type="bytes" Address="0x005f0b43" Value="38040000" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="4"/>
+            <Line Type="bytes" Address="0x005f0b4c" Value="a005" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="13"/>
+            <Line Type="bytes" Address="0x005f0b53" Value="3804" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="20"/>
+            <Line Type="bytes" Address="0x005643f3" Value="38040000" Pattern="c7 04 24 38 04 00 00 48 8d 3d ?? ?? ?? ?? 41 b9 80 07 00 00" At="3"/>
+            <Line Type="bytes" Address="0x00564400" Value="a0050000" Pattern="41 b9 80 07 00 00 4c 89 f9 4d 89 e0 e8 ?? ?? ?? ??" At="2"/>
+            <Line Type="bytes" Address="0x005ff769" Value="a0050000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="6"/>
+            <Line Type="bytes" Address="0x005ff76f" Value="38040000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="12"/>
+            <Line Type="bytes" Address="0x007c46b4" Value="a0050000" Pattern="ff ff ff ff 01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x007c46b8" Value="38040000" Pattern="01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x0056bb82" Value="38040000" Pattern="e8 ?? ?? ?? ?? 4c 89 24 24 ba 01 00 00 00 41 b8 38 04 00 00" At="16"/>
+            <Line Type="bytes" Address="0x0060953d" Value="38040000" Pattern="83 39 00 74 19 48 8b 78 38 ba 38 04 00 00 48 89 de" At="10"/>
+            <Line Type="bytes" Address="0x007f2a3c" Value="d0020000" Pattern="00 00 00 00 0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a40" Value="1c020000" Pattern="0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00 00 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007cd918" Value="000000b0" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8"/>
+            <Line Type="bytes" Address="0x005f0b57" Value="abaaaa3facaaaa3f" Pattern="48 b8 39 8e e3 3f 39 8e e3 3f 49 89 45 00 b9 00 00 01 00" At="2"/>
+        </PatchList>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 1280x960" Note="1280x960 (1.333:1). Sets the game output resolution and the display aspect ratio; the horizontal field of view is the game's own, so this taller picture shows more at the top and bottom and sets the Video Arena to 2.75 GiB. Requires setting DMEM to 3072 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix. Not tested in game yet: please report how it looks." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0b3b" Value="00050000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>
+            <Line Type="bytes" Address="0x005f0b43" Value="c0030000" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="4"/>
+            <Line Type="bytes" Address="0x005f0b4c" Value="0005" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="13"/>
+            <Line Type="bytes" Address="0x005f0b53" Value="c003" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="20"/>
+            <Line Type="bytes" Address="0x005643f3" Value="c0030000" Pattern="c7 04 24 38 04 00 00 48 8d 3d ?? ?? ?? ?? 41 b9 80 07 00 00" At="3"/>
+            <Line Type="bytes" Address="0x00564400" Value="00050000" Pattern="41 b9 80 07 00 00 4c 89 f9 4d 89 e0 e8 ?? ?? ?? ??" At="2"/>
+            <Line Type="bytes" Address="0x005ff769" Value="00050000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="6"/>
+            <Line Type="bytes" Address="0x005ff76f" Value="c0030000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="12"/>
+            <Line Type="bytes" Address="0x007c46b4" Value="00050000" Pattern="ff ff ff ff 01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x007c46b8" Value="c0030000" Pattern="01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x0056bb82" Value="c0030000" Pattern="e8 ?? ?? ?? ?? 4c 89 24 24 ba 01 00 00 00 41 b8 38 04 00 00" At="16"/>
+            <Line Type="bytes" Address="0x0060953d" Value="c0030000" Pattern="83 39 00 74 19 48 8b 78 38 ba 38 04 00 00 48 89 de" At="10"/>
+            <Line Type="bytes" Address="0x007f2a3c" Value="80020000" Pattern="00 00 00 00 0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a40" Value="e0010000" Pattern="0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00 00 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007cd918" Value="000000b0" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8"/>
+            <Line Type="bytes" Address="0x005f0b57" Value="abaaaa3facaaaa3f" Pattern="48 b8 39 8e e3 3f 39 8e e3 3f 49 89 45 00 b9 00 00 01 00" At="2"/>
+        </PatchList>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 1360x768" Note="1360x768 (1.771:1). Sets the game output resolution and the display aspect ratio; the picture has the shape of the original 16:9 one and sets the Video Arena to 2.75 GiB. Requires setting DMEM to 3072 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix. Not tested in game yet: please report how it looks." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0b3b" Value="50050000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>
+            <Line Type="bytes" Address="0x005f0b43" Value="00030000" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="4"/>
+            <Line Type="bytes" Address="0x005f0b4c" Value="5005" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="13"/>
+            <Line Type="bytes" Address="0x005f0b53" Value="0003" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="20"/>
+            <Line Type="bytes" Address="0x005643f3" Value="00030000" Pattern="c7 04 24 38 04 00 00 48 8d 3d ?? ?? ?? ?? 41 b9 80 07 00 00" At="3"/>
+            <Line Type="bytes" Address="0x00564400" Value="50050000" Pattern="41 b9 80 07 00 00 4c 89 f9 4d 89 e0 e8 ?? ?? ?? ??" At="2"/>
+            <Line Type="bytes" Address="0x005ff769" Value="50050000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="6"/>
+            <Line Type="bytes" Address="0x005ff76f" Value="00030000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="12"/>
+            <Line Type="bytes" Address="0x007c46b4" Value="50050000" Pattern="ff ff ff ff 01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x007c46b8" Value="00030000" Pattern="01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x0056bb82" Value="00030000" Pattern="e8 ?? ?? ?? ?? 4c 89 24 24 ba 01 00 00 00 41 b8 38 04 00 00" At="16"/>
+            <Line Type="bytes" Address="0x0060953d" Value="00030000" Pattern="83 39 00 74 19 48 8b 78 38 ba 38 04 00 00 48 89 de" At="10"/>
+            <Line Type="bytes" Address="0x007f2a3c" Value="a8020000" Pattern="00 00 00 00 0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a40" Value="80010000" Pattern="0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00 00 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007cd918" Value="000000b0" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8"/>
+            <Line Type="bytes" Address="0x005f0b57" Value="abaae23fabaae23f" Pattern="48 b8 39 8e e3 3f 39 8e e3 3f 49 89 45 00 b9 00 00 01 00" At="2"/>
+        </PatchList>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 1440x900" Note="1440x900 (1.600:1). Sets the game output resolution and the display aspect ratio; the horizontal field of view is the game's own, so this taller picture shows more at the top and bottom and sets the Video Arena to 2.75 GiB. Requires setting DMEM to 3072 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix. Not tested in game yet: please report how it looks." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0b3b" Value="a0050000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>
+            <Line Type="bytes" Address="0x005f0b43" Value="84030000" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="4"/>
+            <Line Type="bytes" Address="0x005f0b4c" Value="a005" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="13"/>
+            <Line Type="bytes" Address="0x005f0b53" Value="8403" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="20"/>
+            <Line Type="bytes" Address="0x005643f3" Value="84030000" Pattern="c7 04 24 38 04 00 00 48 8d 3d ?? ?? ?? ?? 41 b9 80 07 00 00" At="3"/>
+            <Line Type="bytes" Address="0x00564400" Value="a0050000" Pattern="41 b9 80 07 00 00 4c 89 f9 4d 89 e0 e8 ?? ?? ?? ??" At="2"/>
+            <Line Type="bytes" Address="0x005ff769" Value="a0050000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="6"/>
+            <Line Type="bytes" Address="0x005ff76f" Value="84030000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="12"/>
+            <Line Type="bytes" Address="0x007c46b4" Value="a0050000" Pattern="ff ff ff ff 01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x007c46b8" Value="84030000" Pattern="01 00 00 00 80 07 00 00 38 04 00 00 0a e0 f2 00 0a e0 f2 00" At="8"/>
+            <Line Type="bytes" Address="0x0056bb82" Value="84030000" Pattern="e8 ?? ?? ?? ?? 4c 89 24 24 ba 01 00 00 00 41 b8 38 04 00 00" At="16"/>
+            <Line Type="bytes" Address="0x0060953d" Value="84030000" Pattern="83 39 00 74 19 48 8b 78 38 ba 38 04 00 00 48 89 de" At="10"/>
+            <Line Type="bytes" Address="0x007f2a3c" Value="d0020000" Pattern="00 00 00 00 0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a40" Value="c2010000" Pattern="0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00 00 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007cd918" Value="000000b0" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8"/>
+            <Line Type="bytes" Address="0x005f0b57" Value="cdcccc3fcdcccc3f" Pattern="48 b8 39 8e e3 3f 39 8e e3 3f 49 89 45 00 b9 00 00 01 00" At="2"/>
+        </PatchList>
+    </Metadata>
     <Metadata Title="God of War III Remastered" Name="Frame Rate Patch - 120 FPS" Note="Raises the engine maximum framerate from 59.94 to 120 FPS so the frametime clamp produces a 1/120 second gameplay delta. Corrects swing energy calculations to match the original 60 Hz simulation. Requires setting VBlank to 120 FPS." Author="kvicken" PatchVer="1.1" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
         <PatchList>
             <Line Type="bytes" Address="0x0048ff1a" Value="488d05{rel:sixty:0}" Pattern="c5 fa 11 85 98 fb ff ff 48 8d 05 ?? ?? ?? ?? c5 fa 10 00" At="8"/>

@@ -15,8 +15,12 @@ proportions and you see more to the sides.
 | 5120x1440 | 32:9 | **Tested in game** |
 | 1920x1200 | 16:10 | **Tested in game** (taller than 16:9: see Notes) |
 | 2560x1600 | 16:10 | **Tested in game** (taller than 16:9: see Notes) |
+| 1280x800 | 16:10 | Not tested (the Steam Deck's screen) |
+| 1280x960, 1440x1080, 1920x1440, 2048x1536, 2560x1920 | 4:3 | 1280x960 tested (menu and gameplay, on a 5:4 monitor); the others are not |
+| 1440x900 | 16:10 | Not tested |
+| 1360x768 | 16:9 | Not tested (the shape of the original picture) |
 
-Every size was tested in game. Thanks to the players who tested them in issue #180. Since 2.4.0 these sizes are
+Every size but 1280x800, 1440x900, 1360x768 and the 4:3 ones except 1280x960 was tested in game. Thanks to the players who tested them in issue #180. Since 2.4.0 these sizes are
 built in (Render resolution); the mod is for older versions. If something looks wrong on your screen, please say
 how it looks (resolution, and whether anything is cropped, stretched or missing at the edges) in an issue.
 
@@ -61,7 +65,7 @@ is changed.
   background of a menu does not reach the sides (the top and bottom at 16:10).
 - **16:10 (taller than 16:9).** The game's camera keeps the horizontal view, so a taller picture simply shows
   more at the top and bottom, without distortion. These entries only set the resolution and the aspect ratio
-  (no field of view change). 4:3 is not included.
+  (no field of view change). 4:3: the game letterboxes its picture to 16:9 when its second aspect float is exactly 4/3, so the 4:3 entries write it one unit above.
 - At 32:9 the horizontal field of view is doubled, so objects at the very edges look stretched, as in any
   game with a very wide field of view.
 - It needs extra direct memory (the Video Arena grows with the pixel count); the launcher sets that from the

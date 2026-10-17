@@ -74,6 +74,8 @@ class GraphicsOptionsTest(unittest.TestCase):
         self.assertEqual(g.resolution_label('3440x1440'), '3440 × 1440 · 21:9 (beta)')
         self.assertEqual(g.resolution_label('5120x1440'), '5120 × 1440 · 32:9 (beta)')
         self.assertEqual(g.resolution_label('2560x1600'), '2560 × 1600 · 16:10 (beta)')
+        self.assertEqual(g.resolution_label('1280x800'), '1280 × 800 · 16:10 (beta)')  # the Steam Deck's screen
+        self.assertEqual(g.resolution_label('1920x1440'), '1920 × 1440 · 4:3 (beta)')
         self.assertEqual(g.resolution_label('3840x1080'), '3840 × 1080 · 32:9')  # a mod's size, not beta
         self.assertEqual(g.resolution_label('1600x1200'), '1600 × 1200 · 4:3')
         self.assertEqual(g.resolution_label('custom'), 'custom')
