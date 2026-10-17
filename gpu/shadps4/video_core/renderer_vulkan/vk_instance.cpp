@@ -972,6 +972,24 @@ u64 Instance::GetDeviceMemoryBudgetNow() const {
     return total_budget;
 }
 
+std::string Instance::HeapUsageText() const {
+    vk::PhysicalDeviceMemoryBudgetPropertiesEXT budget{};
+    vk::PhysicalDeviceMemoryProperties2 props{};
+    if (supports_memory_budget) {
+        props.pNext = &budget;
+    }
+    physical_device.getMemoryProperties2(&props);
+    std::string text;
+    for (u32 i = 0; i < props.memoryProperties.memoryHeapCount; ++i) {
+        const u64 size = props.memoryProperties.memoryHeaps[i].size;
+        text += supports_memory_budget
+                    ? fmt::format(" {}: {}/{} MiB (size {})", i, budget.heapUsage[i] >> 20,
+                                  budget.heapBudget[i] >> 20, size >> 20)
+                    : fmt::format(" {}: size {} MiB", i, size >> 20);
+    }
+    return text;
+}
+
 vk::FormatFeatureFlags2 Instance::GetFormatFeatureFlags(vk::Format format) const {
     const auto it = format_properties.find(format);
     if (it == format_properties.end()) {

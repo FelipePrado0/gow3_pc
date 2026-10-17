@@ -1633,6 +1633,17 @@ void TextureCache::GarbageCollectImages() {
                 critical_gc_memory = budget / 100 * 95;
             }
         }
+        // gow3: the heaps every 30 s, to follow memory use over a session in the log.
+        const auto now = std::chrono::steady_clock::now();
+        if (now - heap_report_time >= std::chrono::seconds(30)) {
+            heap_report_time = now;
+            std::printf("Memory: GPU usage %llu MiB (GC at %llu/%llu/%llu MiB); heaps:%s\n",
+                        (unsigned long long)(total_used_memory >> 20),
+                        (unsigned long long)(trigger_gc_memory >> 20),
+                        (unsigned long long)(pressure_gc_memory >> 20),
+                        (unsigned long long)(critical_gc_memory >> 20),
+                        instance.HeapUsageText().c_str());
+        }
     }
     if (total_used_memory < trigger_gc_memory) {
         return;

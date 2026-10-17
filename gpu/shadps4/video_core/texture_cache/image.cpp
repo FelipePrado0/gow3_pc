@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "gow3_toggles.h"
+#include <array>
+#include <atomic>
+#include <cstdio>
 #include <ranges>
+#include <string>
+#include <fmt/format.h>
 #include "common/assert.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
@@ -18,6 +23,21 @@ namespace VideoCore {
 using namespace Vulkan;
 
 Common::IncrementalIdProvider<u64> Image::global_image_uid{};
+
+// gow3: " N: VMA used/budget MiB, driver used MiB (size S)" for every heap, for the log.
+static std::string VmaHeapText(VmaAllocator allocator) {
+    const VkPhysicalDeviceMemoryProperties* props{};
+    vmaGetMemoryProperties(allocator, &props);
+    std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> budgets{};
+    vmaGetHeapBudgets(allocator, budgets.data());
+    std::string text;
+    for (u32 i = 0; i < props->memoryHeapCount; ++i) {
+        text += fmt::format(" {}: {}/{} MiB, driver {} MiB (size {})", i,
+                            budgets[i].statistics.allocationBytes >> 20, budgets[i].budget >> 20,
+                            budgets[i].usage >> 20, props->memoryHeaps[i].size >> 20);
+    }
+    return text;
+}
 
 static vk::ImageUsageFlags ImageUsageFlags(const Vulkan::Instance& instance,
                                            const ImageInfo& info) {
@@ -116,8 +136,60 @@ void UniqueImage::Create(const vk::ImageCreateInfo& image_ci) {
     VmaAllocationInfo alloc_info{};
     VkResult result = vmaCreateImage(allocator, &image_ci_unsafe, &alloc_ci, &unsafe_image,
                                      &allocation, &alloc_info);
-    ASSERT_MSG(result == VK_SUCCESS, "Failed allocating image with error {}",
-               vk::to_string(vk::Result{result}));
+    if (result == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+        // gow3: WITHIN_BUDGET made VMA refuse once every allowed heap was at its budget. On
+        // integrated GPUs (Vega 8: a 256 MiB carve-out, the rest shared with a busy system)
+        // the budget shrinks with system memory use and ended the game mid-session. Log the
+        // heaps and ask the driver itself, which can page beyond the budget.
+        static std::atomic<u64> failures{0};
+        const u64 failure = ++failures;
+        if (failure <= 5 || failure % 100 == 0) {
+            std::printf("GPU: image %ux%ux%u, %u mips, %u layers, format %s over the memory "
+                        "budget (failure %llu); allocating beyond it; VMA heaps:%s\n",
+                        image_ci.extent.width, image_ci.extent.height, image_ci.extent.depth,
+                        image_ci.mipLevels, image_ci.arrayLayers,
+                        vk::to_string(image_ci.format).c_str(), (unsigned long long)failure,
+                        VmaHeapText(allocator).c_str());
+            std::fflush(stdout);
+        }
+        VmaAllocationCreateInfo retry_ci = alloc_ci;
+        retry_ci.flags &= ~VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT;
+        result = vmaCreateImage(allocator, &image_ci_unsafe, &retry_ci, &unsafe_image,
+                                &allocation, &alloc_info);
+        if (result == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+            // gow3: the driver also refuses past some point (Vega 8: the 256 MiB carve-out
+            // at 1858 MiB) while the system-memory heap still had GBs free. Place the image
+            // outside the device-local heaps: slower to sample, but the game keeps running.
+            const VkPhysicalDeviceMemoryProperties* props{};
+            vmaGetMemoryProperties(allocator, &props);
+            u32 host_types = 0;
+            for (u32 i = 0; i < props->memoryTypeCount; ++i) {
+                const u32 heap = props->memoryTypes[i].heapIndex;
+                if (!(props->memoryHeaps[heap].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)) {
+                    host_types |= 1u << i;
+                }
+            }
+            if (host_types != 0) {
+                static std::atomic<u64> host_fallbacks{0};
+                const u64 fallback = ++host_fallbacks;
+                if (fallback <= 5 || fallback % 100 == 0) {
+                    std::printf("GPU: image %ux%ux%u %s refused by the driver; placing it in "
+                                "system memory (fallback %llu)\n",
+                                image_ci.extent.width, image_ci.extent.height,
+                                image_ci.extent.depth, vk::to_string(image_ci.format).c_str(),
+                                (unsigned long long)fallback);
+                    std::fflush(stdout);
+                }
+                retry_ci.memoryTypeBits = host_types;
+                result = vmaCreateImage(allocator, &image_ci_unsafe, &retry_ci, &unsafe_image,
+                                        &allocation, &alloc_info);
+            }
+        }
+    }
+    ASSERT_MSG(result == VK_SUCCESS, "Failed allocating image {}x{}x{} {} with error {}; VMA heaps:{}",
+               image_ci.extent.width, image_ci.extent.height, image_ci.extent.depth,
+               vk::to_string(image_ci.format), vk::to_string(vk::Result{result}),
+               VmaHeapText(allocator));
     image = vk::Image{unsafe_image};
     size_bytes = alloc_info.size;
 }

@@ -5,6 +5,7 @@
 
 #include "gow3_copy.h"
 
+#include <array>
 #include <deque>
 #include <boost/container/small_vector.hpp>
 
@@ -187,7 +188,12 @@ private:
     };
     IntervalList<Backing> resident_ranges;
 
-    u32 arena_memory_type_index{};
+    /// gow3: memory types for arena residency, device-local first; the next one is tried when
+    /// a type's heap is out of memory (integrated GPUs: a small carve-out heap).
+    boost::container::small_vector<u32, VK_MAX_MEMORY_TYPES> arena_memory_types;
+    std::array<u64, VK_MAX_MEMORY_TYPES> arena_type_bytes{};
+    u32 arena_fallback_logged{};
+    u64 arena_limit_bytes{};
     u32 block_size{};
     u32 block_shift{};
     u32 blocks_per_arena_page{};
