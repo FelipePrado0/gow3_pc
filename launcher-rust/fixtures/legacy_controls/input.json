@@ -1,0 +1,19 @@
+{
+  "settings": {
+    "controls": {
+      "native": {
+        "cross": "Space"
+      }
+    },
+    "native_input": true,
+    "native_rage": false
+  },
+  "ini_lines": [],
+  "edits": {
+    "app": {},
+    "ini": {}
+  },
+  "env": {
+    "SPARTAN_GAME_DIR": "D:\\Games\\CUSA01623"
+  }
+}

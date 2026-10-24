@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# AppImage entry point: starts the frozen Tk launcher. The launcher picks the game folder, runs
-# run.py and handles --play (the game without a window, for Steam and shortcuts).
+# AppImage entry point: starts the Rust launcher. The launcher picks the game folder, runs the game
+# and handles --play (the game without a window, for Steam and shortcuts).
 # Usage: spartanport-x86_64.AppImage [--play]
 set -euo pipefail
 here=$(dirname -- "$(readlink -f -- "$0")")

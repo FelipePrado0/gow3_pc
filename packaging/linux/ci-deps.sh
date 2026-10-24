@@ -14,7 +14,7 @@ $sudo apt-get install -y --no-install-recommends \
     libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxss-dev libxtst-dev libxfixes-dev \
     libxinerama-dev libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev libdrm-dev libgbm-dev \
     libegl-dev libasound2-dev libpulse-dev libpipewire-0.3-dev libudev-dev libdbus-1-dev libibus-1.0-dev \
-    python3 python3-venv python3-tk python3-dev
+    python3
 $sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 140 --slave /usr/bin/g++ g++ /usr/bin/g++-14
 $sudo update-alternatives --install /usr/bin/cc cc /usr/bin/gcc-14 140
 $sudo update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++-14 140
@@ -38,8 +38,3 @@ cmake -S "$work/SDL3-$SDL" -B "$work/sdl" -G Ninja -DCMAKE_BUILD_TYPE=Release -D
 ninja -C "$work/sdl" >/dev/null
 $sudo ninja -C "$work/sdl" install >/dev/null
 $sudo ldconfig
-
-# The launcher is frozen with PyInstaller (packaging/linux/build.sh): venv at $VENV.
-VENV=${VENV:-$PWD/out/venv}
-python3 -m venv "$VENV"
-"$VENV/bin/pip" install -q --no-cache-dir pyinstaller pillow iced-x86==1.21.0

@@ -216,7 +216,7 @@ escolhe outra pasta).
 - Tipos de linha aceitos: `bytes`, `bytes16/32/64`, `float32/64`, `utf8`, `utf16`. Um patch com linha
   `mask` ou com endereço fora do `eboot.bin` fica de fora inteiro, com aviso no log.
 - Eles entram depois dos embutidos: onde os dois escrevem, vence o de terceiros.
-- Pelo terminal: `SPARTAN_PATCHES_DIR=/caminho SPARTAN_PATCHES_CONFIG=/caminho/patches.json python run.py`.
+- Pelo terminal: `SPARTAN_PATCHES_DIR=/caminho SPARTAN_PATCHES_CONFIG=/caminho/patches.json bash run.sh`.
 
 Para usar um patch de terceiros em qualquer build, converta-o para o formato embutido, com
 assinaturas, e distribua-o num mod ([Patches em mods](#patches-em-mods)).

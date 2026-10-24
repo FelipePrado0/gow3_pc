@@ -208,7 +208,7 @@ page, **Third-party patches** lists them and **Folders → Patches folder** choo
 - Accepted line types: `bytes`, `bytes16/32/64`, `float32/64`, `utf8`, `utf16`. A patch with a `mask`
   line or an address outside the `eboot.bin` is left out whole, with a note in the log.
 - They are applied after the built-in ones: where both write, the third-party one wins.
-- From a terminal: `SPARTAN_PATCHES_DIR=/path SPARTAN_PATCHES_CONFIG=/path/patches.json python run.py`.
+- From a terminal: `SPARTAN_PATCHES_DIR=/path SPARTAN_PATCHES_CONFIG=/path/patches.json bash run.sh`.
 
 To use a third-party patch on any build, port it to the built-in format with signatures and ship it
 in a mod ([Patches in mods](#patches-in-mods)).

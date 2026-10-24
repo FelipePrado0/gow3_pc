@@ -1,5 +1,5 @@
 """packaging/windows/smoke-test.ps1 against a built package (SPARTAN_WINDOWS_ZIP=path\\to\\spartanport-windows.zip):
-it passes on the package as built and fails when a DLL, a frozen module or a shipped file is wrong."""
+it passes on the package as built and fails when a DLL is missing or a Python or player file ships."""
 from paths import ROOT
 import os
 from pathlib import Path
@@ -45,8 +45,8 @@ class WindowsSmokeTests(unittest.TestCase):
     def test_a_missing_dll_fails(self):
         self.assertNotEqual(self.smoke(lambda tree: (tree / 'bin' / 'SDL3.dll').unlink()), 0)
 
-    def test_a_missing_frozen_module_fails(self):
-        self.assertNotEqual(self.smoke(lambda tree: shutil.rmtree(tree / '_internal' / 'iced_x86')), 0)
+    def test_a_python_file_in_the_package_fails(self):
+        self.assertNotEqual(self.smoke(lambda tree: (tree / 'bin' / 'stray.py').write_text('print(1)')), 0)
 
     def test_a_shipped_player_file_fails(self):
         self.assertNotEqual(self.smoke(lambda tree: (tree / 'spartanport.ini').write_text('[spartanport]\n')), 0)

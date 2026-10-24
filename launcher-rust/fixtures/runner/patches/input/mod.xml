@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<Patch>
+  <TitleID><ID>CUSA01623</ID></TitleID>
+  <Metadata Name="Resolution Patch - 3440x1440" Note="Requires setting DMEM to 4608 MB or more." AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+    <PatchList><Line Type="bytes" Address="0x00401000" Value="9090"/></PatchList>
+  </Metadata>
+  <Metadata Name="Resolution Patch - 2560x1080" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+    <PatchList><Line Type="bytes" Address="0x00401000" Value="9090"/></PatchList>
+  </Metadata>
+  <Metadata Name="Skip Any Video With X Button" Note="replaced by the mod" AppVer="01.02" AppElf="eboot.bin" isEnabled="true">
+    <PatchList><Line Type="bytes" Address="0x00401002" Value="90"/></PatchList>
+  </Metadata>
+</Patch>

@@ -11,7 +11,7 @@ Requirements
   Bridge and AMD FX run with emulated instructions (an "ISA:" log line; speed not measured yet).
   Older processors stop at start with a "STOP: this CPU lacks" line in the log.
 - A graphics card with Vulkan 1.3 and an up-to-date driver.
-  Nothing else: Python and the libraries are inside this folder.
+  Nothing else: no Python is needed, and the libraries are inside this folder.
 
 Starting
 1. Extract this folder anywhere, for example C:\Games\spartanport-windows (not inside the zip).

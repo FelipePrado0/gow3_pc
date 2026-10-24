@@ -1,0 +1,44 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Patch>
+  <TitleID>
+    <ID>CUSA01623</ID>
+  </TitleID>
+  <Metadata Name="Found" AppVer="01.02">
+    <PatchList>
+      <Line Type="bytes" Address="0x401004" Value="9090" Pattern="11 22 ?? 44 55 66" At="1" />
+    </PatchList>
+  </Metadata>
+  <Metadata Name="Call" AppVer="01.02">
+    <PatchList>
+      <Line Type="bytes" Address="0x401010" Value="e8{rel:there:0}" Pattern="aa bb cc dd ee" At="0" />
+    </PatchList>
+    <Target Name="there" Address="0x401100" Pattern="e9 ?? ?? ?? ?? 77 88" At="1" Ref="1" />
+  </Metadata>
+  <Metadata Name="Missing" AppVer="01.02">
+    <PatchList>
+      <Line Type="bytes" Address="0x401004" Value="9090" Pattern="11 22 ?? 44 55 66" At="1" />
+      <Line Type="bytes" Address="0x401020" Value="90" Pattern="de ad be ef" At="0" />
+    </PatchList>
+  </Metadata>
+  <Metadata Name="Data" AppVer="01.02">
+    <PatchList>
+      <Line Type="bytes32" Address="0x402000" Target="variable" Value="0x2" />
+    </PatchList>
+    <Target Name="variable" Address="0x402000" Pattern="44 89 35 ?? ?? ?? ?? c6" At="3" Ref="1" />
+  </Metadata>
+  <Metadata Name="Resolution Patch - 3440x1440" Note="Requires setting DMEM to 4608 MB or more." AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+    <PatchList>
+      <Line Type="bytes" Address="0x00401000" Value="9090" />
+    </PatchList>
+  </Metadata>
+  <Metadata Name="Resolution Patch - 2560x1080" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+    <PatchList>
+      <Line Type="bytes" Address="0x00401000" Value="9090" />
+    </PatchList>
+  </Metadata>
+  <Metadata Name="Skip Any Video With X Button" Note="replaced by the mod" AppVer="01.02" AppElf="eboot.bin" isEnabled="true">
+    <PatchList>
+      <Line Type="bytes" Address="0x00401002" Value="90" />
+    </PatchList>
+  </Metadata>
+</Patch>

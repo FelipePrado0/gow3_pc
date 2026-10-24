@@ -124,12 +124,12 @@ legible: `--crop 0.75,0,1,0.25` toma el cuarto superior derecho (izquierda, arri
 en fracciones). Cada textura que muestra las mismas formas ahí es una capa que hay que cambiar.
 
 `tools/wad_textures.py` encuentra una textura mirando: arma hojas de contacto numeradas con todas las
-texturas de los WAD que nombres (`"SpartanPort.exe" --script tools\wad_textures.py "<juego>\EXEC\WAD\PS4_LE" OLY1* -o sheets`),
+texturas de los WAD que nombres (`python tools/wad_textures.py "<juego>\EXEC\WAD\PS4_LE" OLY1* -o sheets`),
 arma hojas con una parte de cada textura (`--crop`), extrae las numeradas como `.dds` (`--extract`),
 busca palabras en los nombres de entrada de todos los WAD para encontrar el WAD de una sala
 (`--grep Muse Lyre`) y ordena las texturas pequeñas que parecen indicaciones de botones (`--find`).
-Ejecútalo con la ruta completa del script; `--script` del launcher lo corre con el Python que trae, y
-`2>&1 | Out-Host` en PowerShell muestra su salida.
+Es una herramienta de desarrollo que vive en el repositorio:
+ejecútala con Python desde una copia del código fuente.
 
 Los WADs de `PS4_LE` son little-endian. La versión de PS3 funcionaba en una consola big-endian, así
 que no se espera que sus WADs funcionen aquí.
@@ -343,8 +343,8 @@ mismas dos listas:
 Desde un terminal:
 
 ```sh
-SPARTAN_GAME_DIR=/ruta/CUSA01623 SPARTAN_MODS_DIR=/ruta/mods python run.py
-SPARTAN_GAME_DIR=/ruta/CUSA01623 SPARTAN_MODS_ENABLED=0 python run.py
+SPARTAN_GAME_DIR=/ruta/CUSA01623 SPARTAN_MODS_DIR=/ruta/mods bash run.sh
+SPARTAN_GAME_DIR=/ruta/CUSA01623 SPARTAN_MODS_ENABLED=0 bash run.sh
 ```
 
 ## Mods con parches del juego

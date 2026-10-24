@@ -1,2 +1,21 @@
 # git apply needs the patches byte-exact with the LF sources they change, on any core.autocrlf.
 *.patch text eol=lf
+# Parity fixtures and the embedded i18n table are compared byte for byte by the Rust tests: LF on every OS.
+launcher-rust/fixtures/** text eol=lf
+launcher-rust/assets/i18n.json text eol=lf
+# Snapshot references are images compared pixel by pixel: never touched as text.
+launcher-rust/snapshots/** binary
+# The runner fixtures: text outputs are LF, every input and output that is bytes is never touched as text.
+launcher-rust/fixtures/runner/**/*.json text eol=lf
+launcher-rust/fixtures/runner/**/*.xml text eol=lf
+launcher-rust/fixtures/runner/**/*.ini text eol=lf
+launcher-rust/fixtures/runner/**/*.bin binary
+launcher-rust/fixtures/runner/**/*.dds binary
+launcher-rust/fixtures/runner/**/*.dxt1 binary
+launcher-rust/fixtures/runner/**/*.dxt5 binary
+launcher-rust/fixtures/runner/**/*.png binary
+launcher-rust/fixtures/runner/**/*.bmp binary
+launcher-rust/fixtures/runner/**/*.WAD binary
+launcher-rust/fixtures/runner/**/*.prx binary
+launcher-rust/fixtures/runner/**/*.sfo binary
+launcher-rust/fixtures/runner/**/*.elf binary

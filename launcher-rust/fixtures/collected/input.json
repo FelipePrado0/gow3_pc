@@ -1,0 +1,46 @@
+{
+  "settings": {
+    "game_dir": "D:\\Games\\GOW3",
+    "ui_language": "pt",
+    "monitor": "1",
+    "hdr": true,
+    "gpu_id": "0",
+    "controls": {
+      "key": {
+        "cross": "Space",
+        "square": "F"
+      },
+      "pad": {
+        "cross": "b"
+      }
+    },
+    "controls_layout": 2,
+    "game_patches": {
+      "CUSA01623": [
+        "Skip Intro"
+      ]
+    }
+  },
+  "ini_lines": [
+    "# spartanport settings (in-game menu: Insert / R3+L2)",
+    "upscaler=fsr3",
+    "fps_limit=60",
+    "extra=a=b"
+  ],
+  "edits": {
+    "app": {
+      "close_on_play": true
+    },
+    "ini": {
+      "fps_limit": "120",
+      "vsync": "0"
+    }
+  },
+  "env": {
+    "SPARTAN_GAME_DIR": "D:\\Games\\CUSA01623",
+    "SPARTAN_GPU_ID": "7",
+    "SDL_VIDEODRIVER": "windows",
+    "PYTHONPATH": "C:\\lib",
+    "UNRELATED": "dropped"
+  }
+}

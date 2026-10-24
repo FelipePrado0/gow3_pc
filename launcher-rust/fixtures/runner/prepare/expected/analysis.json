@@ -1,0 +1,142 @@
+{
+  "source_sha256": "138b11e351ce338943e47f76805cfba5380996355ea098c97be4fd586002d96c",
+  "source_bytes": 5400,
+  "sfo": {
+    "APP_VER": "01.02",
+    "CONTENT_ID": "EP9000-CUSA01623_00-GOW3REMASTERED00",
+    "TITLE": "ゴッド・オブ・ウォーIII リマスタード",
+    "TITLE_ID": "CUSA01623",
+    "USER_DEFINED_PARAM_1": 13,
+    "USER_DEFINED_PARAM_2": 0,
+    "USER_DEFINED_PARAM_3": 7,
+    "USER_DEFINED_PARAM_4": 4294967295
+  },
+  "entry": "0x10",
+  "image_bytes": 4096,
+  "program_headers": [
+    {
+      "type": 1,
+      "flags": 5,
+      "offset": 4096,
+      "vaddr": 0,
+      "paddr": 0,
+      "filesz": 2048,
+      "memsz": 2048,
+      "align": 16384
+    },
+    {
+      "type": 1,
+      "flags": 6,
+      "offset": 6144,
+      "vaddr": 2048,
+      "paddr": 2048,
+      "filesz": 2048,
+      "memsz": 2048,
+      "align": 16384
+    },
+    {
+      "type": 2,
+      "flags": 4,
+      "offset": 8192,
+      "vaddr": 0,
+      "paddr": 0,
+      "filesz": 192,
+      "memsz": 0,
+      "align": 8
+    },
+    {
+      "type": 1627389952,
+      "flags": 4,
+      "offset": 8448,
+      "vaddr": 0,
+      "paddr": 0,
+      "filesz": 344,
+      "memsz": 0,
+      "align": 8
+    },
+    {
+      "type": 1627389953,
+      "flags": 4,
+      "offset": 8960,
+      "vaddr": 128,
+      "paddr": 128,
+      "filesz": 0,
+      "memsz": 64,
+      "align": 8
+    },
+    {
+      "type": 7,
+      "flags": 4,
+      "offset": 7168,
+      "vaddr": 3072,
+      "paddr": 3072,
+      "filesz": 16,
+      "memsz": 48,
+      "align": 16
+    }
+  ],
+  "self_segments": [
+    {
+      "flags": "0x800",
+      "offset": 768,
+      "size": 2048
+    },
+    {
+      "flags": "0x100800",
+      "offset": 2816,
+      "size": 2048
+    },
+    {
+      "flags": "0x200800",
+      "offset": 4864,
+      "size": 192
+    },
+    {
+      "flags": "0x300800",
+      "offset": 5056,
+      "size": 344
+    }
+  ],
+  "unavailable_metadata_headers": [],
+  "needed": [
+    "libc.prx"
+  ],
+  "relocation_counts": {
+    "8": 1,
+    "6": 2,
+    "1": 1,
+    "7": 2
+  },
+  "import_count": 2,
+  "imports": [
+    "bzQExy189ZI#q#q",
+    "AAAAAAAAAAA#q#q"
+  ],
+  "import_name_hints": {
+    "bzQExy189ZI#q#q": "_init_env"
+  },
+  "libc_evidence": {
+    "sha256": "16bcdb5c0a28f581da21dc76c9e73ed1e8ec35398b85be38352691f4ff4cba33",
+    "init_env_is_ret": true,
+    "symbol": "bzQExy189ZI#C#A",
+    "address": "0x10",
+    "size": 1,
+    "bytes": "c3",
+    "ios_base_init": {
+      "symbol": "sqWytnhYdEg#C#A",
+      "address": "0x20",
+      "size": 3,
+      "code_sha256": "251447ee91a9067dcd6ab96703133f617565974cd6c4819021760c4688c91abf",
+      "name": "_ZNSt8ios_base4InitC1Ev"
+    }
+  },
+  "bundled_modules": [
+    "libc.prx"
+  ],
+  "resources": {
+    "PART1.WAD": 1,
+    "sound": 1
+  },
+  "resource_bytes": 132,
+  "status": "Prepared only; execution and Vulkan are tested separately."
+}

@@ -1,0 +1,103 @@
+[package]
+name = "spartanport-launcher"
+version = "2.8.0"
+edition = "2021"
+rust-version = "1.87"
+# `cargo run` starts the launcher; `fake-game` is a test helper.
+default-run = "spartanport-launcher"
+
+[lib]
+name = "spartanport_launcher"
+
+[[bin]]
+name = "spartanport-launcher"
+path = "src/main.rs"
+
+[[bin]]
+name = "fake-game"
+path = "src/bin/fake_game.rs"
+
+# The runner tests' stand-in for spartanport-probe.
+[[bin]]
+name = "fake-probe"
+path = "src/bin/fake_probe.rs"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+
+[dependencies]
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+indexmap = { version = "2", features = ["serde"] }
+tempfile = "3"
+image = { version = "0.25", default-features = false, features = ["png"] }
+# The button icons' text in `runner/draw.rs`, as Pillow draws it with FreeType: skrifa ports
+# FreeType's auto-hinter (without `autohint_shaping`, as FreeType's default build has no HarfBuzz)
+# and the rasterizer fills the hinted outlines.
+skrifa = { version = "0.44", default-features = false, features = ["std"] }
+ab_glyph_rasterizer = "0.1"
+zip = { version = "9", default-features = false, features = ["deflate"] }
+roxmltree = "0.21"
+ureq = { version = "3", default-features = false, features = ["rustls"] }
+sha2 = "0.10"
+flate2 = "1"
+md-5 = "0.10"
+crc32fast = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+rfd = "0.17"
+iced = { version = "0.14", features = ["wgpu", "tiny-skia", "image", "canvas", "advanced", "tokio"] }
+# The x86 decoder of `runner/isa_rewrite.rs`: the engine and version of the Python's binding, so the
+# sites are the same. `instr_info` gives the flow control and the register numbers and sizes.
+iced-x86 = { version = "=1.21.0", default-features = false, features = ["std", "decoder", "instr_info"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Globalization",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Console",
+    "Win32_System_IO",
+    "Win32_System_Ioctl",
+    "Win32_System_JobObjects",
+    "Win32_System_Pipes",
+    "Win32_System_Registry",
+    "Win32_System_SystemInformation",
+    "Win32_System_SystemServices",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.30", features = ["fs", "signal"] }
+
+# `build.rs` embeds the icon into the Windows exe (R92).
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
+
+[dev-dependencies]
+iced_test = "0.14"
+
+# The snapshot tests draw 2× frames with tiny-skia and pass them through PNG files; unoptimized,
+# one 1920 × 1080 window takes about 20 s.
+[profile.dev.package.tiny-skia]
+opt-level = 3
+[profile.dev.package.tiny-skia-path]
+opt-level = 3
+[profile.dev.package.iced_tiny_skia]
+opt-level = 3
+[profile.dev.package.png]
+opt-level = 3
+[profile.dev.package.fdeflate]
+opt-level = 3
+[profile.dev.package.flate2]
+opt-level = 3
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+[profile.dev.package.crc32fast]
+opt-level = 3
+[profile.dev.package.image]
+opt-level = 3

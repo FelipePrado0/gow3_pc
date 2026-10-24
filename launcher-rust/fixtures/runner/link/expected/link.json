@@ -1,0 +1,43 @@
+{
+  "modules": [
+    {
+      "file": "libc.prx",
+      "base": "0x10000",
+      "size": 4096,
+      "init": "0x10010",
+      "tls_address": "0x10500",
+      "tls_memsz": 48,
+      "tls_filesz": 16,
+      "tls_module": 2,
+      "tls_relocations": 1,
+      "exports": 3,
+      "sha256": "16bcdb5c0a28f581da21dc76c9e73ed1e8ec35398b85be38352691f4ff4cba33"
+    },
+    {
+      "file": "libSceFios2.prx",
+      "base": "0x20000",
+      "size": 2048,
+      "init": "0x20000",
+      "tls_address": "0x0",
+      "tls_memsz": 0,
+      "tls_filesz": 0,
+      "tls_module": 0,
+      "tls_relocations": 0,
+      "exports": 1,
+      "sha256": "a7ae78118c4fcb8dd27129c2b8059fbcf2e0d685b4ad8b40038fa43f4d93e4f2"
+    }
+  ],
+  "bindings": 2,
+  "imports": 4,
+  "fs_loads_patched": 4,
+  "main_tls": {
+    "vaddr": 3072,
+    "filesz": 16,
+    "memsz": 48,
+    "align": 16
+  },
+  "unresolved_imports": [
+    "AAAAAAAAAAA#libc",
+    "DDDDDDDDDDD#libc"
+  ]
+}

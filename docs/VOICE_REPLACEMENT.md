@@ -58,15 +58,20 @@ An `.XVAG` file: a header, then the audio. The header fields used here (the layo
 ## Swapping voice lines: the Update folder
 
 Use the launcher's **Game → Update folder**. It is laid over the game when it starts; the dump is never written
-(`scripts/game_update.py`). The folder needs the game's own `eboot.bin` and `sce_sys/param.sfo`, plus the files
+(`launcher-rust/src/runner/game_update.rs`). The folder needs the game's own `eboot.bin` and `sce_sys/param.sfo`, plus the files
 you change at the same paths as in the game, for example
 `PORTUGUESE/SOUNDS/STREAMS_PS4/KR_001_012.XVAG`.
 
-`tools/xvag_voice_swap.py` builds that folder from your recordings:
+`SpartanPort.exe --voice-swap` builds that folder from your recordings (on Linux,
+`spartanport-x86_64.AppImage --voice-swap …`):
 
 ```
-python tools/xvag_voice_swap.py GAME_DIR SOURCE UPDATE_DIR --language PORTUGUESE [--reference ORIGINAL] [--dry-run]
+SpartanPort.exe --voice-swap GAME_DIR SOURCE UPDATE_DIR --language PORTUGUESE [--reference ORIGINAL] [--dry-run]
 ```
+
+The Windows exe is a windowed program, so a terminal returns the prompt at once and loses the exit code. To wait for
+it and see its output, use PowerShell `& .\SpartanPort.exe --voice-swap … 2>&1 | Out-Host` or cmd
+`start /wait SpartanPort.exe --voice-swap …`.
 
 - `SOURCE` is a PS3 language archive (`.psarc`, zlib) or a folder of mono PS-ADPCM recordings named
   `<NAME>.XVAG` (Sony VAG, or XVAG).
@@ -87,7 +92,7 @@ that timestamp, so treat a missing change as inconclusive.
 
 The current mod loader supports loose voice replacements under
 `dvdroot_ps4/<LANGUAGE>/SOUNDS/STREAMS_PS4/`. It removes the `dvdroot_ps4` prefix for a flat game dump
-(`scripts/mods.py`). The tool documented here builds an Update folder; select that folder through
+(`launcher-rust/src/core/mods.rs`). The tool documented here builds an Update folder; select that folder through
 **Game > Update folder**.
 
 ## Legal
@@ -144,11 +149,14 @@ little-endian (0), e os dois aparecem na mesma pasta; no chunk `fmat` (em `0x20`
 ## Trocar falas: a pasta de Update
 
 Use **Game → Update folder** no launcher. A pasta é colocada por cima do jogo ao iniciar; o dump nunca é
-gravado (`scripts/game_update.py`). Ela precisa do `eboot.bin` e do `sce_sys/param.sfo` do próprio jogo, mais os
+gravado (`launcher-rust/src/runner/game_update.rs`). Ela precisa do `eboot.bin` e do `sce_sys/param.sfo` do próprio jogo, mais os
 arquivos que você troca, no mesmo caminho que têm no jogo, por exemplo
 `PORTUGUESE/SOUNDS/STREAMS_PS4/KR_001_012.XVAG`.
 
-`tools/xvag_voice_swap.py` monta essa pasta a partir das suas gravações (uso acima).
+`SpartanPort.exe --voice-swap` monta essa pasta a partir das suas gravações (no Linux,
+`spartanport-x86_64.AppImage --voice-swap …`; uso acima). O exe do Windows é um programa de janela: o terminal
+devolve o prompt na hora e perde o código de saída. Para esperar e ver a saída, use no PowerShell
+`& .\SpartanPort.exe --voice-swap … 2>&1 | Out-Host` ou no cmd `start /wait SpartanPort.exe --voice-swap …`.
 
 - `SOURCE` é um arquivo de idioma do PS3 (`.psarc`, zlib) ou uma pasta de gravações mono PS-ADPCM com nome
   `<NOME>.XVAG` (Sony VAG ou XVAG).
@@ -169,7 +177,7 @@ esse horário; se não mudar, o resultado é inconclusivo.
 
 O loader atual aceita substituições de voz em
 `dvdroot_ps4/<IDIOMA>/SOUNDS/STREAMS_PS4/`. Ele remove o prefixo `dvdroot_ps4` quando o dump tem os arquivos
-na raiz (`scripts/mods.py`). A ferramenta descrita aqui monta uma pasta Update; selecione essa pasta em
+na raiz (`launcher-rust/src/core/mods.rs`). A ferramenta descrita aqui monta uma pasta Update; selecione essa pasta em
 **Game > Update folder**.
 
 ## Aviso legal

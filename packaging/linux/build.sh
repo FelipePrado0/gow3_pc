@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Builds dist/spartanport-x86_64.AppImage from the Linux build (run `bash build.sh` in the repo root first).
 # Libraries are bundled with their dependencies, except the ones that must come from the host
-# (glibc, Vulkan loader and drivers, X11/Wayland, GL). The Tk launcher is frozen with PyInstaller, so
-# players need no Python. Needs: ldd, patchelf, curl (appimagetool), python-pyinstaller, tk, pillow, iced-x86.
+# (glibc, Vulkan loader and drivers, X11/Wayland, GL). The launcher is the Rust one
+# (launcher-rust/): a single executable, so players need no Python. Needs: ldd, patchelf, curl
+# (appimagetool) and a Rust toolchain.
 set -euo pipefail
 cd -- "$(dirname -- "$0")/../.."
 [[ -f out/spartanport-probe && -f out/gpu/libspartanportgpu.so ]] || { echo 'Build first: bash build.sh' >&2; exit 1; }
@@ -14,8 +15,11 @@ mkdir -p "$share/bin/gpu" "$appdir/usr/lib"
 
 install -m755 out/spartanport-probe out/spartanport-gpu-capabilities "$share/bin/"
 install -m755 out/gpu/libspartanportgpu.so "$share/bin/gpu/"
-cp run.py "$share/"
-cp -r scripts patches "$share/"
+(cd launcher-rust && "${CARGO:-cargo}" build --release --locked)
+install -m755 launcher-rust/target/release/spartanport-launcher "$share/spartanport-launcher"
+cp -r patches "$share/"
+mkdir -p "$share/scripts"
+cp -r scripts/controller_diagrams "$share/scripts/"
 mkdir -p "$share/launcher"
 # The icon of the AppImage, the launcher and the game window: packaging/linux/spartanport.png when it
 # exists (a local choice), else the launcher's own.
@@ -28,23 +32,13 @@ install -m644 launcher/OFL-Cinzel.txt "$share/launcher/OFL-Cinzel.txt"
 install -m644 launcher/BodoniModa.ttf "$share/launcher/BodoniModa.ttf"
 install -m644 launcher/OFL-BodoniModa.txt "$share/launcher/OFL-BodoniModa.txt"
 
-# The launcher also runs run.py (--run) and the preparation scripts (--script) itself, as on
-# Windows: the standard modules those scripts import come along as hidden imports.
-# iced-x86 (pip install iced-x86==1.21.0): scripts/isa_rewrite.py, CPUs without MOVBE/BMI1/LZCNT.
-hidden=()
-for module in argparse base64 collections hashlib json re shutil struct tempfile xml.etree.ElementTree \
-              urllib.request iced_x86; do
-    hidden+=(--hidden-import "$module")
-done
-python3 -c 'import iced_x86' || { echo 'Need iced-x86: pip install iced-x86==1.21.0' >&2; exit 1; }
-python3 -m PyInstaller --noconfirm --clean --log-level WARN --windowed --name spartanport-launcher \
-    --distpath out/pyi-dist --workpath out/pyi-work --specpath out/pyi-work \
-    --paths "$PWD/scripts" "${hidden[@]}" "$PWD/launcher/spartanport_launcher_win.py"
-cp -r out/pyi-dist/spartanport-launcher/. "$share/"
-find "$share" -name __pycache__ -prune -exec rm -r {} +
+# The package holds no Python and no frozen interpreter.
+stray=$(find "$appdir" \( -name '*.py' -o -name _internal \) -print)
+[[ -z $stray ]] || { echo 'Python files in the AppDir:' >&2; echo "$stray" >&2; exit 1; }
 install -m755 packaging/linux/AppRun "$appdir/AppRun"
 install -m644 packaging/linux/spartanport.desktop "$appdir/spartanport.desktop"
 install -m644 "$icon" "$appdir/spartanport.png"
+if [[ -f release.json ]]; then install -m644 release.json "$appdir/release.json"; fi
 
 # Host-provided libraries: bundling any of these breaks drivers or the display connection.
 excluded='^(ld-linux.*|libc|libm|libdl|librt|libpthread|libresolv|libutil|libnsl|libanl|libvulkan|libGL|libGLX|libGLdispatch|libEGL|libOpenGL|libgbm|libdrm.*|libX11|libX11-xcb|libxcb.*|libXau|libXdmcp|libXext|libXfixes|libXrender|libXi|libXcursor|libXrandr|libwayland-.*|libasound|libudev|libpulse.*|libfontconfig|libfreetype|libOpenCL|libva.*|libvdpau|libvpl|libnvidia-.*|libcuda|libz|libstdc\+\+|libgcc_s)\.so'
@@ -64,6 +58,7 @@ bundle() {
 }
 bundle out/gpu/libspartanportgpu.so
 bundle out/spartanport-probe
+bundle launcher-rust/target/release/spartanport-launcher
 # libstdc++/libgcc/libz come from the build host: the same glibc generation as the one that runs
 # the AppImage is assumed, and a newer libstdc++ than Mesa's is the safe direction.
 for name in libstdc++.so.6 libgcc_s.so.1; do

@@ -1,0 +1,10 @@
+{
+  "last_good": {
+    "render_resolution": "1440p",
+    "engine_fps": "120",
+    "deferred_readback": "1",
+    "stale_readback": "1",
+    "async_shaders": "1"
+  },
+  "attempt": false
+}

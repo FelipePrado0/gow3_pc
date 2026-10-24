@@ -1,0 +1,37 @@
+name: Rust launcher
+
+on:
+  push:
+    paths:
+      - 'launcher-rust/**'
+      - '.github/workflows/rust-launcher.yml'
+  pull_request:
+    paths:
+      - 'launcher-rust/**'
+      - '.github/workflows/rust-launcher.yml'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-2025, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: launcher-rust
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Install Linux libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+      - run: cargo build --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spartanport-launcher-${{ matrix.os }}
+          path: launcher-rust/target/release/spartanport-launcher*

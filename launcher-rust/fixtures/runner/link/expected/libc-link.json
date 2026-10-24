@@ -1,0 +1,37 @@
+{
+  "base": "0x10000",
+  "size": 4096,
+  "sha256": "16bcdb5c0a28f581da21dc76c9e73ed1e8ec35398b85be38352691f4ff4cba33",
+  "init": "0x10010",
+  "bindings": 1,
+  "tls_module_id": 2,
+  "fs_loads_patched": 2,
+  "main_tls": {
+    "vaddr": 3072,
+    "filesz": 16,
+    "memsz": 48,
+    "align": 16
+  },
+  "tls_relocations": 1,
+  "tls_template_bytes": 16,
+  "tls_memory_bytes": 48,
+  "imports": [
+    "bzQExy189ZI#q#q",
+    "AAAAAAAAAAA#q#q",
+    "DDDDDDDDDDD#q#q"
+  ],
+  "relocation_counts": {
+    "8": 1,
+    "16": 1,
+    "1": 1,
+    "6": 1,
+    "7": 1
+  },
+  "symbol_bindings": [
+    {
+      "import_name": "bzQExy189ZI#q#q",
+      "address": "0x10010",
+      "kind": 1
+    }
+  ]
+}

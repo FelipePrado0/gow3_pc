@@ -1,0 +1,4 @@
+# The snapshot references (tests/ui_snapshots.rs); the repository ignores *.png.
+!/snapshots/*.png
+# The runner fixtures' pictures (input/ of tests/runner_fixtures.rs and the runner's unit tests).
+!/fixtures/runner/**/*.png

@@ -1,0 +1,56 @@
+{
+  "ui_language": "pt",
+  "ui_scale": "auto",
+  "game_dir": "D:\\Games\\GOW3",
+  "update_dir": "",
+  "experimental_upscaler": false,
+  "video_backend": "auto",
+  "gamemode": false,
+  "mangohud": false,
+  "desktop_integration": true,
+  "user_dir": "",
+  "mods_dir": "",
+  "mods_enabled": true,
+  "patches_dir": "",
+  "language": "1",
+  "hdr": true,
+  "draw_pipe": "",
+  "readbacks": "",
+  "no_msaa": "",
+  "stream_memory": "cached",
+  "gpu_id": "0",
+  "monitor": "",
+  "partial_height_views": true,
+  "disk_shaders": true,
+  "shader_prefetch": true,
+  "shader_notes": false,
+  "background_warmup": true,
+  "parallel_warmup": true,
+  "pipeline_binary_cache": true,
+  "perf_diag": false,
+  "frame_capture_key": false,
+  "frame_stats": false,
+  "gpu_profile": false,
+  "vk_validation": false,
+  "close_on_play": true,
+  "discord_rpc": false,
+  "check_updates": false,
+  "game_patches": {
+    "CUSA01623": [
+      "Skip Intro"
+    ]
+  },
+  "controls": {
+    "key": {
+      "square": "F"
+    },
+    "pad": {
+      "cross": "b"
+    }
+  },
+  "pad_style": "playstation",
+  "rage_one_input": true,
+  "stick_prompts": "keyboard",
+  "controls_layout": 2,
+  "glyph_style": "off"
+}

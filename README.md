@@ -207,9 +207,9 @@ Settings are kept in `spartanport.ini` (the game and the in-game menu) and in
 
 **GUI Scale:** choose **Auto**, **1x** or **2x** under **Advanced → Launcher**,
 then click **Save**. Text, controls and layout resize together, without changing
-game resolution. Auto follows the desktop scale reported by Tk, with X11/XWayland
-font DPI and window-scale fallbacks on Linux. On macOS, Retina scaling stays with
-the operating system. Manual 1x/2x sets the launcher's logical size, including text,
+game resolution. Auto follows the desktop scale the window system reports to the Rust
+launcher (Windows display scaling; the Wayland or X11 scale on Linux). On macOS, Retina
+scaling stays with the operating system. Manual 1x/2x sets the launcher's logical size, including text,
 icons, controls, scrollbars and spacing. Screen resolution alone does not select
 a scale. The choice is saved in `settings.json`.
 
@@ -295,7 +295,7 @@ Chamber of the Flame; the pause-menu controller drawing stays a DualShock 4.
 on the next start); *Match my controller* shows the keys too when no gamepad is connected.
 The launcher writes a patched copy of up to three game files (about 410 MB) into the port's data folder and never changes
 your game folder. A new controller is picked up after a restart. Without the launcher, set
-`SPARTAN_GLYPH_STYLE` to `auto`, `xbox`, `nintendo` or `keyboard` before starting `run.py`.
+`SPARTAN_GLYPH_STYLE` to `auto`, `xbox`, `nintendo` or `keyboard` before starting `run.sh`.
 
 In the menu: L1/R1 or Q/E switch tabs. In the save list: arrows or the d-pad choose, Enter or
 Cross confirm, Esc or Circle cancel.
@@ -389,15 +389,9 @@ reported on other setups, including at 1080p. See the known issues in the releas
 
 ### Windows
 
-Install Python 3.10 or newer from python.org, with Tk support, then install the launcher and
-instruction-rewrite dependencies in PowerShell:
-
-```powershell
-python -m pip install pillow iced-x86==1.21.0
-```
-
-The following build commands use MSYS2 CLANG64; launcher commands marked PowerShell use the
-Windows Python installation.
+Install [rustup](https://rustup.rs) (stable) and the Visual Studio Build Tools with the "Desktop
+development with C++" workload; the launcher is built with cargo and needs no Python. The build
+commands below use MSYS2 CLANG64; launcher commands marked PowerShell run on Windows.
 
 Development happens on the `spartanport` branch; `main` receives tested merges.
 
@@ -415,7 +409,8 @@ Development happens on the `spartanport` branch; `main` receives tested merges.
 3. Start the launcher (in PowerShell, in the project folder):
 
    ```powershell
-   python launcher/spartanport_launcher_win.py
+   cd launcher-rust
+   cargo run --release
    ```
 
 4. On **Game**, choose the game folder and patches. Adjust **Graphics** and **Performance**,
@@ -424,21 +419,22 @@ Development happens on the `spartanport` branch; `main` receives tested merges.
 To play with the saved settings without opening the launcher's window (for a shortcut or Steam):
 
 ```powershell
-python launcher/spartanport_launcher_win.py --play
+cd launcher-rust
+cargo build --release
+.\target\release\spartanport-launcher.exe --play
 ```
 
-Or without the launcher at all:
+Or without the launcher's settings, from a Git Bash or MSYS2 shell:
 
-```powershell
-$env:SPARTAN_GAME_DIR = 'D:\path\CUSA01623'
-python run.py
+```bash
+SPARTAN_GAME_DIR='D:\path\CUSA01623' bash run.sh
 ```
 
 ### Linux (Ubuntu 24.04)
 
 For a fresh checkout, run the following in a Linux shell. The dependency script installs system
-packages using sudo, selects GCC 14 as the default compiler and creates `out/venv` with
-PyInstaller, Pillow and iced-x86. It is intended for Ubuntu 24.04; adapt dependencies for other
+packages using sudo and selects GCC 14 as the default compiler. The launcher also needs
+[rustup](https://rustup.rs) (stable). It is intended for Ubuntu 24.04; adapt dependencies for other
 distributions. If already cloned, start in the repository and skip the first two commands.
 
 ```bash
@@ -446,20 +442,38 @@ git clone --recursive https://github.com/FelipePrado0/SpartanPort
 cd SpartanPort
 bash packaging/linux/ci-deps.sh
 bash build.sh
-out/venv/bin/python launcher/spartanport_launcher_win.py
+cd launcher-rust
+cargo run --release
 ```
 
 To package an AppImage after the build:
 
 ```bash
-PATH="$PWD/out/venv/bin:$PATH" bash packaging/linux/build.sh
+bash packaging/linux/build.sh
 ./dist/spartanport-x86_64.AppImage
 ```
 
-The build environment is created before the packaging command. Building on a newer distribution
+`packaging/linux/build.sh` builds the Rust launcher itself. Building on a newer distribution
 can require a newer glibc; public release builds use Ubuntu 24.04. From the repository, use
-`out/venv/bin/python launcher/spartanport_launcher_win.py --play` for saved launcher settings, or
-`SPARTAN_GAME_DIR=/path/to/CUSA01623 out/venv/bin/python run.py` for a direct launch.
+`bash run.sh` for a direct start (it builds what is missing and runs the launcher's exe with
+`--run`), with `SPARTAN_GAME_DIR=/path/to/CUSA01623` to name the game folder. For the saved
+launcher settings without the window, run `launcher-rust/target/release/spartanport-launcher --play`.
+
+### Rust launcher
+
+The launcher is written in Rust (`launcher-rust/`, iced) and is the only launcher the packages
+ship. It builds with [rustup](https://rustup.rs) (stable). On Windows,
+install the Visual Studio Build Tools with the "Desktop development with C++" workload; on Ubuntu,
+`sudo apt-get install build-essential pkg-config libwayland-dev libxkbcommon-dev`.
+
+```bash
+cd launcher-rust
+cargo run --release
+```
+
+Started from a checkout, it finds the tools in `out/` on its own; `SPARTAN_PORT_DIR` points it at a
+packaged port instead (its `bin/`). PLAY starts the launcher's own exe with `--run`, so nothing
+needs Python.
 
 ### Linux (Arch Linux)
 
@@ -490,11 +504,25 @@ Run these from the repository root after the build. The first C++ checks below d
 
 ### Python
 
-On Windows, use PowerShell. On Linux, replace `python` with `out/venv/bin/python`.
+The launcher and runner Python code is frozen: it is not packaged and not run by the port. It stays
+in the repository as the parity reference for the Rust launcher. Its tests still run, with Python
+3.10 or newer (on Windows, in PowerShell):
 
 ```powershell
 python -m unittest discover -s tests -p "test_*.py"
 ```
+
+### Rust launcher
+
+```bash
+cd launcher-rust
+cargo test
+```
+
+The page snapshots under `launcher-rust/snapshots/` are compared pixel by pixel on Windows only.
+`python -m unittest discover -s tests -p "test_launcher_parity_doc.py"` checks that every Python
+launcher test has its row in `docs/specs/2026-10-21-rust-launcher-parity.md`.
+`tools/runner_fixtures.py` generates `launcher-rust/fixtures/runner/`, the inputs and the files the Python runner's modules write over them, for the Rust runner's parity tests.
 
 ### Windows C++ tests (MSYS2 CLANG64)
 
@@ -554,13 +582,15 @@ It is a fork of [Supermedo's Windows port](https://github.com/Supermedo/bloodbor
 
 | Part | Where | What it does |
 |---|---|---|
-| Preparation | `scripts/` | Reads `eboot.bin`, applies its relocations and links the game's own `libc` and `libSceFios2` into one image |
+| Preparation | `launcher-rust/src/core`, `launcher-rust/src/runner` | Reads `eboot.bin`, applies its relocations and links the game's own `libc` and `libSceFios2` into one image |
 | Loader | `src/probe.c` | Loads the image, installs the validated hooks (cheats, multipliers, health bar) and starts the game's original code |
 | Runtime | `src/runtime_*.c` | Reimplements the PS4 system functions: memory, threads, files, audio, video, controller, saves and services |
 | GPU | `gpu/shadps4/` | The shadPS4 video core, translating the PS4 GPU commands and shaders to Vulkan, with cuesta4's fixes for this game (`eltutz` branch) and this port's speed work (background shader cache, deferred readbacks) |
 | In-game menu | `gpu/shim/spartanport_overlay.cpp` | The Dear ImGui menu and performance overlay; settings in `gpu/shim/spartanport_settings.cpp` |
-| Patches | `patches/CUSA01623.xml`, `scripts/patches.py` | Applied in memory at start, without changing the game files |
-| Launcher | `launcher/spartanport_launcher_win.py` | Settings, patches, mods, controls and the play button |
+| Patches | `patches/CUSA01623.xml`, `launcher-rust/src/core` | Applied in memory at start, without changing the game files |
+| Launcher | `launcher-rust/src/ui` | Settings, patches, mods, controls and the play button |
+
+The Python in `scripts/` and `launcher/` is kept as the frozen reference the Rust code was ported from; it no longer ships.
 
 More documentation: [mods](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/MODS.md), [patches](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/PATCHES.md), [frame map and historical upscaler research](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/upscaler.md)
 and [parallel GPU work](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/parallel_gpu.md).

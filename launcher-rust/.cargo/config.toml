@@ -1,0 +1,5 @@
+# The Windows exe links the C runtime statically, so it runs without VCRUNTIME140.dll (the
+# Visual C++ Redistributable), which a fresh Windows may lack. Cargo reads this file when it
+# runs inside launcher-rust/, as the CI workflow does.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

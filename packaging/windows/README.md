@@ -18,43 +18,48 @@ pacman -S --needed git patch \
 ```
 
 magic_enum, miniz and xbyak (not packaged by MSYS2) are submodules under `gpu/third_party/`.
-Before packaging, also install Windows Python 3.10+ from python.org with Tk support; the
-packaging script uses it to create its private Python environment.
-Then, in the repository, build with MSYS2 CLANG64:
+The launcher is Rust and is built outside MSYS2: install [rustup](https://rustup.rs) with the
+Visual Studio Build Tools (the `x86_64-pc-windows-msvc` target). The launcher build needs no Python.
+Then, in the repository:
 
 ```bash
+# MSYS2 CLANG64
 git submodule update --init --recursive
 bash build.sh                      # out/spartanport-probe.exe, out/spartanport-gpu-capabilities.exe
+```
+
+```powershell
+# PowerShell
+cd launcher-rust
+cargo build --release --locked   # from inside launcher-rust/: it reads .cargo/config.toml (static CRT)
+cd ..
+```
+
+```bash
+# MSYS2 CLANG64
 bash packaging/windows/package.sh  # dist/spartanport-windows/ and .zip: SpartanPort.exe + DLLs
 ```
 
-For a source launcher, install Windows Python 3.10+ from python.org with Tk support. In
-PowerShell at the repository root:
-
-```powershell
-python -m pip install pillow iced-x86==1.21.0
-python launcher/spartanport_launcher_win.py
-```
+To run the launcher from the source tree, in PowerShell at the repository root:
+`cd launcher-rust; cargo run --release`.
 
 Choose the game folder in the launcher. For platform-specific tests, see
 [Tests in the root README](https://github.com/FelipePrado0/SpartanPort#tests): Windows uses Ninja
 test targets; `bash build.sh --test` runs additional runtime tests only on Linux.
 
-`run.py` is the Windows `run.sh` (same variables; works from a plain Windows Python too).
-The package freezes the launcher with PyInstaller (a private venv in `out/pyenv`, from a
-python.org Python) into `SpartanPort.exe`, which also runs `run.py` (`--run`), the preparation
-scripts (`--script`) and the game without the window (`--play`): players need no Python.
-The venv also receives `iced-x86`, which `scripts/isa_rewrite.py` uses for CPUs without MOVBE,
-BMI1 or LZCNT.
+`SpartanPort.exe` is the Rust launcher (`launcher-rust/`). It also runs the game (`--run`, the
+Windows `run.sh`, same variables), the preparation steps natively and the game without the window
+(`--play`): players need no Python. It decodes instructions itself for CPUs without MOVBE, BMI1
+or LZCNT. `--voice-swap` swaps voice lines (`docs/VOICE_REPLACEMENT.md`).
 `Play SpartanPort.exe` (`packaging/windows/play.c`) is a small native program that runs
 `SpartanPort.exe --play` from its folder and waits for it, for players who want to start the
 game directly with the saved settings.
-`scripts/patches.py` identifies SpartanPort by title ID or title and finds built-in patch
+The runner identifies SpartanPort by title ID or title and finds built-in patch
 sites by signature, rather than requiring one `eboot.bin` hash. Each unmatched patch is skipped
 and reported; this is not a guarantee that every game build works. The startup black-screen
 fix is always requested, including with patch lists saved by older launchers. The resolution
 patch and texture fix are mutually exclusive. See the root README for tested builds.
-From a source tree, `run.py` adds `C:\msys64\clang64\bin` (or `$MSYS2_ROOT`) to `PATH` for DLLs.
+From a source tree, the launcher adds `C:\msys64\clang64\bin` (or `$MSYS2_ROOT`) to `PATH` for DLLs.
 
 FSR 1 and temporal upscaling (FSR 3.1, FSR 4, TAA and DLSS) are disabled in the current launcher
 and game settings path. RCAS sharpening remains available. The DLSS bridge and FSR asset tools
@@ -65,8 +70,7 @@ See the [feature availability table](https://github.com/FelipePrado0/SpartanPort
 for differences between published packages and current source builds, including Discord Rich Presence.
 
 The launcher texts are written in English with the Russian beside them; the other languages
-are in `launcher/spartanport_lang.py` (one list per language in the order of `KEYS`; a missing or
-empty text falls back to English). The icon (`launcher/spartanport.ico`/`.png`) is made from the
+are in `launcher-rust/assets/i18n.json` (a missing or empty text falls back to English). The icon (`launcher/spartanport.ico`/`.png`) is made from the
 SP monogram (`packaging/icon/monogram.png`) by `packaging/windows/make_icon.py` and built into `SpartanPort.exe`, `spartanport-probe.exe` (the game
 window) and `spartanport-gpu-capabilities.exe`.
 
@@ -81,7 +85,7 @@ window) and `spartanport-gpu-capabilities.exe`.
 | Guest thread stacks from `runtime_low_map` | Windows allocates them, fully committed (`pthread_attr_setstacksize`): guest code has no stack probes and would skip the guard page. The main thread stack is 16 MiB committed. |
 | glibc `nanosleep`, monotonic condition variables | High-resolution waitable timers (`compat_sleep_ns`; winpthreads' sleep rounds to 15.6 ms); semaphore deadlines use `CLOCK_REALTIME` (winpthreads rejects monotonic condition variables). |
 | `libspartanportgpu.so` | `libspartanportgpu.a`, linked into `spartanport-probe.exe` by CMake (`gpu/CMakeLists.txt`), with a manifest for UTF-8 paths and long paths. |
-| `execlp bash run.sh` (in-game restart) | `run.py` puts its command line in `SPARTAN_RESTART_COMMAND`; the new launch waits for the old process (`--after PID`). The launcher keeps the game in a job object. |
+| `execlp bash run.sh` (in-game restart) | The launcher puts its command line in `SPARTAN_RESTART_COMMAND`; the new launch waits for the old process (`--after PID`). The launcher keeps the game in a job object. |
 | Mod overlay with symlinks | Symlinks when allowed (Developer Mode), else junctions for folders and hard links for files. On a network share (SMB), which refuses junctions too, folders are mirrored with hard links so the game still reads real files through the view. |
 
 Diagnostics added on the way: `SPARTAN_FRAME_DUMP_TRIGGER=<file>` writes the guest display buffer

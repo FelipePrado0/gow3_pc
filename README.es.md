@@ -277,7 +277,7 @@ presiona cada botón, según tu mapeo del teclado (una tecla cambiada aparece en
 *Match my controller* también muestra las teclas cuando no hay un control conectado. El launcher escribe una copia
 parcheada de hasta tres archivos del juego (unos 410 MB) en la carpeta de datos del port y nunca modifica tu carpeta del
 juego. Un control nuevo se detecta después de reiniciar. Sin el launcher, definí `SPARTAN_GLYPH_STYLE`
-como `auto`, `xbox`, `nintendo` o `keyboard` antes de iniciar `run.py`.
+como `auto`, `xbox`, `nintendo` o `keyboard` antes de iniciar `run.sh`.
 
 En el menú: L1/R1 o Q/E cambian de pestaña. En la lista de partidas: las flechas o la cruceta eligen,
 Enter o Cruz confirman, Esc o Círculo cancelan.
@@ -353,15 +353,10 @@ configuraciones, incluso en 1080p. Consultá los problemas conocidos en las nota
 
 ### Windows
 
-Instalá Python 3.10 o posterior de python.org, con soporte de Tk. Después instalá las
-dependencias del launcher y de la reescritura de instrucciones en PowerShell:
-
-```powershell
-python -m pip install pillow iced-x86==1.21.0
-```
-
-Los comandos de compilación siguientes usan MSYS2 CLANG64; los comandos del launcher marcados
-como PowerShell usan la instalación de Python para Windows.
+Instalá [rustup](https://rustup.rs) (stable) y Visual Studio Build Tools con la carga "Desarrollo
+para el escritorio con C++"; el launcher se compila con cargo y no necesita Python. Los comandos de
+compilación siguientes usan MSYS2 CLANG64; los comandos del launcher marcados como PowerShell se
+ejecutan en Windows.
 
 El desarrollo ocurre en la rama `spartanport`; `main` recibe merges ya probados.
 
@@ -379,7 +374,8 @@ El desarrollo ocurre en la rama `spartanport`; `main` recibe merges ya probados.
 3. Iniciá el launcher (en PowerShell, en la carpeta del proyecto):
 
    ```powershell
-   python launcher/spartanport_launcher_win.py
+   cd launcher-rust
+   cargo run --release
    ```
 
 4. En **Game**, elegí la carpeta del juego y los parches. Ajustá **Graphics** y **Performance**,
@@ -389,22 +385,23 @@ Para jugar con los ajustes guardados sin abrir la ventana del launcher (para un 
 Steam):
 
 ```powershell
-python launcher/spartanport_launcher_win.py --play
+cd launcher-rust
+cargo build --release
+.\target\release\spartanport-launcher.exe --play
 ```
 
-O sin el launcher:
+O sin los ajustes del launcher, desde Git Bash o una terminal MSYS2:
 
-```powershell
-$env:SPARTAN_GAME_DIR = 'D:\ruta\CUSA01623'
-python run.py
+```bash
+SPARTAN_GAME_DIR='D:\ruta\CUSA01623' bash run.sh
 ```
 
 ### Linux (Ubuntu 24.04)
 
 Para un clon nuevo, ejecutá los comandos siguientes en una terminal Linux. El script de
-dependencias instala paquetes del sistema con sudo, selecciona GCC 14 como compilador
-predeterminado y crea `out/venv` con PyInstaller, Pillow e iced-x86. Está destinado a Ubuntu
-24.04; adaptá las dependencias en otras distribuciones. Si ya clonaste, empezá en la carpeta
+dependencias instala paquetes del sistema con sudo y selecciona GCC 14 como compilador
+predeterminado. El launcher necesita además [rustup](https://rustup.rs) (stable). Está destinado a
+Ubuntu 24.04; adaptá las dependencias en otras distribuciones. Si ya clonaste, empezá en la carpeta
 del repositorio y omití los dos primeros comandos.
 
 ```bash
@@ -412,21 +409,38 @@ git clone --recursive https://github.com/FelipePrado0/SpartanPort
 cd SpartanPort
 bash packaging/linux/ci-deps.sh
 bash build.sh
-out/venv/bin/python launcher/spartanport_launcher_win.py
+cd launcher-rust
+cargo run --release
 ```
 
 Para generar un AppImage después de compilar:
 
 ```bash
-PATH="$PWD/out/venv/bin:$PATH" bash packaging/linux/build.sh
+bash packaging/linux/build.sh
 ./dist/spartanport-x86_64.AppImage
 ```
 
-El entorno de compilación se crea antes del comando de empaquetado. Compilar en una distribución
+`packaging/linux/build.sh` compila el launcher en Rust por su cuenta. Compilar en una distribución
 más nueva puede requerir una glibc más nueva; las builds públicas usan Ubuntu 24.04. En la carpeta
-del repositorio, usá `out/venv/bin/python launcher/spartanport_launcher_win.py --play` para los ajustes
-guardados del launcher, o `SPARTAN_GAME_DIR=/ruta/a/CUSA01623 out/venv/bin/python run.py` para
-iniciar directamente.
+del repositorio, usá `bash run.sh` para iniciar directamente (compila lo que falta y ejecuta el exe
+del launcher con `--run`), con `SPARTAN_GAME_DIR=/ruta/a/CUSA01623` para indicar la carpeta del
+juego. Para los ajustes guardados del launcher sin la ventana, ejecutá
+`launcher-rust/target/release/spartanport-launcher --play`.
+
+### Launcher en Rust
+
+El launcher está escrito en Rust (`launcher-rust/`, iced) y es el único que traen los paquetes.
+Compila con [rustup](https://rustup.rs) (stable). En Windows, instalá Visual Studio Build Tools con la carga "Desarrollo para el escritorio con C++"; en
+Ubuntu, `sudo apt-get install build-essential pkg-config libwayland-dev libxkbcommon-dev`.
+
+```bash
+cd launcher-rust
+cargo run --release
+```
+
+Abierto desde un checkout, encuentra solo las herramientas de `out/`; `SPARTAN_PORT_DIR` lo apunta
+a un port empaquetado (con `bin/`). PLAY inicia el propio exe del launcher con `--run`, así que
+nada necesita Python.
 
 ## Tests
 
@@ -434,11 +448,24 @@ Ejecutá desde la raíz del repositorio después de compilar. Los primeros tests
 
 ### Python
 
-En Windows, usá PowerShell. En Linux, reemplazá `python` por `out/venv/bin/python`.
+El código Python del launcher y del runner está congelado: no se empaqueta ni lo ejecuta el port.
+Queda en el repositorio como referencia de paridad del launcher en Rust. Sus tests siguen
+corriendo, con Python 3.10 o posterior (en Windows, en PowerShell):
 
 ```powershell
 python -m unittest discover -s tests -p "test_*.py"
 ```
+
+### Launcher en Rust
+
+```bash
+cd launcher-rust
+cargo test
+```
+
+Los snapshots de las páginas en `launcher-rust/snapshots/` se comparan píxel a píxel solo en
+Windows. `python -m unittest discover -s tests -p "test_launcher_parity_doc.py"` comprueba que cada
+test del launcher en Python tiene su fila en `docs/specs/2026-10-21-rust-launcher-parity.md`.
 
 ### Tests C++ en Windows (MSYS2 CLANG64)
 
@@ -500,13 +527,15 @@ Es un fork del [port para Windows de Supermedo](https://github.com/Supermedo/blo
 
 | Parte | Dónde | Qué hace |
 |---|---|---|
-| Preparación | `scripts/` | Lee `eboot.bin`, aplica sus relocaciones y enlaza las `libc` y `libSceFios2` propias del juego en una sola imagen |
+| Preparación | `launcher-rust/src/core`, `launcher-rust/src/runner` | Lee `eboot.bin`, aplica sus relocaciones y enlaza las `libc` y `libSceFios2` propias del juego en una sola imagen |
 | Loader | `src/probe.c` | Carga la imagen, instala los hooks validados (trucos, multiplicadores, barra de vida) e inicia el código original del juego |
 | Runtime | `src/runtime_*.c` | Reimplementa las funciones del sistema de la PS4: memoria, hilos, archivos, audio, video, control, partidas y servicios |
 | GPU | `gpu/shadps4/` | El video core de shadPS4, que traduce los comandos y shaders de la GPU de la PS4 a Vulkan, con las correcciones de cuesta4 para este juego (rama `eltutz`) y el trabajo de velocidad de este port (caché de shaders en segundo plano, lecturas diferidas) |
 | Menú dentro del juego | `gpu/shim/spartanport_overlay.cpp` | El menú Dear ImGui y el overlay de rendimiento; ajustes en `gpu/shim/spartanport_settings.cpp` |
-| Parches | `patches/CUSA01623.xml`, `scripts/patches.py` | Se aplican en memoria al iniciar, sin modificar los archivos del juego |
-| Launcher | `launcher/spartanport_launcher_win.py` | Ajustes, parches, mods, controles y el botón de jugar |
+| Parches | `patches/CUSA01623.xml`, `launcher-rust/src/core` | Se aplican en memoria al iniciar, sin modificar los archivos del juego |
+| Launcher | `launcher-rust/src/ui` | Ajustes, parches, mods, controles y el botón de jugar |
+
+El Python de `scripts/` y `launcher/` se conserva como la referencia congelada de la que se portó el código Rust; ya no se distribuye.
 
 Más documentación: [mods](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/MODS.es.md), [parches](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/PATCHES.es.md), [mapa de cuadros e historial de investigación de escaladores](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/upscaler.md)
 y [trabajo paralelo de GPU](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/parallel_gpu.md).

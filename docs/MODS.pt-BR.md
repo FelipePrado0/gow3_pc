@@ -120,12 +120,11 @@ folhas só com a parte de cada textura onde está o desenho, num tamanho legíve
 Toda textura que mostra as mesmas formas ali é uma camada a mudar.
 
 `tools/wad_textures.py` acha uma textura olhando: monta folhas de contato numeradas com todas as
-texturas dos WAD que você nomear (`"SpartanPort.exe" --script tools\wad_textures.py "<jogo>\EXEC\WAD\PS4_LE" OLY1* -o sheets`),
+texturas dos WAD que você nomear (`python tools/wad_textures.py "<jogo>\EXEC\WAD\PS4_LE" OLY1* -o sheets`),
 monta folhas com uma parte de cada textura (`--crop`), extrai as numeradas como `.dds` (`--extract`),
 procura palavras nos nomes de entrada de todos os WAD para achar o WAD de uma sala (`--grep Muse Lyre`)
-e ordena as texturas pequenas que parecem ícones de botão (`--find`). Rode com o caminho completo do
-script; o `--script` do launcher o executa com o Python que vem junto, e `2>&1 | Out-Host` no
-PowerShell mostra a saída.
+e ordena as texturas pequenas que parecem ícones de botão (`--find`). É uma ferramenta de desenvolvimento que fica
+no repositório: rode com Python a partir de um checkout do código-fonte.
 
 Os WADs de `PS4_LE` são little-endian. A versão de PS3 rodava num console big-endian, então não se
 espera que os WADs dela funcionem aqui.
@@ -330,8 +329,8 @@ Os presets da página Mods ficam em `mods_presets.json`, um item por nome, com a
 Pelo terminal:
 
 ```sh
-SPARTAN_GAME_DIR=/caminho/CUSA01623 SPARTAN_MODS_DIR=/caminho/mods python run.py
-SPARTAN_GAME_DIR=/caminho/CUSA01623 SPARTAN_MODS_ENABLED=0 python run.py
+SPARTAN_GAME_DIR=/caminho/CUSA01623 SPARTAN_MODS_DIR=/caminho/mods bash run.sh
+SPARTAN_GAME_DIR=/caminho/CUSA01623 SPARTAN_MODS_ENABLED=0 bash run.sh
 ```
 
 ## Mods com patches de jogo

@@ -1,0 +1,122 @@
+[
+  {
+    "offset": 0,
+    "length": 5,
+    "kind": "BLSR",
+    "width": 32,
+    "mode": "JMP",
+    "registers": {
+      "dst": 1,
+      "src1": 1,
+      "src2": 255,
+      "base": 255,
+      "index": 255
+    },
+    "mem_slot": 0,
+    "scale": 0,
+    "mem_flags": 0,
+    "disp": 0,
+    "original": "c4e270f3c9",
+    "relocated": ""
+  },
+  {
+    "offset": 5,
+    "length": 4,
+    "kind": "MOVBE_STORE",
+    "width": 32,
+    "mode": "JMP_RELOCATE",
+    "registers": {
+      "dst": 255,
+      "src1": 1,
+      "src2": 255,
+      "base": 0,
+      "index": 255
+    },
+    "mem_slot": 1,
+    "scale": 1,
+    "mem_flags": 0,
+    "disp": 0,
+    "original": "0f38f108",
+    "relocated": "90"
+  },
+  {
+    "offset": 10,
+    "length": 9,
+    "kind": "BEXTR",
+    "width": 32,
+    "mode": "JMP",
+    "registers": {
+      "dst": 0,
+      "src1": 255,
+      "src2": 1,
+      "base": 255,
+      "index": 255
+    },
+    "mem_slot": 2,
+    "scale": 1,
+    "mem_flags": 1,
+    "disp": 31,
+    "original": "c4e270f7050c000000",
+    "relocated": ""
+  },
+  {
+    "offset": 19,
+    "length": 5,
+    "kind": "LZCNT",
+    "width": 16,
+    "mode": "JMP",
+    "registers": {
+      "dst": 0,
+      "src1": 1,
+      "src2": 255,
+      "base": 255,
+      "index": 255
+    },
+    "mem_slot": 0,
+    "scale": 0,
+    "mem_flags": 0,
+    "disp": 0,
+    "original": "66f30fbdc1",
+    "relocated": ""
+  },
+  {
+    "offset": 24,
+    "length": 5,
+    "kind": "TZCNT",
+    "width": 64,
+    "mode": "JMP",
+    "registers": {
+      "dst": 0,
+      "src1": 1,
+      "src2": 255,
+      "base": 255,
+      "index": 255
+    },
+    "mem_slot": 0,
+    "scale": 0,
+    "mem_flags": 0,
+    "disp": 0,
+    "original": "f3480fbcc1",
+    "relocated": ""
+  },
+  {
+    "offset": 29,
+    "length": 4,
+    "kind": "MOVBE_STORE",
+    "width": 32,
+    "mode": "INT3",
+    "registers": {
+      "dst": 255,
+      "src1": 1,
+      "src2": 255,
+      "base": 0,
+      "index": 255
+    },
+    "mem_slot": 1,
+    "scale": 1,
+    "mem_flags": 0,
+    "disp": 0,
+    "original": "0f38f108",
+    "relocated": ""
+  }
+]

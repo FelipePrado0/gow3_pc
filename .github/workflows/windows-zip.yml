@@ -1,5 +1,5 @@
-# Windows package: built with MSYS2 CLANG64 and a python.org-style Python (packaging/windows/README.md),
-# then opened on a clean runner without MSYS2 before it is published. Run by hand
+# Windows package: the game side built with MSYS2 CLANG64 and the Rust launcher with cargo
+# (packaging/windows/README.md), then opened on a clean runner without MSYS2 before it is published. Run by hand
 # (Actions > Windows zip > Run workflow), on the branch to build:
 #   - no tag: build and test only (the zip is kept as a workflow artifact).
 #   - tag of an existing release (e.g. windows-v2.3.0): the zip replaces the one attached to it.
@@ -12,6 +12,10 @@ on:
       tag:
         description: Release to attach the zip to; a new tag makes a test pre-release. Empty builds only.
         required: false
+      stamp:
+        description: Attach the release stamp (the package ships the Rust launcher)
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -49,22 +53,43 @@ jobs:
             spirv-tools:p spirv-headers:p spirv-cross:p
       - name: Build
         run: bash build.sh
-      # Freezes the launcher; this Python ships Tk, as the python.org one does. Set up after the
-      # build so its Python_ROOT_DIR and PKG_CONFIG_PATH do not reach CMake.
+      # The launcher is built by cargo outside MSYS2 (package.sh needs its exe).
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build the launcher
+        shell: pwsh
+        # Inside launcher-rust/: cargo reads .cargo/config.toml (static CRT) from the working directory.
+        working-directory: launcher-rust
+        run: cargo build --release --locked
+      # Only for the Stamp step (packaging/release_stamp.py is a build tool, not part of the package).
+      # Set up after the build so its Python_ROOT_DIR and PKG_CONFIG_PATH do not reach CMake.
       - uses: actions/setup-python@v5
-        id: python
         with:
           python-version: '3.13'
-      - name: Package
+      - name: Stamp
+        if: inputs.tag != '' && inputs.stamp
+        shell: bash
         env:
-          PYTHON_EXE: ${{ steps.python.outputs.python-path }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
         run: |
-          WINPYTHON=$(cygpath -u "$PYTHON_EXE") bash packaging/windows/package.sh
+          if pre=$(gh release view "$TAG" --json isPrerelease -q .isPrerelease 2>gh.err); then :
+          elif grep -qi 'not found' gh.err; then pre=true
+          else cat gh.err >&2; echo "::error::gh release view failed for $TAG"; exit 1
+          fi
+          python packaging/release_stamp.py "$TAG" --prerelease "$pre" > release.json
+          mkdir -p dist && cp release.json dist/release-windows.json
+          cat release.json
+      - name: Package
+        run: |
+          bash packaging/windows/package.sh
           cd dist && sha256sum -b spartanport-windows.zip > spartanport-windows.zip.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: spartanport-windows.zip
-          path: dist/spartanport-windows.zip*
+          path: |
+            dist/spartanport-windows.zip*
+            dist/release-windows.json
           if-no-files-found: error
 
   smoke:
@@ -78,6 +103,8 @@ jobs:
           path: dist
       - name: Open the package without MSYS2
         shell: powershell
+        env:
+          SPARTAN_RELEASE_TAG: ${{ inputs.stamp && inputs.tag || '' }}
         run: powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/smoke-test.ps1 dist/spartanport-windows.zip
 
   publish:
@@ -99,4 +126,4 @@ jobs:
             gh release create "$TAG" --prerelease --target "$GITHUB_SHA" --title "Windows test build $TAG" \
               --notes "Windows test build from \`${GITHUB_SHA::7}\`. Download \`spartanport-windows.zip\`, extract it and run \`SpartanPort.exe\`. Not a final release: please report in the linked issue whether it opens and runs."
           fi
-          gh release upload "$TAG" dist/spartanport-windows.zip dist/spartanport-windows.zip.sha256 --clobber
+          gh release upload "$TAG" dist/spartanport-windows.zip dist/spartanport-windows.zip.sha256 $( [[ -f dist/release-windows.json ]] && echo dist/release-windows.json ) --clobber

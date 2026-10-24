@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>SpartanPort launcher mockup v13</title>
+<!-- Reference mockup of docs/specs/2026-10-21-rust-launcher-design.md. background.avif is the game's key art and is not in the repository: drop any 16:9 image with that name next to this file to see the Home with artwork. -->
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&display=swap" rel="stylesheet">
+<style>
+:root { --bg:#0d0b0b; --panel:#161212; --card:#1d1717; --line:#2a2222; --text:#e6e0d8; --muted:#8a817a; --red:#a4161a; --redhi:#c81e25; --silver:#c9c4bd; --gold:#b8862b; }
+* { box-sizing:border-box; }
+html, body { margin:0; background:#070606; color:var(--text); font-family:"Segoe UI",system-ui,sans-serif; }
+#toolbar { display:flex; gap:10px; align-items:center; padding:8px 14px; font-size:12px; color:var(--muted); border-bottom:1px solid var(--line); background:#0a0909; }
+#toolbar b { color:var(--text); font-weight:600; }
+#toolbar button { background:var(--card); color:var(--text); border:1px solid var(--line); padding:4px 10px; border-radius:3px; cursor:pointer; font-size:12px; }
+#toolbar button.on { border-color:var(--redhi); color:#fff; }
+#viewport { display:flex; justify-content:center; padding:14px; }
+#stage { position:relative; width:1280px; height:800px; background:var(--bg); overflow:hidden; transform-origin:top left; border:1px solid #221c1c; box-shadow:0 30px 80px rgba(0,0,0,.7); user-select:none; }
+.cinzel { font-family:Cinzel, Georgia, serif; }
+
+/* art + embers */
+#base { position:absolute; inset:0; background:
+  radial-gradient(55% 65% at 68% 38%, rgba(200,30,37,.42), transparent 70%),
+  radial-gradient(35% 45% at 22% 78%, rgba(130,130,130,.14), transparent 70%),
+  radial-gradient(80% 40% at 50% 100%, rgba(120,12,16,.5), transparent 70%),
+  linear-gradient(180deg,#1b1414 0%, #0d0b0b 100%); transition:filter .25s ease; }
+#base.blur { filter:blur(6px); }
+#photo { position:absolute; inset:0; background:url('./background.avif') 70% 30% / cover no-repeat; opacity:.7;
+  filter:saturate(.9) contrast(1.05); transition:filter .25s ease; }
+#art { position:absolute; inset:0; background:
+  linear-gradient(rgba(13,11,11,.32), rgba(13,11,11,.32)),
+  linear-gradient(90deg, rgba(13,11,11,.88) 0%, rgba(13,11,11,.45) 30%, rgba(13,11,11,0) 58%),
+  linear-gradient(180deg, rgba(13,11,11,.6) 0%, rgba(13,11,11,0) 28%, rgba(120,14,18,0) 50%, rgba(140,16,20,.5) 78%, rgba(13,11,11,.98) 100%);
+  transition:filter .25s ease; }
+#photo.blur { filter:blur(10px) brightness(.5) saturate(.8); }
+#art.blur { filter:blur(6px); }
+#heat { position:absolute; inset:-15%; pointer-events:none; mix-blend-mode:screen; background:
+  radial-gradient(70% 48% at 52% 104%, rgba(235,80,30,.55), rgba(164,22,26,.28) 42%, transparent 72%),
+  radial-gradient(28% 24% at 18% 110%, rgba(230,90,30,.3), transparent 70%),
+  radial-gradient(42% 44% at 84% 96%, rgba(235,90,30,.5), rgba(164,22,26,.2) 50%, transparent 72%);
+  animation: heat 2.8s ease-in-out infinite alternate; transform-origin:50% 100%; }
+@keyframes heat { from { opacity:.65; transform:rotate(-7deg) scaleY(.96); } to { opacity:1; transform:rotate(-7deg) scaleY(1.06); } }
+#art.blur { filter:blur(10px) brightness(.6); }
+#fade { position:absolute; left:-20%; right:-20%; bottom:-6%; height:70%; background:linear-gradient(180deg, transparent, rgba(110,12,16,.38) 50%, rgba(13,11,11,.96)); transform:rotate(-7deg); transform-origin:50% 100%; }
+#embers { position:absolute; inset:0; pointer-events:none; }
+
+/* top */
+#splogo { position:absolute; left:28px; top:22px; height:30px; filter:drop-shadow(0 2px 6px rgba(0,0,0,.6)); }
+#topright { position:absolute; right:24px; top:22px; display:flex; gap:10px; align-items:center; font-size:12px; color:var(--muted); }
+.pill { background:rgba(22,18,18,.9); border:1px solid var(--line); border-radius:12px; padding:3px 10px; color:var(--silver); font-size:11px; }
+.pill.upd { border-color:var(--red); color:#f0d0d0; cursor:pointer; }
+#langpick { position:relative; }
+#langbtn { display:flex; align-items:center; gap:7px; background:rgba(22,18,18,.9); border:1px solid var(--line); border-radius:12px; padding:3px 10px 3px 8px; color:var(--silver); font-size:11.5px; cursor:pointer; transition:border-color .15s; }
+#langbtn:hover, #langpick.open #langbtn { border-color:#4a3a3a; color:var(--text); }
+#langbtn .caret { color:var(--muted); font-size:10px; }
+.lh { font-family:Cinzel, Georgia, serif; font-weight:700; font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--redhi); padding:9px 14px 3px; }
+.lh:not(:first-child) { border-top:1px solid var(--line); margin-top:4px; }
+#langmenu { position:absolute; right:0; top:30px; min-width:200px; background:rgba(22,18,18,.98); border:1px solid #352b2b; border-radius:4px; padding:6px 0; box-shadow:0 14px 40px rgba(0,0,0,.6); z-index:6; opacity:0; transform:translateY(-6px); pointer-events:none; transition:opacity .16s ease, transform .16s ease; }
+#langpick.open #langmenu { opacity:1; transform:none; pointer-events:auto; }
+.li { display:flex; justify-content:space-between; align-items:center; gap:14px; padding:7px 14px; font-size:12.5px; color:var(--silver); cursor:pointer; }
+.li:hover { background:var(--card); color:var(--text); }
+.li.on { color:var(--text); } .li.on::after { content:"✓"; color:var(--redhi); font-size:12px; }
+
+
+/* home right block */
+#home { position:absolute; right:40px; bottom:78px; width:auto; max-width:760px; text-align:right; transition:opacity .25s ease; }
+#home.dim { opacity:.35; pointer-events:none; }
+#home #splogo { position:static; height:54px; filter:drop-shadow(0 3px 10px rgba(0,0,0,.7)); margin-bottom:18px; }
+.chips { display:flex; justify-content:flex-end; gap:8px; flex-wrap:nowrap; white-space:nowrap; margin-top:16px; margin-bottom:0; }
+.chip { font-size:11.5px; color:var(--silver); background:rgba(22,18,18,.88); border:1px solid var(--line); padding:4px 10px; border-radius:12px; }
+.chip.ok { color:#d7e8d2; border-color:#3a4a36; }
+.chip.warn { color:#f0d7a0; border-color:#5a4a26; }
+#quick { font-size:13px; color:var(--muted); margin-top:10px; margin-bottom:4px; }
+#quick b { color:var(--text); font-weight:600; }
+#playrow { display:flex; justify-content:flex-end; align-items:center; gap:12px; }
+#play { font-family:Cinzel, Georgia, serif; font-weight:900; letter-spacing:4px; font-size:22px; color:#fff; padding:16px 54px; border:0; border-radius:4px; cursor:pointer;
+  background:linear-gradient(180deg,var(--redhi),var(--red)); box-shadow:0 0 28px rgba(200,30,37,.45), inset 0 1px 0 rgba(255,255,255,.18); transition:transform .12s ease, box-shadow .2s ease, filter .2s ease; }
+#play:hover { transform:translateY(-1px); box-shadow:0 0 40px rgba(200,30,37,.7), inset 0 1px 0 rgba(255,255,255,.25); }
+#play:disabled { filter:grayscale(.6) brightness(.7); cursor:default; transform:none; box-shadow:none; }
+#stop { display:none; font-family:Cinzel, Georgia, serif; font-weight:700; letter-spacing:2px; font-size:14px; color:var(--text); padding:14px 22px; background:var(--card); border:1px solid var(--line); border-radius:4px; cursor:pointer; }
+#status { font-size:12px; color:var(--muted); margin-top:10px; min-height:16px; }
+
+/* bottom bar */
+#bar { position:absolute; left:0; right:0; bottom:0; height:52px; background:rgba(22,18,18,.94); border-top:1px solid var(--line); display:flex; align-items:stretch; padding:0 14px; backdrop-filter:blur(6px); }
+.tab { font-family:Cinzel, Georgia, serif; font-weight:700; font-size:13px; letter-spacing:1px; color:var(--muted); padding:0 16px; display:flex; align-items:center; cursor:pointer; border-bottom:3px solid transparent; transition:color .15s, background .15s; }
+.tab:hover { color:var(--text); background:rgba(29,23,23,.8); }
+.tab.on { color:var(--text); background:var(--card); border-bottom-color:var(--redhi); }
+#barright { margin-left:auto; display:flex; align-items:center; gap:14px; font-size:11px; color:var(--muted); }
+#barright .hint { color:#5a5250; }
+
+/* drawer */
+#drawer { position:absolute; left:0; top:0; bottom:52px; width:46%; background:rgba(20,16,16,.97); border-right:1px solid var(--line); box-shadow:18px 0 50px rgba(0,0,0,.55); transform:translateX(-102%); transition:transform .22s cubic-bezier(.2,.8,.2,1), width .22s ease; display:flex; flex-direction:column; }
+#drawer.open { transform:translateX(0); }
+#drawer.wide { width:72%; }
+#dhead { padding:26px 32px 10px; border-bottom:1px solid var(--line); }
+#dtitle { font-family:Cinzel, Georgia, serif; font-weight:900; font-size:26px; letter-spacing:2px; color:var(--text); }
+#dsub { font-size:12px; color:var(--muted); margin-top:4px; }
+#dbody { flex:1; overflow:auto; padding:10px 32px 30px; scrollbar-color:#3a3030 transparent; scrollbar-width:thin; }
+.sec { font-family:Cinzel, Georgia, serif; font-weight:700; color:var(--redhi); font-size:13px; letter-spacing:1.5px; text-transform:uppercase; margin:22px 0 6px; padding-bottom:4px; border-bottom:1px solid var(--line); }
+.row { display:grid; grid-template-columns:1fr auto; gap:14px; align-items:center; padding:9px 0; border-bottom:1px solid #1e1818; font-size:13.5px; }
+.row .hint { grid-column:1 / -1; font-size:11.5px; color:var(--muted); margin-top:-4px; }
+.sel { font-size:12.5px; color:var(--text); background:var(--card); border:1px solid #352b2b; padding:5px 28px 5px 10px; border-radius:3px; min-width:170px; position:relative; cursor:pointer; }
+.sel::after { content:"▾"; position:absolute; right:9px; top:4px; color:var(--muted); }
+.sel.sm { min-width:90px; }
+.cb { width:18px; height:18px; border:1px solid #4a4040; background:var(--card); border-radius:2px; position:relative; cursor:pointer; justify-self:end; }
+.cb.on { background:var(--red); border-color:var(--redhi); }
+.cb.on::after { content:""; position:absolute; left:5px; top:1px; width:5px; height:10px; border:solid #f4ece0; border-width:0 2px 2px 0; transform:rotate(45deg); }
+.btn { font-size:12.5px; color:var(--text); background:var(--card); border:1px solid #352b2b; padding:6px 14px; border-radius:3px; cursor:pointer; }
+.btn.red { background:linear-gradient(180deg,var(--redhi),var(--red)); border-color:var(--redhi); color:#fff; }
+.input { font-size:12.5px; color:var(--silver); background:#120f0f; border:1px solid #2e2626; padding:6px 10px; border-radius:3px; width:100%; }
+.folder { display:grid; grid-template-columns:150px 1fr auto auto; gap:8px; align-items:center; padding:7px 0; font-size:13.5px; }
+.note { font-size:12px; color:var(--muted); margin:6px 0 2px; }
+.twocol { display:grid; grid-template-columns:1fr 1fr; gap:0 36px; }
+
+/* mods */
+.mods { display:grid; grid-template-columns:1.5fr 1fr; gap:22px; margin-top:10px; }
+.modrow { display:grid; grid-template-columns:22px 22px 1fr auto auto auto; gap:8px; align-items:center; padding:9px 12px; background:var(--card); border:1px solid var(--line); margin-bottom:5px; font-size:13px; }
+.modrow.sel-on { border-color:#4a2a2a; background:#241a1a; }
+.modrow .n { color:var(--muted); font-size:11px; }
+.modrow b { color:var(--redhi); font-weight:600; }
+.modrow .w { color:#f0d7a0; }
+.arrow { width:24px; height:22px; border:1px solid var(--line); background:#141010; text-align:center; font-size:10px; line-height:20px; cursor:pointer; }
+.detail { background:var(--card); border:1px solid var(--line); padding:14px; font-size:12.5px; }
+.detail .thumb { height:150px; background:linear-gradient(135deg,#5a3d10,#8a6a2a 60%,#3a2a0a); display:flex; align-items:center; justify-content:center; font-family:Cinzel,serif; font-weight:900; color:#f4e6c0; letter-spacing:2px; margin-bottom:12px; }
+.detail h4 { font-family:Cinzel, Georgia, serif; font-size:16px; margin:0 0 2px; letter-spacing:1px; }
+.detail .by { color:var(--muted); font-size:11.5px; margin-bottom:10px; }
+
+/* trophies */
+.tfilters { display:flex; gap:8px; margin:12px 0 6px; align-items:center; }
+.tfilters .btn.on { border-color:var(--redhi); color:#fff; }
+.trophies { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:8px; }
+.tro { display:flex; gap:10px; align-items:center; background:var(--card); border:1px solid var(--line); padding:8px 10px; font-size:12.5px; }
+.tro i { width:30px; height:30px; border-radius:50%; flex:none; background:radial-gradient(circle at 35% 30%, #d9a05a, #7a4a12); box-shadow:inset 0 0 0 2px rgba(0,0,0,.35); }
+.tro i.s { background:radial-gradient(circle at 35% 30%, #e8e8e8, #7a7a7a); }
+.tro i.g { background:radial-gradient(circle at 35% 30%, #ffe08a, #b8862b); }
+.tro i.p { background:radial-gradient(circle at 35% 30%, #cfe9ff, #4f8fb8); }
+.tro.lock { opacity:.42; } .tro.lock i { filter:grayscale(1); }
+.tro small { display:block; color:var(--muted); font-size:11px; }
+
+/* controls */
+.map { display:grid; grid-template-columns:1fr 1fr; gap:0 30px; }
+.keyrow { display:grid; grid-template-columns:36px 1fr auto; gap:10px; align-items:center; padding:6px 0; border-bottom:1px solid #1e1818; font-size:13px; }
+.icon { width:28px; height:28px; border-radius:50%; background:#262020; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; }
+.key { font-family:Consolas, monospace; font-size:12px; color:var(--text); background:#120f0f; border:1px solid #352b2b; padding:4px 10px; border-radius:3px; min-width:90px; text-align:center; }
+
+/* log */
+#logbox { font-family:Consolas, "Cascadia Mono", monospace; font-size:12px; color:#b9b1a8; background:transparent; border:0; border-top:1px solid var(--line); padding:12px 0; height:560px; overflow:auto; white-space:pre-wrap; line-height:1.55; }
+#logbox .k { color:#8a817a; } #logbox .ok { color:#9ccf8f; } #logbox .r { color:var(--redhi); }
+
+/* splash */
+#splash { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:30px; z-index:10; cursor:pointer; }
+#sbg { position:absolute; inset:0; background:#070606; transition:opacity .55s ease; }
+#splash.out { pointer-events:none; }
+#splash.out #sbg, #splash.out #sstatus, #splash.out #skip { opacity:0; }
+#slogo { position:relative; z-index:2; height:200px; opacity:0; transform:translateY(8px); transform-origin:top left; transition:opacity .8s ease, transform .8s ease; filter:drop-shadow(0 0 26px rgba(200,30,37,.35)); }
+#splash.in #slogo { opacity:1; transform:none; }
+#sstatus { position:relative; z-index:2; font-size:13px; color:var(--muted); letter-spacing:.8px; min-height:16px; transition:opacity .3s ease; }
+#skip { position:absolute; right:22px; bottom:18px; font-size:11px; color:#5a5250; transition:opacity .3s ease; }
+#trmono { position:absolute; left:26px; top:16px; height:60px; opacity:0; transition:opacity .35s ease; filter:drop-shadow(0 2px 8px rgba(0,0,0,.7)); }
+#trmono.show { opacity:1; }
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <b>SpartanPort launcher · mockup v13 · logotipo um pouco maior</b>
+  <span>·</span>
+  <button id="szA" class="on" onclick="setSize(1280,800,this)">1280 × 800 (Steam Deck)</button>
+  <button id="szB" onclick="setSize(1920,1080,this)">1920 × 1080</button>
+  <span>·</span>
+  <button onclick="replaySplash()">Repetir splash</button>
+  <span style="margin-left:auto">Teclas: ← → trocam de aba (L1/R1 no Deck) · Esc fecha a gaveta · Enter = PLAY</span>
+</div>
+
+<div id="viewport"><div id="stage">
+  <div id="base"></div>
+  <div id="photo"></div>
+  <div id="art"></div>
+  <div id="heat"></div>
+  <div id="fade"></div>
+  <canvas id="embers"></canvas>
+
+  <div id="topright">
+    <span class="pill upd" id="updpill" data-en="Version 2.6.1 is available · Update" data-pt="A versão 2.6.1 está disponível · Atualizar">Version 2.6.1 is available · Update</span>
+    <div id="langpick">
+      <div id="langbtn" onclick="toggleLangMenu()"><span id="langcur">English</span><span class="caret">▾</span></div>
+      <div id="langmenu"></div>
+    </div>
+  </div>
+  <img id="trmono" src="./monogram.png" alt="SP">
+
+  <div id="home">
+    <img id="splogo" src="./spartanport-logo.png" alt="SpartanPort">
+    <div id="playrow">
+      <button id="stop" onclick="stopGame()" data-en="■ &nbsp;STOP" data-pt="■ &nbsp;PARAR">■ &nbsp;STOP</button>
+      <button id="play" onclick="playGame()" data-en="▶ &nbsp;PLAY" data-pt="▶ &nbsp;JOGAR">▶ &nbsp;PLAY</button>
+    </div>
+    <div class="chips">
+      <span class="chip ok">✓ RX 6700 XT · Vulkan 1.3</span>
+      <span class="chip ok" data-en="✓ CUSA01623 · v01.02" data-pt="✓ CUSA01623 · v01.02">✓ CUSA01623 · v01.02</span>
+      <span class="chip" data-en="✓ Saves in user/saves" data-pt="✓ Saves em user/saves">✓ Saves in user/saves</span>
+      <span class="chip warn" data-en="12 patches · 120 FPS engine" data-pt="12 patches · engine a 120 FPS">12 patches · 120 FPS engine</span>
+    </div>
+    <div id="quick"><b>FSR 4</b> · Quality · <b>2560 × 1440</b> · <b>120 FPS</b> · <span data-en="Fullscreen" data-pt="Tela cheia">Fullscreen</span> · Monitor 1</div>
+    <div id="status" data-en="In the game: Insert or R3+L2 opens the port's menu." data-pt="No jogo: Insert ou R3+L2 abre o menu do port.">In the game: Insert or R3+L2 opens the port's menu.</div>
+  </div>
+
+  <div id="drawer">
+    <div id="dhead"><div id="dtitle" class="cinzel">GRAPHICS</div><div id="dsub"></div></div>
+    <div id="dbody"></div>
+  </div>
+
+  <div id="bar">
+    <div class="tab on" data-page="home" data-en="Home" data-pt="Início">Home</div>
+    <div class="tab" data-page="graphics" data-en="Graphics" data-pt="Gráficos">Graphics</div>
+    <div class="tab" data-page="performance" data-en="Performance" data-pt="Desempenho">Performance</div>
+    <div class="tab" data-page="game" data-en="Game" data-pt="Jogo">Game</div>
+    <div class="tab" data-page="trophies" data-en="Trophies" data-pt="Troféus">Trophies</div>
+    <div class="tab" data-page="controls" data-en="Controls" data-pt="Controles">Controls</div>
+    <div class="tab" data-page="mods" data-en="Mods" data-pt="Mods">Mods</div>
+    <div class="tab" data-page="advanced" data-en="Advanced" data-pt="Avançado">Advanced</div>
+    <div class="tab" data-page="log" data-en="Log" data-pt="Registro">Log</div>
+    <div id="barright"><span class="hint">L1 ◂ ▸ R1</span><span>SpartanPort 2.6.0 · Windows</span></div>
+  </div>
+
+  <div id="splash">
+    <div id="sbg"></div>
+    <img id="slogo" src="./monogram.png" alt="SP">
+    <div id="sstatus"></div>
+    <div id="skip" data-en="any key skips" data-pt="qualquer tecla pula">any key skips</div>
+  </div>
+</div></div>
+
+<script>
+// ---------- sizing ----------
+const stage = document.getElementById('stage');
+let W = 1280, H = 800;
+function fit() {
+  const avail = Math.min(window.innerWidth - 28, 1600);
+  const s = Math.min(1, avail / W);
+  window._scale = s; stage.style.transform = 'scale(' + s + ')';
+  document.getElementById('viewport').style.height = (H * s + 28) + 'px';
+}
+function setSize(w, h, btn) {
+  W = w; H = h; stage.style.width = w + 'px'; stage.style.height = h + 'px';
+  document.querySelectorAll('#toolbar button').forEach(b => b.classList.remove('on')); btn.classList.add('on');
+  fit(); resizeEmbers();
+}
+window.addEventListener('resize', fit);
+
+// ---------- i18n ----------
+let lang = 'en', uiLang = 'en';
+// The 14 launcher languages (spartanport_lang.py + English and Russian). The mockup only carries EN and PT texts; the others fall back to English, as the real launcher does for a missing entry.
+const LANGS = [['en','English','am'],['pt','Português (Brasil)','am'],['es','Español','am'],
+  ['fr','Français','eu'],['de','Deutsch','eu'],['it','Italiano','eu'],['pl','Polski','eu'],['ru','Русский','eu'],['tr','Türkçe','eu'],
+  ['ar','العربية','as'],['zh','中文','as'],['ja','日本語','as'],['ko','한국어','as'],['id','Bahasa Indonesia','as']];
+const LANG_NAME = Object.fromEntries(LANGS.map(([c, n]) => [c, n]));
+const REGIONS = { am: { en: 'Americas', pt: 'Américas' }, eu: { en: 'Europe', pt: 'Europa' }, as: { en: 'Asia & Middle East', pt: 'Ásia e Oriente Médio' } };
+let langHover = null, langLeave = null;
+function renderLangMenu() {
+  let html = '', region = '';
+  for (const [c, n, r] of LANGS) {
+    if (r !== region) { region = r; html += `<div class="lh">${REGIONS[r][lang] || REGIONS[r].en}</div>`; }
+    html += `<div class="li ${c === uiLang ? 'on' : ''}" onclick="setLang('${c}')">${n}</div>`;
+  }
+  document.getElementById('langmenu').innerHTML = html;
+  document.getElementById('langcur').textContent = LANG_NAME[uiLang];
+}
+function openLangMenu(open) { document.getElementById('langpick').classList.toggle('open', open); }
+function toggleLangMenu() { clearTimeout(langHover); openLangMenu(!document.getElementById('langpick').classList.contains('open')); }
+document.addEventListener('DOMContentLoaded', () => {
+  const lp = document.getElementById('langpick');
+  lp.addEventListener('mouseenter', () => { clearTimeout(langLeave); langHover = setTimeout(() => openLangMenu(true), 450); });
+  lp.addEventListener('mouseleave', () => { clearTimeout(langHover); langLeave = setTimeout(() => openLangMenu(false), 300); });
+  renderLangMenu();
+});
+const T = {
+  en: { prep:'Preparing the game; it opens in its own window…', running:'The game is running.', exited:'\nThe game exited (code 0).\n', idle:"In the game: Insert or R3+L2 opens the port's menu.", playing:'RUNNING',
+        checks:['Checking Vulkan graphics cards…','Checking the game folder…','Checking for updates…'] },
+  pt: { prep:'Preparando o jogo; ele abrirá em sua própria janela…', running:'O jogo está rodando.', exited:'\nO jogo foi encerrado (código 0).\n', idle:'No jogo: Insert ou R3+L2 abre o menu do port.', playing:'RODANDO',
+        checks:['Verificando placas de vídeo Vulkan…','Verificando a pasta do jogo…','Procurando atualizações…'] },
+};
+function setLang(l) {
+  uiLang = l; lang = T[l] ? l : 'en';
+  renderLangMenu(); openLangMenu(false);
+  document.querySelectorAll('[data-en]').forEach(e => { e.innerHTML = e.dataset[lang] || e.dataset.en; });
+  document.getElementById('stage').dir = (l === 'ar') ? 'rtl' : 'ltr';
+  if (!running) document.getElementById('status').textContent = T[l].idle;
+  if (current !== 'home') openPage(current, true);
+}
+
+// ---------- embers ----------
+const canvas = document.getElementById('embers'), ctx = canvas.getContext('2d');
+let particles = [], intensity = 1;
+function resizeEmbers() { canvas.width = W; canvas.height = H; }
+function spawn(n) {
+  for (let i = 0; i < n; i++) {
+    // The fire line is lower on the left and higher on the right: start higher and live longer towards the right edge.
+    const x = Math.random() * W, rise = (x / W) * 0.22 * H, boost = 1 + (x / W) * 0.7;
+    if (Math.random() < 0.22) particles.push({ flame: true, x: W * 0.1 + x * 0.8, y: H + 10 - rise, r: 7 + Math.random() * 12, vy: 0.5 + Math.random() * 0.8, vx: (Math.random() - .5) * 0.3, life: 0, max: (90 + Math.random() * 90) * boost, hue: 14 + Math.random() * 16 });
+    else particles.push({ x, y: H + Math.random() * 40 - rise, r: 0.8 + Math.random() * 1.8, vy: 0.25 + Math.random() * 0.9, vx: (Math.random() - .5) * 0.35, life: 0, max: (400 + Math.random() * 500) * boost, hue: Math.random() < .7 ? 0 : 22 });
+  }
+}
+function tick() {
+  ctx.clearRect(0, 0, W, H);
+  const target = Math.floor(120 * intensity);
+  if (particles.length < target) spawn(3);
+  ctx.globalCompositeOperation = 'lighter';
+  particles = particles.filter(p => { p.life++; p.x += p.vx + Math.sin(p.life / 23) * (p.flame ? 0.6 : 0.25); p.y -= p.vy; return p.life < p.max && p.y > -20; });
+  for (const p of particles) {
+    const t = p.life / p.max;
+    if (p.flame) {
+      const a = Math.sin(Math.PI * t) * 0.22 * intensity, r = p.r * (1 + t * 0.8);
+      const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+      g.addColorStop(0, `hsla(${p.hue + 20}, 95%, 65%, ${a})`); g.addColorStop(0.5, `hsla(${p.hue}, 95%, 48%, ${a * .55})`); g.addColorStop(1, 'hsla(0, 90%, 30%, 0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+      continue;
+    }
+    const a = Math.sin(Math.PI * t) * (0.55 + 0.45 * Math.sin(p.life / 7)) * intensity;
+    ctx.fillStyle = `hsla(${p.hue}, 90%, ${p.hue ? 62 : 52}%, ${Math.max(0, a)})`;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `hsla(${p.hue}, 90%, 70%, ${Math.max(0, a * .18)})`;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 3.2, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  requestAnimationFrame(tick);
+}
+
+// ---------- splash ----------
+let splashTimer = null, splashStart = 0;
+let splashDone = false;
+function runSplash() {
+  const sp = document.getElementById('splash'), st = document.getElementById('sstatus'), logo = document.getElementById('slogo');
+  sp.classList.remove('out'); sp.classList.remove('in'); intensity = 1; splashDone = false;
+  logo.style.transition = ''; logo.style.transform = ''; logo.style.opacity = '';
+  document.getElementById('trmono').classList.remove('show');
+  requestAnimationFrame(() => sp.classList.add('in'));
+  splashStart = performance.now();
+  const checks = T[lang].checks; let i = 0;
+  st.textContent = checks[0];
+  clearInterval(splashTimer);
+  splashTimer = setInterval(() => { i++; if (i < checks.length) st.textContent = checks[i]; else endSplash(); }, 450);
+  const guard = setTimeout(endSplash, 3000); sp._guard = guard;
+}
+function endSplash() {
+  const sp = document.getElementById('splash');
+  if (splashDone) return;
+  const elapsed = performance.now() - splashStart;
+  if (elapsed < 800) { setTimeout(endSplash, 800 - elapsed); return; }
+  splashDone = true; clearInterval(splashTimer); clearTimeout(sp._guard);
+  // FLIP: the monogram flies from the centre to its place in the top right corner.
+  const logo = document.getElementById('slogo'), target = document.getElementById('trmono');
+  const s = window._scale || 1, a = logo.getBoundingClientRect(), b = target.getBoundingClientRect();
+  const dx = (b.left - a.left) / s, dy = (b.top - a.top) / s, k = b.height / a.height;
+  logo.style.transition = 'transform .7s cubic-bezier(.2,.8,.2,1)';
+  logo.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(' + k + ')';
+  sp.classList.add('out'); intensity = 0.8;
+  setTimeout(() => { target.classList.add('show'); logo.style.opacity = '0'; }, 700);
+}
+function replaySplash() { closeDrawer(); runSplash(); }
+document.getElementById('splash').addEventListener('click', endSplash);
+
+// ---------- pages ----------
+const WIDE = new Set(['trophies', 'controls', 'mods', 'log']);
+let current = 'home';
+const sel = (v, extra) => `<span class="sel ${extra || ''}">${v}</span>`;
+const cb = on => `<span class="cb ${on ? 'on' : ''}" onclick="this.classList.toggle('on')"></span>`;
+const row = (t, c, hint) => `<div class="row"><span>${t}</span>${c}${hint ? `<span class="hint">${hint}</span>` : ''}</div>`;
+const folder = (t, v, empty) => `<div class="folder"><span>${t}</span><span class="input">${v || '<span style="color:#5a5250">' + (empty || '') + '</span>'}</span><span class="btn">Browse…</span><span class="btn">Open</span></div>`;
+
+const PAGES = {
+  graphics: { en: ['GRAPHICS', 'Stored in gow3.ini; the in-game menu (Insert or R3+L2) changes the same values.'], pt: ['GRÁFICOS', 'Guardado em gow3.ini; o menu do jogo (Insert ou R3+L2) muda os mesmos valores.'],
+    body: () => `
+      <div class="sec">Experimental</div>
+      ${row('Enable the upscaler (experimental)', cb(true))}
+      <div class="sec">Upscaling</div>
+      ${row('Upscaler', sel('FSR 4 (best quality)'), "Temporal upscaling with the game's own motion vectors. FSR 4 needs its assets and a GPU with INT8 dot products; otherwise the game falls back to FSR 3.1.")}
+      ${row('Quality preset', sel('Quality (×1.5)'), 'Render scale per axis: Quality renders at 1/1.5 of the output size.')}
+      ${row('Output resolution', sel('2560 × 1440'), 'What the upscaler produces; the HUD is drawn at this size too.')}
+      ${row('Live resolution changes', sel('Off (faster)'))}
+      ${row('Object motion vectors', cb(true), 'Less ghosting on characters, cloth and weapons; costs about 10% FPS.')}
+      ${row('FSR 4 assets', '<span class="btn">Download FSR 4 assets</span>', 'Installed: 31 files in fsr4_shaders.')}
+      <div class="sec">Window</div>
+      ${row('Display mode', sel('Fullscreen'))}
+      ${row('Monitor', sel('1 · 2560 × 1440 · 144 Hz'))}
+      ${row('VSync', cb(false))}
+      ${row('Allow HDR output', cb(false), 'When HDR is on in Windows and the display supports it.')}
+      <div class="sec">Textures</div>
+      ${row('Anisotropic filtering', sel('16×'), 'Sharper floors and walls seen at an angle, at little cost on most graphics cards.')}
+      <div class="sec">Overlay</div>
+      ${row('Show performance overlay', cb(true))}
+      <div class="sec">Screenshots</div>
+      ${row('F12 in the game', '<span class="btn">Open the screenshots folder</span>', "Saves the game's image, without the overlay, as a PNG in the screenshots folder of the saves.")}` },
+  performance: { en: ['PERFORMANCE', 'Frame rate, shaders and GPU data paths. Applied when the game starts.'], pt: ['DESEMPENHO', 'Taxa de quadros, shaders e caminhos de dados da GPU. Aplicado ao iniciar o jogo.'],
+    body: () => `
+      <div class="sec">Frame rate</div>
+      ${row('Frame rate limit', sel('120'), 'Auto: display refresh, max 120 (recommended).')}
+      ${row('Frames queued', sel('1 (default)'), '1 keeps frame pacing even; more can raise FPS when the graphics card is the limit.')}
+      ${row('Engine frame rate', sel('120'), 'The game logic rate. 60 is the original; higher needs the frame rate patch.')}
+      ${row('Aspect ratio', sel('16:9 (native)'))}
+      ${row('Render resolution', sel('Native (1920 × 1080)'), 'The game renders at this size; a resolution patch replaces the texture fix and reserves the memory it needs.')}
+      <div class="sec">Shaders</div>
+      ${row('Use pipeline binary cache (A/B test)', cb(true))}
+      ${row('Load shader cache in the background', cb(true))}
+      ${row('Compile new shaders in the background', cb(true))}
+      ${row('Fast shader cache loading (parallel)', cb(true))}
+      <div class="sec">GPU data</div>
+      ${row('Graphics card', sel('0 · AMD Radeon RX 6700 XT'))}
+      ${row('Stream buffer memory', sel('Auto'))}
+      ${row('Game reads GPU data without waiting (big FPS gain)', cb(true))}
+      ${row('Deferred GPU readbacks', cb(true))}
+      ${row('Fast screen effects (Rage of Sparta, weapons)', cb(true))}
+      ${row('Two-stage GPU pipeline', sel('Auto (8+ threads)'), '20–30% faster; switch it off if the game is unstable.')}
+      ${row('GPU readbacks', sel('Relaxed (default)'))}
+      ${row('Game multisampling', sel('Automatic (RX 6700 XT: off)'))}` },
+  game: { en: ['GAME', 'Your game dump, saves and the game patches.'], pt: ['JOGO', 'Seu dump do jogo, os saves e os patches do jogo.'],
+    body: () => `
+      <div class="sec">Folders</div>
+      ${folder('Game folder', 'D:\\Games\\GOW3\\CUSA01623')}
+      ${folder('Update folder', '', 'Empty: the game folder holds the update')}
+      ${folder('Saves folder', '', 'Empty: user/ (shader caches are kept there too)')}
+      <div class="sec">Saves</div>
+      ${row('Save backups', sel('2026-10-21 16:02 · 3 files', '') + ' <span class="btn">Restore</span>', 'The launcher backs the saves up before every start; keeps the last 10.')}
+      <div class="sec">Language</div>
+      ${row('Game language', sel('Portuguese (Brazil)'), 'The game keeps its own text and speech languages; this picks which one it starts in.')}
+      <div class="sec">Cheats</div>
+      ${row('Infinite Double Jumps', cb(false))}
+      ${row('Unlock Very Hard', cb(false))}
+      <div class="sec">Game patches</div>
+      <div class="note">CUSA01623 · version 01.02 · God_of_War_III_Remastered.xml. Resolution and frame rate patches follow Performance.</div>
+      ${row('Bug Fix - Texture Corruption Fix <span style="color:#8a817a">(cuesta4)</span>', cb(true), 'Fixes corrupted textures by increasing the Video Arena size. Enable either this patch or one resolution patch, never both.')}
+      ${row('Skip Intro <span style="color:#8a817a">(cuesta4)</span>', cb(false), 'Skips the initial logos.')}
+      ${row('Skip Any Video With X Button <span style="color:#8a817a">(cuesta4)</span>', cb(true), 'Allows manual skipping of any cinematic with the X button.')}` },
+  advanced: { en: ['ADVANCED', 'Launcher options, diagnostics and system tools.'], pt: ['AVANÇADO', 'Opções do launcher, diagnóstico e ferramentas do sistema.'],
+    body: () => `
+      <div class="sec">Launcher</div>
+      ${row('Launcher language', sel(LANG_NAME[uiLang]), 'Also in the top right corner of the window.')}
+      ${row('GUI Scale', sel('Auto', 'sm'), 'For launcher only. Applies after Save.')}
+      ${row('Show Discord Rich Presence', cb(true))}
+      ${row('Close the launcher when the game starts', cb(false))}
+      ${row('Check for updates when the launcher opens', cb(true))}
+      ${row('Updates', '<span class="btn">Check for updates</span>', 'You have the latest version (2.6.0).')}
+      <div class="sec">Diagnostics</div>
+      ${row('Frame statistics in the log (every 5 s)', cb(false))}
+      ${row('GPU time per pass in the log', cb(false))}
+      ${row('GPU wait and readback report in the log (every 5 s)', cb(false))}
+      ${row('F11 captures a frame for analysis', cb(false))}
+      ${row('Vulkan validation layers (needs the Vulkan SDK; much slower)', cb(false))}
+      ${row('Extra variables', '<span class="input" style="width:260px">GOW3_STREAM_MEMORY=2048</span>', 'NAME=value pairs separated by spaces (README lists them).')}
+      <div class="sec">System</div>
+      ${row('Desktop shortcut', '<span class="btn">Create</span>')}
+      ${row('Steam', '<span class="btn">Add to Steam</span>', "A non-Steam shortcut with the game's icon, capsules, hero and logo.")}
+      ${row('Shader cache', '<span class="btn">Clear shader cache</span>', 'If the game only shows a black screen, this usually helps.')}
+      ${row('Port folder', '<span class="btn">Open</span>')}` },
+  trophies: { en: ['TROPHIES', 'The trophies this port recorded while you played. 12 of 35 unlocked.'], pt: ['TROFÉUS', 'Os troféus que este port registrou enquanto você jogava. 12 de 35 desbloqueados.'],
+    body: () => {
+      const names = ['King of the Hill','Releasing the Floodgates','Burnt to a Crisp','Mr. Hand','Shine Lord','Shoe Delivery','Ladies Man','Handy Man','Open Sesame','Rescue Me','Three Wise Men','Hit Man','Rip One!','Nice Tan','Obedience School',"It's getting hot in here...",'Souled Out','Bloody Hell','No Guts, No Glory','Hitting Your Stride','Sibling Rivalry','Titan Slayer','Retribution','Hooker','Freezer Burn','Seeing Things From a Different Perspective','Eye Candy','Feather Plucker','Are You Horny to Win?','Maxed Out!','Vengeance Complete','Up to the Challenge','Unhuman','Priceless','aMAZEd'];
+      const unlocked = new Set([1,2,4,6,8,10,12,14,16,17,19,21]);
+      const tier = i => i === 0 ? 'p' : i <= 18 ? '' : i <= 29 ? 's' : 'g';
+      const tname = i => i === 0 ? 'Platinum' : i <= 18 ? 'Bronze' : i <= 29 ? 'Silver' : 'Gold';
+      return `<div class="tfilters"><span class="btn on">All trophies</span><span class="btn">Unlocked</span><span class="btn">Locked</span><span style="margin-left:auto" class="btn">Refresh</span><span class="btn">Reset trophies</span></div>
+      <div class="note">Only trophies unlocked with this port are listed; the ones earned on a PlayStation are not.</div>
+      <div class="trophies">${names.map((n, i) => `<div class="tro ${unlocked.has(i) ? '' : 'lock'}"><i class="${tier(i)}"></i><span>${n}<small>${tname(i)}${unlocked.has(i) ? ' · 2026-10-' + (10 + (i % 9)) : ''}</small></span></div>`).join('')}</div>`; } },
+  controls: { en: ['CONTROLS', 'Keyboard, mouse and gamepad mapping. DualSense Wireless Controller detected.'], pt: ['CONTROLES', 'Mapeamento de teclado, mouse e controle. DualSense Wireless Controller detectado.'],
+    body: () => {
+      const keys = [['✕','Cross','Space'],['○','Circle','Left Shift'],['□','Square','E'],['△','Triangle','Q'],['L1','L1','Mouse 4'],['R1','R1','Mouse 5'],['L2','L2','Right Mouse'],['R2','R2','Left Mouse'],['L3','L3','Left Ctrl'],['R3','R3','Middle Mouse'],['≡','Options','Esc'],['▭','Touchpad','Tab']];
+      return `<div class="twocol">${row('In-game button icons', sel('Match my controller'))}${row('Device', sel('DualSense Wireless Controller'))}</div>
+      <div class="sec">Keyboard & Mouse Mapping</div>
+      <div class="note">Which key or mouse input presses each button of the game. Click a box, then press a key, click a mouse button or turn the wheel.</div>
+      <div class="map">${keys.map(k => `<div class="keyrow"><span class="icon" style="color:${{ '✕':'#6b9ae8','○':'#e5555e','□':'#d683d6','△':'#45c4a2' }[k[0]] || '#e6e0d8'};font-size:${k[0].length > 1 ? 11 : 15}px">${k[0]}</span><span>${k[1]}</span><span class="key">${k[2]}</span></div>`).join('')}</div>
+      <div class="twocol" style="margin-top:14px">${row('Joystick prompts', sel('Keyboard (native)'))}${row('Right stick style', sel('Relative'))}${row('Right stick sensitivity', sel('100%', 'sm'))}${row('Keep the mouse in the game window', cb(true))}</div>
+      <div class="sec">Gamepad Mapping</div>
+      <div class="twocol">${row('Controller type', sel('Auto (PlayStation)'))}${row('Vibration', sel('100%', 'sm'))}</div>
+      <div class="note">L2/R2 stay on the triggers. Touchpad right opens the game's menu.</div>`; } },
+  mods: { en: ['MODS', 'Change textures, sounds and text. Your game files stay untouched.'], pt: ['MODS', 'Troque texturas, sons e textos. Os arquivos do jogo não são alterados.'],
+    body: () => `
+      <div class="twocol" style="align-items:center">${row('Load mods', cb(true) + ' <span style="color:#8a817a;font-size:12px;margin-left:10px">3 of 3 active</span>')}<div style="text-align:right;padding-top:8px"><span class="btn">Open folder</span></div></div>
+      <div class="sec">Load order <span style="float:right;font-size:11px;color:#8a817a;letter-spacing:0;text-transform:none;font-family:'Segoe UI',sans-serif">Lower in the list wins · Refresh</span></div>
+      <div class="mods">
+        <div>
+          <div class="modrow">${cb(true)}<span class="n">1</span><span>Portuguese voices</span><span></span><span class="arrow">▲</span><span class="arrow">▼</span></div>
+          <div class="modrow sel-on">${cb(true)}<span class="n">2</span><b>Kratos Gold Armor</b><span class="w">⚠</span><span class="arrow">▲</span><span class="arrow">▼</span></div>
+          <div class="modrow">${cb(true)}<span class="n">3</span><span>Clean HUD</span><span class="w">⚠</span><span class="arrow">▲</span><span class="arrow">▼</span></div>
+          <div class="note">⚠ 1 file is changed by two mods. Clean HUD wins. <span style="color:#5a5250">EXEC/WAD/PS4_LE/R_UI.WAD: Kratos Gold Armor › Clean HUD</span></div>
+          <div class="sec">Presets</div>
+          <div style="display:flex;gap:8px;align-items:center">${sel('Default')}<span class="btn">Load</span><span class="btn">Save</span><span class="btn">Delete</span></div>
+          <div class="sec">Third-party patches</div>
+          <div class="note">No patch files for this game version yet.</div>
+          <div class="sec">Folders</div>
+          ${folder('Mods folder', '', 'Empty: mods/')}
+          ${folder('Patches folder', '', 'Empty: patches/')}
+        </div>
+        <div class="detail"><div class="thumb">GOLD ARMOR</div><h4>Kratos Gold Armor</h4><div class="by">by Example author · v1.0</div>Sample mod for the documentation: replaces two hero WADs and the interface WAD.<br><br><span style="color:#8a817a">3 files</span><br><br><span class="w" style="color:#f0d7a0">⚠ R_UI.WAD also in Clean HUD. Clean HUD wins.</span><br><br><span class="btn">Open mod folder</span> <span class="btn">Website</span></div>
+      </div>` },
+  log: { en: ['LOG', 'Output of the last start. last_run.log holds the same text.'], pt: ['REGISTRO', 'Saída da última execução. last_run.log tem o mesmo texto.'],
+    body: () => `<div style="display:flex;gap:8px;margin:12px 0"><span class="btn">Copy</span><span class="btn">Clear</span><span class="btn">Open last_run.log</span><span style="margin-left:auto;color:#8a817a;font-size:12px;align-self:center">6 000 lines kept</span></div><div id="logbox">${logText}</div>` },
+};
+
+let logText = '';
+function appendLog(s) { logText += s; const b = document.getElementById('logbox'); if (b) { b.innerHTML = logText; b.scrollTop = b.scrollHeight; } }
+
+function openPage(p, keep) {
+  const d = document.getElementById('drawer');
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.page === p));
+  if (p === 'home') { closeDrawer(); return; }
+  current = p;
+  const page = PAGES[p]; const head = page[lang] || page.en;
+  document.getElementById('dtitle').textContent = head[0];
+  document.getElementById('dsub').textContent = head[1];
+  document.getElementById('dbody').innerHTML = page.body();
+  if (!keep) document.getElementById('dbody').scrollTop = 0;
+  d.classList.toggle('wide', WIDE.has(p)); d.classList.add('open');
+  document.getElementById('home').classList.toggle('dim', WIDE.has(p));
+  setBlur(true);
+}
+function setBlur(on) { ['base', 'art', 'photo'].forEach(id => document.getElementById(id).classList.toggle('blur', on)); }
+function closeDrawer() {
+  current = 'home';
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('home').classList.remove('dim');
+  setBlur(false);
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.page === 'home'));
+}
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => openPage(t.dataset.page)));
+document.getElementById('art').addEventListener('click', closeDrawer);
+document.getElementById('fade').addEventListener('click', closeDrawer);
+
+// ---------- play ----------
+let running = false, playTimers = [];
+function playGame() {
+  if (running) return; running = true;
+  const play = document.getElementById('play'), stop = document.getElementById('stop'), st = document.getElementById('status');
+  play.disabled = true; play.innerHTML = '● &nbsp;' + T[lang].playing; stop.style.display = 'inline-block';
+  st.textContent = T[lang].prep; logText = '';
+  const lines = [
+    ['<span class="k">[launcher]</span> SpartanPort 2.6.0 · Windows 11 · settings.json saved', 0],
+    ['<span class="k">[prepare]</span> CUSA01623 v01.02 · boot-linked.bin ok · 12 patches applied', 500],
+    ['<span class="k">[gpu]</span> AMD Radeon RX 6700 XT · Vulkan 1.3.283 · FSR 4 assets ok', 900],
+    ['<span class="k">[shaders]</span> pipeline cache: 11 982 of 12 168 warm', 1300],
+    ['<span class="ok">[runtime]</span> Entering original x86-64 code', 1700],
+    ['<span class="k">[frame]</span> 118 FPS · 8.4 ms · GPU 6.1 ms', 3200],
+    ['<span class="k">[frame]</span> 120 FPS · 8.3 ms · GPU 6.0 ms', 5200],
+  ];
+  lines.forEach(([l, t]) => playTimers.push(setTimeout(() => { appendLog(l + '\n'); if (l.includes('x86-64')) st.textContent = T[lang].running; }, t)));
+}
+function stopGame() {
+  if (!running) return; running = false; playTimers.forEach(clearTimeout); playTimers = [];
+  const play = document.getElementById('play'), stop = document.getElementById('stop'), st = document.getElementById('status');
+  appendLog('<span class="r">' + T[lang].exited + '</span>');
+  play.disabled = false; play.innerHTML = play.dataset[lang]; stop.style.display = 'none'; st.textContent = T[lang].idle;
+}
+
+// ---------- keys ----------
+const ORDER = ['home','graphics','performance','game','trophies','controls','mods','advanced','log'];
+document.addEventListener('keydown', e => {
+  const sp = document.getElementById('splash');
+  if (!sp.classList.contains('out')) { endSplash(); return; }
+  if (e.key === 'Escape') closeDrawer();
+  else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { const i = ORDER.indexOf(current); openPage(ORDER[(i + (e.key === 'ArrowRight' ? 1 : ORDER.length - 1)) % ORDER.length]); }
+  else if (e.key === 'Enter' && current === 'home') playGame();
+});
+
+// ---------- boot ----------
+resizeEmbers(); fit(); tick(); runSplash();
+</script>
+</body>
+</html>

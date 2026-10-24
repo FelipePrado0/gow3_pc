@@ -10,7 +10,6 @@ pgo/
 !docs/images/*.png
 last_run.log
 dist/
-packaging/runtime-paths.nix
 fsr4_411/
 vkd3d-proton.cache
 tools/fsr4cap/*.exe
@@ -32,3 +31,20 @@ gamecontrollerdb.txt
 !packaging/icon/monogram.png
 /.vscode
 
+# The launcher's data files when it runs from a checkout (data folder = this folder).
+/settings.json
+/mods.json
+/mods_presets.json
+/patches.json
+/game_icon.ico
+/legacy-migrated
+/shortcut-migrated
+/mods/
+# Rust launcher (docs/specs/2026-10-21-rust-launcher-design.md)
+launcher-rust/target/
+!launcher-rust/assets/*.png
+!docs/specs/assets/**/*.png
+# Release stamp: the workflows' Stamp step writes it here; a stale local copy would be packaged.
+/release.json
+# Brainstorming companion sessions
+.superpowers/

@@ -219,7 +219,7 @@ Los archivos de parches de terceros van en la carpeta `patches/` de la carpeta d
   línea `mask` o con una dirección fuera del `eboot.bin` queda fuera entero, con un aviso en el
   registro.
 - Se aplican después de los incluidos: donde ambos escriben, gana el de terceros.
-- Desde un terminal: `SPARTAN_PATCHES_DIR=/ruta SPARTAN_PATCHES_CONFIG=/ruta/patches.json python run.py`.
+- Desde un terminal: `SPARTAN_PATCHES_DIR=/ruta SPARTAN_PATCHES_CONFIG=/ruta/patches.json bash run.sh`.
 
 Para usar un parche de terceros en cualquier build, conviértelo al formato incluido, con firmas, y
 distribúyelo en un mod ([Parches en mods](#parches-en-mods)).
